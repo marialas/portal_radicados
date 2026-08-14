@@ -1,0 +1,6 @@
+{
+  "name": "INTECOAL SAS - Portal de Radicación Documental",
+  "description": "Portal web de radicación y recepción de documentación técnica de proyectos de alumbrado público (RETILAP/RETIE) para INTECOAL SAS.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

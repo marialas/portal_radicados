@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>INTECOAL SAS - Sistema de Radicación Alumbrado Público RETILAP</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            intecoal: {
+              black: '#0D0D0D',
+              dark: '#1E222A',
+              gold: '#D9CF43',
+              gray: '#6B7280',
+              light: '#F8FAFC'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="./css/custom.css" />
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Microsoft MSAL Browser JS -->
+  <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+  <!-- TOP HEADER -->
+  <header class="bg-[#1E222A] text-white border-b-4 border-[#D9CF43] shadow-lg sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+      
+      <!-- Logo & Title -->
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 bg-[#D9CF43] rounded-lg flex items-center justify-center shadow-md">
+          <i data-lucide="shield-check" class="w-6 h-6 text-[#1E222A]"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-base font-black tracking-tight text-white uppercase">
+              INTECOAL S.A.S.
+            </h1>
+            <span class="bg-[#D9CF43]/20 text-[#D9CF43] text-[10px] font-bold px-2 py-0.5 rounded border border-[#D9CF43]/30">
+              RETILAP v2026
+            </span>
+          </div>
+          <p class="text-xs text-slate-300 font-medium">
+            Portal de Radicación Documental & Expedientes - Alumbrado Público
+          </p>
+        </div>
+      </div>
+
+      <!-- User Profile & Action Controls -->
+      <div class="flex items-center space-x-3">
+        <!-- SENA / M365 Badge -->
+        <div id="m365-badge" class="hidden sm:flex items-center space-x-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
+          <i data-lucide="cloud" class="w-4 h-4 text-emerald-400"></i>
+          <span class="text-xs font-bold text-slate-200" id="m365-badge-text">SharePoint M365 Sync</span>
+        </div>
+
+        <!-- M365 Config Button -->
+        <button 
+          id="btn-open-m365" 
+          class="bg-slate-800 hover:bg-slate-700 text-[#D9CF43] p-2 rounded-lg border border-slate-700 transition-colors flex items-center space-x-1.5 text-xs font-bold"
+          title="Configurar SharePoint List & M365"
+        >
+          <i data-lucide="database" class="w-4 h-4 text-[#D9CF43]"></i>
+          <span class="hidden md:inline">SharePoint List M365</span>
+        </button>
+
+        <!-- User Profile Pill -->
+        <div class="bg-slate-800 border border-slate-700 rounded-lg p-1.5 flex items-center space-x-2">
+          <div class="w-8 h-8 rounded-md bg-[#D9CF43] text-[#1E222A] font-black text-xs flex items-center justify-center uppercase" id="user-avatar">
+            JFC
+          </div>
+          <div class="text-left pr-2">
+            <span class="block text-xs font-bold text-white leading-tight" id="user-name-display">
+              Ing. John Fredy Castro
+            </span>
+            <span class="block text-[10px] text-[#D9CF43] font-semibold" id="user-role-display">
+              Rol 1: Interventor INTECOAL
+            </span>
+          </div>
+          <button 
+            id="btn-switch-user" 
+            class="text-slate-400 hover:text-white p-1 hover:bg-slate-700 rounded transition-colors"
+            title="Cambiar Usuario / Rol SENA"
+          >
+            <i data-lucide="user-cog" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN NAVIGATION TABS -->
+  <nav class="bg-[#0D0D0D] text-slate-300 border-b border-slate-800 shadow-inner">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 flex space-x-1 overflow-x-auto">
+      
+      <button 
+        id="tab-btn-lista" 
+        class="tab-btn active px-4 py-3 text-xs font-bold flex items-center space-x-2 border-b-2 border-[#D9CF43] text-[#D9CF43] bg-white/5 transition-all"
+        onclick="switchTab('lista')"
+      >
+        <i data-lucide="file-text" class="w-4 h-4"></i>
+        <span>Radicaciones Existentes</span>
+        <span id="badge-count" class="ml-1 bg-[#D9CF43] text-[#0D0D0D] text-[10px] font-black px-2 py-0.5 rounded-full">
+          3
+        </span>
+      </button>
+
+      <button 
+        id="tab-btn-nueva" 
+        class="tab-btn px-4 py-3 text-xs font-bold flex items-center space-x-2 border-b-2 border-transparent text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+        onclick="switchTab('nueva')"
+      >
+        <i data-lucide="file-plus" class="w-4 h-4"></i>
+        <span>Nueva Radicación RETILAP</span>
+      </button>
+
+      <button 
+        id="tab-btn-informe" 
+        class="tab-btn px-4 py-3 text-xs font-bold flex items-center space-x-2 border-b-2 border-transparent text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+        onclick="switchTab('informe')"
+      >
+        <i data-lucide="clipboard-check" class="w-4 h-4"></i>
+        <span>Informe Técnico & Firma Digital</span>
+      </button>
+
+      <button 
+        id="tab-btn-onedrive" 
+        class="tab-btn px-4 py-3 text-xs font-bold flex items-center space-x-2 border-b-2 border-transparent text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+        onclick="switchTab('onedrive')"
+      >
+        <i data-lucide="folder-git-2" class="w-4 h-4"></i>
+        <span>OneDrive & SharePoint M365</span>
+      </button>
+
+    </div>
+  </nav>
+
+  <!-- MAIN CONTAINER CONTENT -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+
+    <!-- VIEW 1: LISTA DE RADICACIONES -->
+    <section id="view-lista" class="tab-view space-y-6">
+      
+      <!-- Filters Bar -->
+      <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex-1 min-w-[240px] relative">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
+          <input 
+            type="text" 
+            id="search-input" 
+            placeholder="Buscar por radicado, proyecto, municipio o contratista..."
+            class="w-full pl-9 pr-4 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#D9CF43] focus:outline-none"
+            onkeyup="filterFilings()"
+          />
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 text-xs font-bold">
+          <div>
+            <label class="text-slate-500 mr-1">Municipio:</label>
+            <select id="filter-municipio" class="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-slate-50" onchange="filterFilings()">
+              <option value="TODOS">Todos</option>
+              <option value="Cali">Cali</option>
+              <option value="Palmira">Palmira</option>
+              <option value="Buenaventura">Buenaventura</option>
+              <option value="Jamundí">Jamundí</option>
+              <option value="Yumbo">Yumbo</option>
+              <option value="Tuluá">Tuluá</option>
+              <option value="Buga">Buga</option>
+              <option value="Cartago">Cartago</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="text-slate-500 mr-1">Estado:</label>
+            <select id="filter-estado" class="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-slate-50" onchange="filterFilings()">
+              <option value="TODOS">Todos</option>
+              <option value="Radicado">Radicado</option>
+              <option value="En Revisión">En Revisión</option>
+              <option value="Con Observaciones">Con Observaciones</option>
+              <option value="Aprobado">Aprobado</option>
+            </select>
+          </div>
+
+          <button 
+            onclick="loadFilingsList()" 
+            class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-300 flex items-center space-x-1"
+          >
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>Actualizar</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Filings Cards Grid -->
+      <div id="filings-cards-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Rendered dynamically via app.js -->
+      </div>
+
+    </section>
+
+    <!-- VIEW 2: NUEVA RADICACIÓN RETILAP -->
+    <section id="view-nueva" class="tab-view hidden space-y-6">
+      <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+        
+        <div class="bg-[#1E222A] text-white p-6 border-b-4 border-[#D9CF43]">
+          <div class="flex items-center space-x-3">
+            <i data-lucide="file-check" class="w-7 h-7 text-[#D9CF43]"></i>
+            <div>
+              <h2 class="text-lg font-black uppercase tracking-wide">
+                Formulario Oficial de Radicación RETILAP
+              </h2>
+              <p class="text-xs text-slate-300">
+                Radicación de expediente técnico para proyectos de infraestructura de Alumbrado Público - INTECOAL SAS
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <form id="form-nueva-radicacion" onsubmit="handleNewFilingSubmit(event)" class="p-6 space-y-8">
+          
+          <!-- Seccion 1: Datos del Proyecto -->
+          <div class="space-y-4">
+            <h3 class="text-xs font-black text-slate-800 uppercase tracking-wider border-b pb-2 flex items-center space-x-2">
+              <i data-lucide="building-2" class="w-4 h-4 text-[#D9CF43]"></i>
+              <span>1. Información General del Proyecto</span>
+            </h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-bold">
+              <div>
+                <label class="block text-slate-700 mb-1">Código del Proyecto *</label>
+                <input type="text" id="input-codigo-proyecto" required placeholder="ej. INT-2026-001" class="w-full p-2.5 border rounded-lg bg-slate-50 font-mono" />
+              </div>
+
+              <div class="md:col-span-2">
+                <label class="block text-slate-700 mb-1">Nombre Completo del Proyecto *</label>
+                <input type="text" id="input-nombre-proyecto" required placeholder="ej. MODERNIZACIÓN ALUMBRADO PÚBLICO VÍA CAÑASGORDAS" class="w-full p-2.5 border rounded-lg bg-slate-50 uppercase" />
+              </div>
+
+              <div>
+                <label class="block text-slate-700 mb-1">Municipio / Ubicación *</label>
+                <select id="input-municipio" class="w-full p-2.5 border rounded-lg bg-slate-50">
+                  <option value="Cali">Cali</option>
+                  <option value="Palmira">Palmira</option>
+                  <option value="Buenaventura">Buenaventura</option>
+                  <option value="Jamundí">Jamundí</option>
+                  <option value="Yumbo">Yumbo</option>
+                  <option value="Tuluá">Tuluá</option>
+                  <option value="Buga">Buga</option>
+                  <option value="Cartago">Cartago</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-slate-700 mb-1">Empresa Contratista Creadora *</label>
+                <input type="text" id="input-contratista" required class="w-full p-2.5 border rounded-lg bg-slate-50 font-semibold" />
+              </div>
+
+              <div>
+                <label class="block text-slate-700 mb-1">Correo Responsable M365 *</label>
+                <input type="email" id="input-correo-responsable" required class="w-full p-2.5 border rounded-lg bg-slate-50 font-mono" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Seccion 2: Checklist de 21 Documentos RETILAP -->
+          <div class="space-y-4">
+            <div class="flex items-center justify-between border-b pb-2">
+              <h3 class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center space-x-2">
+                <i data-lucide="file-text" class="w-4 h-4 text-[#D9CF43]"></i>
+                <span>2. Carga de los 21 Requisitos RETILAP (PDF / CAD)</span>
+              </h3>
+              <span class="text-xs font-extrabold text-blue-900 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
+                Sincronización Automática OneDrive M365
+              </span>
+            </div>
+
+            <div id="retilap-upload-catalog-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <!-- Dynamically filled with catalog.js -->
+            </div>
+          </div>
+
+          <!-- Submit Button -->
+          <div class="pt-4 border-t flex justify-end space-x-3">
+            <button type="button" onclick="switchTab('lista')" class="px-5 py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg hover:bg-slate-200">
+              Cancelar
+            </button>
+            <button type="submit" class="px-7 py-2.5 bg-[#0D0D0D] text-[#D9CF43] font-black text-xs rounded-lg shadow-lg hover:bg-slate-800 flex items-center space-x-2">
+              <i data-lucide="send" class="w-4 h-4 text-[#D9CF43]"></i>
+              <span>Radicar Expediente en SharePoint List</span>
+            </button>
+          </div>
+
+        </form>
+      </div>
+    </section>
+
+    <!-- VIEW 3: INFORME TÉCNICO & FIRMA DIGITAL -->
+    <section id="view-informe" class="tab-view hidden space-y-6">
+      <div id="informe-content-container">
+        <!-- Rendered dynamically by app.js when selecting a filing -->
+      </div>
+    </section>
+
+    <!-- VIEW 4: ONEDRIVE & SHAREPOINT M365 -->
+    <section id="view-onedrive" class="tab-view hidden space-y-6">
+      <div class="bg-white rounded-xl shadow-md border border-slate-200 p-6 space-y-6">
+        
+        <div class="flex items-center justify-between border-b pb-4">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
+              <i data-lucide="folder-git-2" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-black text-slate-900 uppercase">
+                Explorador de Carpetas OneDrive & SharePoint Online
+              </h2>
+              <p class="text-xs text-slate-500">
+                Sitio: <span class="font-mono text-blue-700">https://intecoal.sharepoint.com/sites/AlumbradoPublico</span>
+              </p>
+            </div>
+          </div>
+
+          <button onclick="handleSharePointSync()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold px-4 py-2 rounded-lg flex items-center space-x-2 shadow">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            <span>Sincronizar Estructura M365</span>
+          </button>
+        </div>
+
+        <!-- Folder tree structure simulation -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="border rounded-xl p-4 bg-slate-50 space-y-3">
+            <h3 class="text-xs font-black text-slate-800 uppercase flex items-center space-x-2">
+              <i data-lucide="folder" class="w-4 h-4 text-amber-500"></i>
+              <span>Estructura de Carpetas RETILAP</span>
+            </h3>
+
+            <div class="space-y-2 text-xs font-mono font-medium text-slate-700">
+              <div class="p-2 bg-white rounded border flex items-center space-x-2">
+                <i data-lucide="folder" class="w-4 h-4 text-amber-500"></i>
+                <span>/A_Tecnicos/</span>
+              </div>
+              <div class="p-2 bg-white rounded border flex items-center space-x-2">
+                <i data-lucide="folder" class="w-4 h-4 text-amber-500"></i>
+                <span>/B_Certificaciones/</span>
+              </div>
+              <div class="p-2 bg-white rounded border flex items-center space-x-2">
+                <i data-lucide="folder" class="w-4 h-4 text-amber-500"></i>
+                <span>/C_Contractuales/</span>
+              </div>
+              <div class="p-2 bg-white rounded border flex items-center space-x-2">
+                <i data-lucide="folder" class="w-4 h-4 text-amber-500"></i>
+                <span>/D_Inventario/</span>
+              </div>
+              <div class="p-2 bg-white rounded border flex items-center space-x-2">
+                <i data-lucide="folder" class="w-4 h-4 text-amber-500"></i>
+                <span>/E_SST_Ambiental/</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="onedrive-files-detail" class="md:col-span-2 border rounded-xl p-4 bg-white space-y-4">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: SHAREPOINT LIST & CONFIG M365 -->
+  <div id="modal-m365" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
+      
+      <div class="bg-[#1E222A] text-white p-5 border-b-4 border-[#D9CF43] flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <i data-lucide="database" class="w-6 h-6 text-[#D9CF43]"></i>
+          <div>
+            <h3 class="text-base font-black">Base de Datos SharePoint List & Microsoft 365</h3>
+            <p class="text-xs text-slate-400">Configuración e integración del almacén "Radicaciones_AP"</p>
+          </div>
+        </div>
+        <button onclick="closeModalM365()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+        <!-- SharePoint List Columns Table -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-black text-slate-800 uppercase flex items-center space-x-2">
+              <i data-lucide="table" class="w-4 h-4 text-[#D9CF43]"></i>
+              <span>Esquema de las 16 Columnas Oficiales en SharePoint List</span>
+            </h4>
+
+            <button onclick="copyPnP() " class="bg-[#1E222A] text-[#D9CF43] text-xs font-bold px-3 py-1.5 rounded border border-slate-700 flex items-center space-x-1">
+              <i data-lucide="terminal" class="w-3.5 h-3.5 text-[#D9CF43]"></i>
+              <span id="btn-pnp-text">Copiar Script PnP PowerShell</span>
+            </button>
+          </div>
+
+          <div id="sharepoint-columns-table-modal" class="border rounded-lg overflow-x-auto">
+            <!-- Rendered by app.js -->
+          </div>
+        </div>
+
+        <div class="pt-4 border-t flex justify-end">
+          <button onclick="closeModalM365()" class="px-5 py-2 bg-[#0D0D0D] text-[#D9CF43] text-xs font-bold rounded-lg">
+            Cerrar Ventana
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: CAMBIO DE USUARIO / ROL SENA -->
+  <div id="modal-user-role" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
+      
+      <div class="bg-[#1E222A] text-white p-5 border-b-4 border-[#D9CF43] flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="user-check" class="w-5 h-5 text-[#D9CF43]"></i>
+          <h3 class="text-sm font-black">Seleccionar Rol de Usuario SENA</h3>
+        </div>
+        <button onclick="closeModalUserRole()" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4 text-xs font-bold">
+        <p class="text-slate-600 font-normal">
+          Seleccione el perfil para probar el comportamiento de visibilidad de radicaciones:
+        </p>
+
+        <div class="space-y-2">
+          <button onclick="selectUserRole('interventor', 'Ing. John Fredy Castro', 'INTECOAL SAS')" class="w-full text-left p-3 border rounded-xl hover:border-[#D9CF43] hover:bg-slate-50 transition-all flex items-center justify-between">
+            <div>
+              <span class="block font-black text-slate-900">Rol 1: Interventor INTECOAL</span>
+              <span class="block text-[11px] text-slate-500 font-normal">Acceso total a todos los expedientes de todos los contratistas.</span>
+            </div>
+            <i data-lucide="shield-check" class="w-5 h-5 text-emerald-600"></i>
+          </button>
+
+          <button onclick="selectUserRole('contratista', 'Contratista SENA Obra 1', 'ELECTROINGENIERIA S.A.S.')" class="w-full text-left p-3 border rounded-xl hover:border-[#D9CF43] hover:bg-slate-50 transition-all flex items-center justify-between">
+            <div>
+              <span class="block font-black text-slate-900">Rol 2: Contratista (ELECTROINGENIERIA)</span>
+              <span class="block text-[11px] text-slate-500 font-normal">Filtra y muestra ÚNICAMENTE sus radicaciones asociadas.</span>
+            </div>
+            <i data-lucide="building" class="w-5 h-5 text-blue-600"></i>
+          </button>
+        </div>
+
+        <div class="pt-3 border-t flex justify-end">
+          <button onclick="closeModalUserRole()" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg">Cerrar</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- App Scripts -->
+  <script src="./js/catalog.js"></script>
+  <script src="./js/api.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>
