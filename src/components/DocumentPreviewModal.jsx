@@ -18,7 +18,7 @@ import {
   UploadCloud
 } from 'lucide-react';
 
-export function getOneDriveCloudUrl(rutaOneDrive, codigoProyecto) {
+export function getOneDriveCloudUrl(rutaOneDrive, numeroRadicado) {
   if (rutaOneDrive && (rutaOneDrive.startsWith('http://') || rutaOneDrive.startsWith('https://')) && !rutaOneDrive.includes('Documentos_Radicacion')) {
     return rutaOneDrive;
   }
@@ -39,7 +39,7 @@ export const DocumentPreviewModal = ({ docItem, filing, onClose }) => {
 
   const isNA = docItem.status === 'N/A' || docItem.fileName === 'N/A';
   const hasFile = docItem.fileName && docItem.fileName !== 'N/A';
-  const cloudUrl = getOneDriveCloudUrl(filing?.rutaOneDrive, filing?.metadata?.codigoProyecto);
+  const cloudUrl = getOneDriveCloudUrl(filing?.rutaOneDrive, filing?.numeroRadicado);
 
   const handleDownloadPdf = () => {
     // Generar archivo PDF binario estructurado para descarga real
@@ -66,7 +66,7 @@ BT
 0 -20 Td
 (Requisito: ${docItem.docName}) Tj
 0 -20 Td
-(Proyecto: ${filing?.metadata?.codigoProyecto || 'INT-2026'}) Tj
+(Radicado: ${filing?.numeroRadicado || 'N/A'}) Tj
 0 -20 Td
 (Municipio: ${filing?.metadata?.municipio || 'N/A'}) Tj
 0 -20 Td
@@ -119,7 +119,7 @@ startxref
                   {docItem.docCode}
                 </span>
                 <span className="text-xs text-gray-400 font-bold uppercase truncate">
-                  {filing?.metadata?.codigoProyecto} - {filing?.metadata?.municipio}
+                  {filing?.numeroRadicado} - {filing?.metadata?.municipio}
                 </span>
               </div>
               <h3 className="text-base font-extrabold text-white truncate leading-tight mt-0.5">
@@ -334,8 +334,8 @@ startxref
                     {/* Banner de metadatos del documento */}
                     <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                       <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Proyecto</span>
-                        <span className="font-bold text-slate-900">{filing?.metadata?.codigoProyecto || 'INT-2026'}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Radicado</span>
+                        <span className="font-bold text-slate-900">{filing?.numeroRadicado || 'N/A'}</span>
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-gray-400 uppercase block">Municipio</span>
@@ -424,7 +424,7 @@ startxref
                     <div className="pt-8 border-t border-gray-300 flex items-end justify-between">
                       <div className="space-y-1">
                         <div className="w-36 h-12 border-b-2 border-slate-900 flex items-end pb-1 font-serif text-slate-800 italic text-sm">
-                          {filing?.metadata?.responsableRevision || 'Ing. John Fredy Castro'}
+                          {filing?.metadata?.responsableRevision || 'Responsable de Revisión'}
                         </div>
                         <div className="text-[10px] font-bold text-[#1E222A]">REVISOR DE INTERVENTORÍA</div>
                         <div className="text-[9px] text-gray-500">INTECOAL S.A.S. • RETILAP</div>
@@ -474,7 +474,7 @@ startxref
                   <div className="sm:col-span-2">
                     <span className="text-[10px] font-bold text-gray-400 block uppercase">Ruta de Carpeta OneDrive / SharePoint</span>
                     <span className="font-mono text-xs bg-slate-950 p-2 rounded border border-slate-800 text-amber-300 block break-all">
-                      {docItem.folderPath || `/Documentos_Radicacion/${filing?.metadata?.codigoProyecto}/`}
+                      {docItem.folderPath || `/Documentos_Radicacion/${filing?.numeroRadicado}/`}
                     </span>
                   </div>
                 </div>
@@ -495,7 +495,7 @@ startxref
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-3 rounded-xl inline-flex items-center space-x-2 transition-all shadow-md"
                 >
                   <Cloud className="w-4 h-4" />
-                  <span>Abrir Carpeta {filing?.metadata?.codigoProyecto} en SharePoint / OneDrive</span>
+                  <span>Abrir Carpeta {filing?.numeroRadicado} en SharePoint / OneDrive</span>
                   <ExternalLink className="w-4 h-4 ml-1" />
                 </a>
               </div>

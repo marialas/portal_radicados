@@ -4,8 +4,8 @@
  * PROYECTO DE ETAPA PRÁCTICA SENA
  * ============================================================================
  * Componente Principal de la Aplicación en React + JavaScript.
- * Controla la navegación, estados de usuarios (Rol 1 Interventor / Rol 2 Contratista),
- * la integración con SharePoint / OneDrive y la visualización de los 21 requisitos RETILAP.
+ * Controla la navegación, estados de usuarios (Revisor / Contratista)
+ * y la visualización de los 21 requisitos RETILAP.
  * ----------------------------------------------------------------------------
  */
 
@@ -16,43 +16,26 @@ import { RadicacionForm } from './components/RadicacionForm';
 import { RadicacionesList } from './components/RadicacionesList';
 import { InformeRecibidoConformidad } from './components/InformeRecibidoConformidad';
 import { EvaluacionRadicacion } from './components/EvaluacionRadicacion';
-import { OneDriveViewer } from './components/OneDriveViewer';
 import { LoginForm } from './components/LoginForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { INITIAL_SEED_FILINGS } from './data/documentsCatalog';
+
 import { logoutM365User, ensureMsalInit, extractCompanyFromEmail, formatNameFromEmail, msalInstance } from './lib/msalConfig';
 
 export default function App() {
-  // Pestaña activa del sistema: lista, nueva, informe, evaluacion u onedrive
+  // Pestaña activa del sistema: lista, nueva, informe o evaluacion
   const [activeTab, setActiveTab] = useState('lista');
   
   // Lista de radicaciones cargadas en memoria o backend
-  const [filings, setFilings] = useState(INITIAL_SEED_FILINGS);
-  const [selectedFiling, setSelectedFiling] = useState(INITIAL_SEED_FILINGS[0]);
+  const [filings, setFilings] = useState([]);
+  const [selectedFiling, setSelectedFiling] = useState(null);
 
   // Estado de sesión del usuario SENA / INTECOAL (restaurado de sessionStorage o localStorage si existe)
-  const [user, setUser] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = sessionStorage.getItem('m365_user_session') || localStorage.getItem('m365_user_session');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed && parsed.isAuthenticated) {
-            parsed.name = formatNameFromEmail(parsed.email, parsed.name);
-            return parsed;
-          }
-        } catch (e) {
-          console.warn('Error al leer sesión previa:', e);
-        }
-      }
-    }
-    return {
-      isAuthenticated: false,
-      name: '',
-      email: '',
-      role: 'interventor',
-      company: ''
-    };
+  const [user, setUser] = useState({
+    isAuthenticated: false,
+    name: '',
+    email: '',
+    role: 'interventor',
+    company: ''
   });
 
   // Estado para mensajes de error de autenticación MSAL/Azure AD
@@ -66,18 +49,35 @@ export default function App() {
     return false;
   });
 
-  // M365 Config state (Internal Backend Config)
-  const [m365Config] = useState({
-    azureClientId: '00000000-0000-0000-0000-000000000000',
-    azureTenantId: '00000000-0000-0000-0000-000000000000',
-    sharepointSiteId: 'intecoal.sharepoint.com,site-id-123',
-    sharepointListId: 'Radicaciones_AP',
-    sharepointLibraryId: 'Documentos_Radicacion',
-    onedriveFolderRoot: 'Radicaciones',
-    isConnected: true
+  // M365 Config state (loaded from backend /api/m365/status)
+  const [m365Config, setM365Config] = useState({
+    azureClientId: import.meta.env.VITE_MSAL_CLIENT_ID || '',
+    azureTenantId: '',
+    sharepointSiteUrl: '',
+    sharepointSiteId: '',
+    sharepointListId: '',
+    sharepointLibraryId: '',
+    onedriveFolderRoot: '',
+    senderEmail: '',
+    isConnected: false
   });
 
-  // Filter filings by creator account for Rol 2 (contratista) or show all for Rol 1 (interventor)
+  useEffect(() => {
+    fetch('/api/m365/status')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.config) {
+          setM365Config(prev => ({
+            ...prev,
+            ...data.config
+          }));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Filtrar radicados por la cuenta del Contratista (solo los creados por ese usuario).
+  // El Responsable de Revisión ve todos los radicados.
   const userFilings = React.useMemo(() => {
     if (user.role === 'contratista' && user.isAuthenticated) {
       const userEmailClean = (user.email || '').toLowerCase().trim();
@@ -85,10 +85,8 @@ export default function App() {
 
       return filings.filter(f => {
         const creatorEmailClean = (f.creadorEmail || f.metadata?.creadorEmail || '').toLowerCase().trim();
-        const respEmailClean = (f.metadata?.correoResponsable || '').toLowerCase().trim();
 
-        // Exact match with user's specific account
-        return creatorEmailClean === userEmailClean || respEmailClean === userEmailClean;
+        return creatorEmailClean === userEmailClean;
       });
     }
     return filings;
@@ -244,7 +242,13 @@ export default function App() {
 
   const fetchFilings = async () => {
     try {
-      const res = await fetch('/api/radicacion/lista');
+      const params = new URLSearchParams();
+      if (user.email && user.isAuthenticated) {
+        params.set('email', user.email);
+        params.set('rol', user.role);
+      }
+      const qs = params.toString();
+      const res = await fetch(`/api/radicacion/lista${qs ? '?' + qs : ''}`);
       if (res.ok) {
         const json = await res.json();
         if (json.data && json.data.length > 0) {
@@ -286,6 +290,26 @@ export default function App() {
     setFilings([newRecord, ...filings]);
     setSelectedFiling(newRecord);
     setActiveTab('informe');
+  };
+
+  const handleDeleteFiling = async (filingId) => {
+    if (!confirm('¿Está seguro de eliminar este radicado? Esta acción no se puede deshacer.')) return;
+    try {
+      const params = new URLSearchParams();
+      if (user.email) params.set('email', user.email);
+      if (user.role) params.set('rol', user.role);
+      const qs = params.toString();
+      const res = await fetch(`/api/radicacion/${encodeURIComponent(filingId)}${qs ? '?' + qs : ''}`, { method: 'DELETE' });
+      if (res.ok) {
+        setFilings(prev => prev.filter(f => f.id !== filingId));
+        setSelectedFiling(prev => (prev && prev.id === filingId) ? null : prev);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || 'No se pudo eliminar el radicado.');
+      }
+    } catch {
+      alert('Error de conexión al eliminar.');
+    }
   };
 
   const handleUpdateStatus = async (id, newStatus) => {
@@ -384,11 +408,8 @@ export default function App() {
                     setActiveTab('evaluacion');
                   }}
                   onNewFiling={() => setActiveTab('nueva')}
-                  onSelectOneDrive={(record) => {
-                    setSelectedFiling(record);
-                    setActiveTab('onedrive');
-                  }}
                   onUpdateStatus={handleUpdateStatus}
+                  onDeleteFiling={handleDeleteFiling}
                   userRole={user.role}
                   currentUser={user}
                 />
@@ -417,16 +438,6 @@ export default function App() {
                     setActiveTab('evaluacion');
                   }}
                   onUpdateFiling={handleSaveEvaluation}
-                  currentUser={user}
-                  userRole={user.role}
-                />
-              )}
-
-              {activeTab === 'onedrive' && (
-                <OneDriveViewer
-                  filing={selectedFiling || userFilings[0] || undefined}
-                  filingsList={userFilings}
-                  onSelectFiling={(record) => setSelectedFiling(record)}
                   currentUser={user}
                   userRole={user.role}
                 />

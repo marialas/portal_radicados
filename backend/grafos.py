@@ -1,0 +1,435 @@
+import os
+from pathlib import Path
+import httpx
+
+
+class GraphService:
+    def __init__(self):
+        self.tenant_id = os.getenv("AZURE_TENANT_ID", "")
+        self.client_id = os.getenv("AZURE_CLIENT_ID", "")
+        self.client_secret = os.getenv("AZURE_CLIENT_SECRET", "")
+        self.site_id = os.getenv("SHAREPOINT_SITE_ID", "")
+        self.list_id = os.getenv("SHAREPOINT_LIST_ID", "")
+        self.library_name = os.getenv("SHAREPOINT_LIBRARY_ID", "Documents")
+        self.sender_email = os.getenv("M365_SENDER_EMAIL", "interventoriaapalborada@intecoalsas.com")
+        self.notification_recipient = os.getenv("M365_NOTIFICATION_RECIPIENT", "")
+        self._token = None
+        self._token_expiry = 0
+        self._resolved_drive_id = None
+
+    def _sanitizar_codigo(self, codigo):
+        return "".join(c for c in codigo if c.isalnum())
+
+    async def _obtener_token(self):
+        import time
+        ahora = time.time()
+        if self._token and ahora < self._token_expiry:
+            return self._token
+
+        if not self.client_id or not self.client_secret or not self.tenant_id:
+            raise Exception("Faltan credenciales Azure AD (AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)")
+
+        url = f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
+        data = {
+            "grant_type": "client_credentials",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "scope": "https://graph.microsoft.com/.default",
+        }
+
+        async with httpx.AsyncClient() as cliente:
+            resp = await cliente.post(url, data=data)
+            resp.raise_for_status()
+            resultado = resp.json()
+
+        self._token = resultado["access_token"]
+        self._token_expiry = ahora + resultado.get("expires_in", 3600) - 120
+        return self._token
+
+    async def _headers(self):
+        token = await self._obtener_token()
+        return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+    async def _obtener_drive_id(self):
+        if self._resolved_drive_id:
+            return self._resolved_drive_id
+
+        token = await self._obtener_token()
+        headers = {"Authorization": f"Bearer {token}"}
+
+        url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/drives"
+        async with httpx.AsyncClient() as cliente:
+            resp = await cliente.get(url, headers=headers)
+            resp.raise_for_status()
+            drives = resp.json().get("value", [])
+
+        for drive in drives:
+            name = drive.get("name", "")
+            if name.lower() == self.library_name.lower():
+                self._resolved_drive_id = drive["id"]
+                print(f"[GRAPH] Drive '{name}' resuelto: {self._resolved_drive_id}")
+                return self._resolved_drive_id
+
+        if drives:
+            self._resolved_drive_id = drives[0]["id"]
+            print(f"[GRAPH] Drive '{self.library_name}' no encontrado, usando '{drives[0].get('name', '?')}' ({self._resolved_drive_id})")
+        else:
+            raise Exception(f"No se encontraron drives en el sitio {self.site_id}")
+
+        return self._resolved_drive_id
+
+    async def _drive_url(self):
+        drive_id = await self._obtener_drive_id()
+        return f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/drives/{drive_id}"
+
+    async def sincronizar_a_sharepoint(self, radicacion):
+        token = await self._obtener_token()
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        meta = radicacion["metadata"]
+        numero = radicacion["numeroRadicado"]
+
+        existente = await self._buscar_por_titulo(numero)
+        print(f"[GRAPH] Busqueda item existente: {'FOUND id=' + str(existente['id']) if existente else 'NO ENCONTRADO, se crea nuevo'}")
+
+        estado_map = {
+            "Aprobado": "Aprobado",
+            "Con Observaciones": "Revision",
+            "Radicado": "Pendiente_Firma",
+        }
+        estado_sp = estado_map.get(radicacion.get("estado", ""), "Pendiente_Firma")
+
+        campos_todos = {
+            "Title": numero,
+            "NumeroRadicado": numero,
+            "Municipio": meta.get("municipio", ""),
+            "Operador": meta.get("contratista", ""),
+            "NIT": meta.get("nitContratista", ""),
+            "Responsable": meta.get("responsable", ""),
+            "CorreoResponsable": meta.get("correoResponsable", ""),
+            "TipoEntrega": meta.get("tipoEntrega", ""),
+            "Estado": estado_sp,
+            "DocumentosOk": f"{radicacion.get('documentosOk', 0)}/{radicacion.get('totalDocumentos', 21)}",
+            "PorcentajeConformidad": radicacion.get("porcentajeCumplimiento", 0),
+            "FechaRadicacion": radicacion.get("fechaRadicacion", "")[:10],
+            "RutaOneDrive": f"/Documentos_Radicacion/{numero}/",
+        }
+
+        try:
+            cols_existentes = await self._columnas_lista()
+            campos = {k: v for k, v in campos_todos.items() if k in cols_existentes}
+            col_faltantes = [k for k in campos_todos if k not in cols_existentes]
+            if col_faltantes:
+                print(f"[GRAPH] Columnas no encontradas en la lista (se omiten): {col_faltantes}")
+        except Exception as e:
+            print(f"[GRAPH] No se pudieron consultar columnas, se envían todos: {e}")
+            campos = campos_todos
+
+        print(f"[GRAPH] Campos a enviar a lista: {campos}")
+
+        async with httpx.AsyncClient() as cliente:
+            if existente:
+                item_id = existente["id"]
+                url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items/{item_id}"
+                resp = await cliente.patch(url, headers=headers, json={"fields": campos})
+                print(f"[GRAPH] PATCH item {item_id}: status={resp.status_code} body={resp.text[:300]}")
+                resp.raise_for_status()
+                print(f"[GRAPH] SharePoint item {item_id} actualizado OK")
+            else:
+                url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items"
+                resp = await cliente.post(url, headers=headers, json={"fields": campos})
+                print(f"[GRAPH] POST item nuevo: status={resp.status_code} body={resp.text[:300]}")
+                resp.raise_for_status()
+                print(f"[GRAPH] SharePoint item nuevo creado OK")
+
+        await self._crear_carpeta_proyecto(numero)
+        await self._subir_archivos(radicacion, numero)
+
+        return {"ok": True}
+
+    async def _buscar_por_titulo(self, titulo):
+        token = await self._obtener_token()
+        headers = {"Authorization": f"Bearer {token}"}
+
+        url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items"
+        params = {
+            "$filter": f"fields/Title eq '{titulo}'",
+            "$top": 1,
+            "$expand": "fields",
+            "$select": "id",
+        }
+
+        async with httpx.AsyncClient() as cliente:
+            resp = await cliente.get(url, headers=headers, params=params)
+            if resp.status_code == 200:
+                items = resp.json().get("value", [])
+                if items:
+                    return items[0]
+        return None
+
+    async def _crear_carpeta_proyecto(self, codigo):
+        token = await self._obtener_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        base = await self._drive_url()
+
+        subcarpetas = [
+            "A_Tecnicos", "B_Certificaciones", "C_Contractuales",
+            "D_Inventario", "E_SST_Ambiental", "Documentos_Adicionales",
+        ]
+
+        async with httpx.AsyncClient(timeout=30.0) as cliente:
+            for sub in subcarpetas:
+                folder_path = f"{codigo}/{sub}"
+                url = f"{base}/root:/{folder_path}"
+                try:
+                    resp = await cliente.get(url, headers=headers)
+                    if resp.status_code == 200:
+                        print(f"[GRAPH] Carpeta ya existe: {folder_path}")
+                        continue
+                except Exception:
+                    pass
+
+                url_create = f"{base}/root:/{codigo}:/children"
+                try:
+                    resp = await cliente.post(
+                        url_create,
+                        headers=headers,
+                        json={
+                            "name": sub,
+                            "folder": {},
+                            "@microsoft.graph.conflictBehavior": "rename",
+                        },
+                    )
+                    if resp.status_code in (200, 201):
+                        print(f"[GRAPH] Carpeta creada: {folder_path}")
+                    else:
+                        print(f"[GRAPH] Error creando carpeta {sub}: {resp.status_code} {resp.text[:200]}")
+                except Exception as e:
+                    print(f"[GRAPH] Excepcion creando carpeta {sub}: {e}")
+
+    async def _subir_archivos(self, radicacion, codigo):
+        token = await self._obtener_token()
+        headers_auth = {"Authorization": f"Bearer {token}"}
+        base = await self._drive_url()
+
+        archivos = radicacion.get("archivos", [])
+        async with httpx.AsyncClient(timeout=120.0) as cliente:
+            for a in archivos:
+                if a.get("fileName") and a.get("status") == "CUMPLE":
+                    local_path = a.get("localPath", "")
+                    if not local_path:
+                        continue
+                    file_path = Path(local_path)
+                    if not file_path.exists():
+                        print(f"[GRAPH] Archivo local no encontrado: {local_path}")
+                        continue
+
+                    contenido = file_path.read_bytes()
+                    subcarpeta = a.get("folderPath", "").split("/")[-2] if a.get("folderPath") else "A_Tecnicos"
+                    path = f"{codigo}/{subcarpeta}/{a['fileName']}"
+                    url = f"{base}/root:/{path}:/content"
+                    try:
+                        resp = await cliente.put(url, headers=headers_auth, content=contenido)
+                        if resp.status_code in (200, 201):
+                            print(f"[GRAPH] Archivo subido a SharePoint: {path}")
+                        else:
+                            print(f"[GRAPH] Error subiendo {path}: {resp.status_code} {resp.text[:200]}")
+                    except Exception as e:
+                        print(f"[GRAPH] Excepcion subiendo {path}: {e}")
+
+    async def enviar_correo_confirmacion(self, radicacion, destino=None):
+        meta = radicacion["metadata"]
+        if not destino:
+            destino = meta.get("correoResponsable", "") or self.notification_recipient
+
+        if not destino:
+            return
+
+        token = await self._obtener_token()
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        asunto = f"Nuevo Radicado {radicacion['numeroRadicado']} — {meta.get('nombreProyecto', '')}"
+        cuerpo = f"""
+        <html><body style="font-family:Arial,sans-serif;color:#1E222A;">
+        <div style="background:#1E222A;color:#D9CF43;padding:16px 24px;border-radius:8px 8px 0 0;">
+            <h2 style="margin:0;font-size:16px;">INTECOAL SAS — Nuevo Radicado para Revisar</h2>
+        </div>
+        <div style="padding:20px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
+            <p>Se ha registrado un nuevo radicado y requiere su revisión:</p>
+            <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0;">
+                <tr><td style="padding:6px 0;font-weight:bold;width:140px;">Radicado:</td><td>{radicacion['numeroRadicado']}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{meta.get('nombreProyecto', '')}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Municipio:</td><td>{meta.get('municipio', '')}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Contratista:</td><td>{meta.get('contratista', '')}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Responsable:</td><td>{meta.get('responsable', '')}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Tipo Entrega:</td><td>{meta.get('tipoEntrega', '')}</td></tr>
+            </table>
+            <p style="font-size:12px;color:#666;">Acceda al portal para revisar y evaluar la documentación.</p>
+            <p style="font-size:11px;color:#999;margin-top:20px;">INTECOAL SAS — Interventoría Técnica</p>
+        </div>
+        </body></html>
+        """
+
+        mensaje = {
+            "message": {
+                "subject": asunto,
+                "body": {"contentType": "HTML", "content": cuerpo},
+                "from": {"emailAddress": {"address": self.sender_email}},
+                "toRecipients": [{"emailAddress": {"address": destino}}],
+            }
+        }
+
+        url = f"https://graph.microsoft.com/v1.0/users/{self.sender_email}/sendMail"
+        async with httpx.AsyncClient() as cliente:
+            try:
+                resp = await cliente.post(url, headers=headers, json=mensaje)
+                print(f"[GRAPH] Correo confirmacion enviado a {destino} | status={resp.status_code}")
+            except Exception as e:
+                print(f"[GRAPH] Error enviando correo confirmacion: {e}")
+
+    async def enviar_correo_estado(self, radicacion, estado_anterior, observaciones):
+        meta = radicacion["metadata"]
+        destino = (
+            radicacion.get("creadorEmail", "")
+            or meta.get("creadorEmail", "")
+            or self.notification_recipient
+        )
+
+        if not destino:
+            return
+
+        token = await self._obtener_token()
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        estado_final = radicacion.get("estado", "")
+        emoji = "\u2713" if estado_final == "Aprobado" else "\u26a0"
+
+        asunto = f"{emoji} Radicado {radicacion['numeroRadicado']} — {estado_final}"
+        cuerpo = f"""
+        <html><body style="font-family:Arial,sans-serif;color:#1E222A;">
+        <div style="background:#1E222A;color:#D9CF43;padding:16px 24px;border-radius:8px 8px 0 0;">
+            <h2 style="margin:0;font-size:16px;">INTECOAL SAS — Resultado de Evaluación</h2>
+        </div>
+        <div style="padding:20px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
+            <p>Su radicado ha sido evaluado por la Interventoría Técnica.</p>
+            <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0;">
+                <tr><td style="padding:6px 0;font-weight:bold;width:140px;">Radicado:</td><td>{radicacion['numeroRadicado']}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{meta.get('nombreProyecto', '')}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Estado:</td><td><strong style="font-size:14px;">{estado_final}</strong></td></tr>
+            </table>
+            <p style="font-size:12px;color:#666;">Acceda al portal para revisar los detalles completos.</p>
+            <p style="font-size:11px;color:#999;margin-top:20px;">INTECOAL SAS — Interventoría Técnica</p>
+        </div>
+        </body></html>
+        """
+
+        mensaje = {
+            "message": {
+                "subject": asunto,
+                "body": {"contentType": "HTML", "content": cuerpo},
+                "from": {"emailAddress": {"address": self.sender_email}},
+                "toRecipients": [{"emailAddress": {"address": destino}}],
+            }
+        }
+
+        url = f"https://graph.microsoft.com/v1.0/users/{self.sender_email}/sendMail"
+        async with httpx.AsyncClient() as cliente:
+            try:
+                await cliente.post(url, headers=headers, json=mensaje)
+                print(f"[GRAPH] Correo estado enviado a {destino} | estado={estado_final}")
+            except Exception as e:
+                print(f"[GRAPH] Error enviando correo estado: {e}")
+
+    def obtener_config(self):
+        return {
+            "azureClientId": self.client_id,
+            "azureTenantId": self.tenant_id,
+            "sharepointSiteId": self.site_id,
+            "sharepointListId": self.list_id,
+            "sharepointLibrary": self.library_name,
+            "senderEmail": self.sender_email,
+            "notificationRecipient": self.notification_recipient,
+            "isConnected": bool(self.client_id and self.client_secret and self.tenant_id),
+        }
+
+    async def _columnas_lista(self):
+        token = await self._obtener_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/columns"
+        async with httpx.AsyncClient() as cliente:
+            resp = await cliente.get(url, headers=headers)
+            resp.raise_for_status()
+            cols = resp.json().get("value", [])
+            return {c["name"]: c.get("displayName", c["name"]) for c in cols}
+
+    async def probar_conexion(self):
+        resultados = {"pasos": []}
+
+        token = await self._obtener_token()
+        headers = {"Authorization": f"Bearer {token}"}
+
+        async with httpx.AsyncClient() as cliente:
+            resultados["pasos"].append({"paso": "Token OAuth2", "ok": True})
+
+            url_site = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}"
+            resp = await cliente.get(url_site, headers=headers)
+            resultados["pasos"].append({
+                "paso": "Acceso al sitio",
+                "ok": resp.status_code == 200,
+                "status": resp.status_code,
+                "detalle": resp.json().get("displayName", resp.json().get("error", {}).get("message", "")) if resp.status_code == 200 else resp.text[:200],
+            })
+
+            try:
+                drive_id = await self._obtener_drive_id()
+                url_drives = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/drives"
+                resp_d = await cliente.get(url_drives, headers=headers)
+                drives_nombres = [d.get("name", "?") for d in resp_d.json().get("value", [])]
+                resultados["pasos"].append({
+                    "paso": "Resolver drive/librería",
+                    "ok": True,
+                    "driveId": drive_id,
+                    "drivesDisponibles": drives_nombres,
+                })
+            except Exception as e:
+                resultados["pasos"].append({"paso": "Resolver drive/librería", "ok": False, "error": str(e)})
+
+            url_list = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}"
+            resp_l = await cliente.get(url_list, headers=headers)
+            resultados["pasos"].append({
+                "paso": "Acceso a lista SharePoint",
+                "ok": resp_l.status_code == 200,
+                "status": resp_l.status_code,
+                "detalle": resp_l.json().get("displayName", resp_l.json().get("error", {}).get("message", "")) if resp_l.status_code == 200 else resp_l.text[:300],
+            })
+
+            if resp_l.status_code == 200:
+                url_items = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items?$top=1&$select=id,fields"
+                resp_items = await cliente.get(url_items, headers=headers)
+                items_count = len(resp_items.json().get("value", []))
+                resultados["pasos"].append({
+                    "paso": "Listar items de la lista",
+                    "ok": resp_items.status_code == 200,
+                    "status": resp_items.status_code,
+                    "itemsEncontrados": items_count,
+                })
+
+            try:
+                drive_id = await self._obtener_drive_id()
+                url_root = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/drives/{drive_id}/root/children"
+                resp_r = await cliente.get(url_root, headers=headers)
+                carpetas = [i.get("name", "?") for i in resp_r.json().get("value", [])[:5]]
+                resultados["pasos"].append({
+                    "paso": "Listar contenido raíz del drive",
+                    "ok": resp_r.status_code == 200,
+                    "status": resp_r.status_code,
+                    "primerosElementos": carpetas,
+                })
+            except Exception as e:
+                resultados["pasos"].append({"paso": "Listar contenido raíz del drive", "ok": False, "error": str(e)})
+
+        todos_ok = all(p.get("ok", False) for p in resultados["pasos"])
+        resultados["ok"] = todos_ok
+        resultados["message"] = "Todos los pasos OK" if todos_ok else "Algunos pasos fallaron - revisa los detalles"
+
+        return resultados

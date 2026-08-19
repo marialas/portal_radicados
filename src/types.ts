@@ -8,13 +8,9 @@
  */
 
 export type FilingStatus = 
-  | 'Borrador'
-  | 'Completo'
   | 'Radicado'
-  | 'En Revisión'
   | 'Aprobado'
-  | 'Con Observaciones'
-  | 'Subsanación Requerida';
+  | 'Con Observaciones';
 
 export type UserRole = 'interventor' | 'contratista' | 'admin';
 
@@ -38,7 +34,6 @@ export interface SignatureData {
 }
 
 export interface ProjectMetadata {
-  codigoProyecto: string;
   nombreProyecto: string;
   municipio: string;
   contratista: string;
@@ -104,13 +99,9 @@ export interface M365Config {
 }
 
 export const FILING_STATUSES: FilingStatus[] = [
-  'Borrador',
-  'Completo',
   'Radicado',
-  'En Revisión',
   'Aprobado',
-  'Con Observaciones',
-  'Subsanación Requerida'
+  'Con Observaciones'
 ];
 
 export const USER_ROLES = {

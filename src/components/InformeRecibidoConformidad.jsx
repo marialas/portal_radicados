@@ -180,7 +180,7 @@ export const InformeRecibidoConformidad = ({
     day: 'numeric' 
   });
 
-  const verificationUrl = `${window.location.origin}/verificar?radicado=${encodeURIComponent(filing.numeroRadicado)}&codigo=${encodeURIComponent(filing.metadata.codigoProyecto)}`;
+  const verificationUrl = `${window.location.origin}/verificar?radicado=${encodeURIComponent(filing.numeroRadicado)}`;
 
   return (
     <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 font-sans">
@@ -189,12 +189,12 @@ export const InformeRecibidoConformidad = ({
         @media print {
           @page {
             size: letter portrait;
-            margin: 2.54cm;
+            margin: 0;
           }
           header, aside, nav, .print\\:hidden {
             display: none !important;
           }
-          html, body, #root, div, main, section {
+          html, body, #root, main, div, section, article {
             overflow: visible !important;
             height: auto !important;
             min-height: 0 !important;
@@ -207,19 +207,43 @@ export const InformeRecibidoConformidad = ({
             padding: 0 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
-            font-size: 10px !important;
-            font-family: ui-sans-serif, system-ui, sans-serif !important;
+            font-size: 11px !important;
+          }
+          .print-canvas {
+            margin: 0 !important;
+            padding: 12mm 12mm 12mm 12mm !important;
+            width: 100% !important;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            font-family: Georgia, 'Times New Roman', serif !important;
+            font-size: 12px !important;
+          }
+          .print-canvas > * + * {
+            margin-top: 1rem !important;
           }
           .page-break-avoid {
             break-inside: avoid !important;
             page-break-inside: avoid !important;
           }
+          h1, h2, h3, h4 {
+            break-after: avoid !important;
+            page-break-after: avoid !important;
+          }
           .print-border-clean {
             border: 1px solid #cbd5e1 !important;
             box-shadow: none !important;
+            border-radius: 4px !important;
           }
           .print-bg-slate {
             background-color: #f8fafc !important;
+          }
+          table {
+            border-collapse: collapse !important;
+            page-break-inside: auto !important;
+          }
+          .print-justify {
+            text-align: justify !important;
           }
         }
       `}</style>
@@ -242,13 +266,13 @@ export const InformeRecibidoConformidad = ({
           <button
             onClick={() => setSigningRole(isRol2Contratista ? 'contratista' : 'interventoria')}
             className="flex items-center space-x-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-950 font-black text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl border border-emerald-300 transition-all cursor-pointer shadow-sm"
-            title={isRol2Contratista ? "Gestionar Firma Digital del Contratista (Rol 2)" : "Gestionar Firma Digital de Interventoría (Rol 1)"}
+            title={isRol2Contratista ? "Gestionar Firma Digital del Contratista" : "Gestionar Firma Digital de Interventoría"}
           >
             <PenTool className="w-4 h-4 text-emerald-800" />
             <span>
               {isRol2Contratista
-                ? (filing.metadata.firmaContratista ? '✓ Firma Contratista' : 'Firmar Digitalmente (Rol 2)')
-                : (filing.metadata.firmaInterventoria ? '✓ Firma Revisor' : 'Firmar Digitalmente (Rol 1)')
+                ? (filing.metadata.firmaContratista ? '✓ Firma Contratista' : 'Firmar Digitalmente')
+                : (filing.metadata.firmaInterventoria ? '✓ Firma Revisor' : 'Firmar Digitalmente')
               }
             </span>
           </button>
@@ -277,13 +301,13 @@ export const InformeRecibidoConformidad = ({
       {/* Helper notice for PDF printing */}
       <div className="mb-6 bg-slate-100 border border-slate-300 text-slate-700 p-3 rounded-xl text-xs flex items-center space-x-2 print:hidden shadow-sm">
         <span className="font-extrabold text-slate-900 text-sm">💡 Tip de Impresión PDF:</span>
-        <span>En la ventana del navegador, desmarca la casilla <strong>"Encabezados y pies de página"</strong> (Headers and Footers) para obtener un informe sin URL ni fecha en los márgenes.</span>
+        <span>El informe se imprime con formato carta y sin las marcas del navegador (URL, fecha, páginas). En la ventana de impresión, selecciona <strong>"Guardar como PDF"</strong> y elige <strong>Letter</strong> como tamaño si no viene preseleccionado.</span>
       </div>
 
       {/* Main Corporate Report Canvas (Official Letterhead Format) */}
       <div 
         ref={printRef}
-        className="bg-white p-6 sm:p-10 shadow-2xl rounded-2xl border border-gray-200 text-slate-900 font-sans space-y-7 print:shadow-none print:border-none print:p-0 print:m-0 print:rounded-none"
+        className="print-canvas bg-white p-6 sm:p-10 shadow-2xl rounded-2xl border border-gray-200 text-slate-900 font-sans space-y-7 print:shadow-none print:border-none print:rounded-none"
       >
         {/* OFFICIAL INTECOAL LETTERHEAD HEADER */}
         <div className="border-b-2 border-slate-800 pb-5 space-y-4 page-break-avoid">
@@ -318,6 +342,30 @@ export const InformeRecibidoConformidad = ({
 
         {/* DOCUMENT HEADER & FORMAL EXECUTIVE HEADING */}
         <div className="space-y-4 page-break-avoid">
+          {/* CONTROL DE DOCUMENTO OFICIAL */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-700 border border-slate-300 rounded-lg px-3 py-2 bg-slate-50 page-break-avoid print-border-clean">
+            <div className="space-y-0.5">
+              <span className="block text-slate-500 text-[8px]">N° Radicado</span>
+              <span className="font-black text-slate-900">{filing.numeroRadicado}</span>
+            </div>
+            <div className="space-y-0.5">
+              <span className="block text-slate-500 text-[8px]">Versión</span>
+              <span className="font-black text-slate-900">1.0</span>
+            </div>
+            <div className="space-y-0.5">
+              <span className="block text-slate-500 text-[8px]">Referencia Radicado</span>
+              <span className="font-black text-slate-900">{filing.numeroRadicado}</span>
+            </div>
+            <div className="space-y-0.5">
+              <span className="block text-slate-500 text-[8px]">Fecha de Emisión</span>
+              <span className="font-black text-slate-900">{formattedDate}</span>
+            </div>
+            <div className="space-y-0.5">
+              <span className="block text-slate-500 text-[8px]">Clasificación</span>
+              <span className="font-black text-slate-900">Público · Interventoría</span>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-700 font-medium bg-slate-50 p-3.5 rounded-xl border border-slate-200 print-border-clean">
             <div className="space-y-1">
               <div><strong className="text-slate-900">CIUDAD Y FECHA:</strong> Villavicencio (Meta), {formattedDate}</div>
@@ -329,7 +377,7 @@ export const InformeRecibidoConformidad = ({
             <div className="space-y-1">
               <div><strong className="text-slate-900">CONTRATISTA DE OBRA:</strong> {filing.metadata.contratista} {filing.metadata.nitContratista ? `(NIT: ${filing.metadata.nitContratista})` : ''}</div>
               <div><strong className="text-slate-900">PROYECTO:</strong> {filing.metadata.nombreProyecto}</div>
-              <div><strong className="text-slate-900">CONTRATO / FICHA N°:</strong> {filing.metadata.codigoProyecto}</div>
+              <div><strong className="text-slate-900">N° RADICADO:</strong> {filing.numeroRadicado}</div>
               <div><strong className="text-slate-900">TIPO DE RADICACIÓN:</strong> {filing.metadata.tipoEntrega || 'Entrega Inicial de Proyecto'}</div>
             </div>
           </div>
@@ -366,7 +414,7 @@ export const InformeRecibidoConformidad = ({
               </div>
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <span className="bg-slate-900 text-[#D9CF43] text-[10px] font-mono font-bold px-2.5 py-0.5 rounded border border-slate-700">
-                  Ficha / Código: {filing.metadata.codigoProyecto}
+                  Radicado: {filing.numeroRadicado}
                 </span>
                 <span className="bg-slate-100 text-slate-900 text-[10px] font-bold px-2.5 py-0.5 rounded border border-slate-300">
                   Ubicación: {filing.metadata.municipio} (Meta)
@@ -390,15 +438,15 @@ export const InformeRecibidoConformidad = ({
                 Entidad Interventora Especializada
               </span>
               <div className="text-xs font-black text-slate-900">INTECOAL S.A.S.</div>
-              <div className="text-[11px] text-slate-600">Ingeniero Director: <strong className="text-slate-900">{filing.metadata.responsableRevision || 'John Fredy Castro'}</strong></div>
+              <div className="text-[11px] text-slate-600">Responsable de Revisión: <strong className="text-slate-900">{filing.metadata.responsableRevision || 'Responsable de Revisión'}</strong></div>
             </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1 print-border-clean">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
-                Trazabilidad Microsoft 365
+                Trazabilidad Documental
               </span>
-              <div className="text-xs font-black text-slate-900">SharePoint / OneDrive Alborada</div>
-              <div className="text-[11px] text-slate-600 truncate">Ruta: <span className="font-mono text-[10px]">/Radicaciones/{filing.metadata.codigoProyecto}/</span></div>
+              <div className="text-xs font-black text-slate-900">Repositorio Documental (SharePoint)</div>
+              <div className="text-[11px] text-slate-600 truncate">Ruta: <span className="font-mono text-[10px]">/Documentos_Radicacion/{filing.numeroRadicado}/</span></div>
             </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1 print-border-clean">
@@ -419,7 +467,7 @@ export const InformeRecibidoConformidad = ({
               2. MARCO LEGAL Y FUNDAMENTO REGULATORIO APLICABLE
             </h2>
           </div>
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-[11px] text-slate-700 leading-relaxed space-y-1.5 print-border-clean">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-[11px] text-slate-700 leading-relaxed space-y-1.5 print-border-clean print-justify">
             <p>
               El presente informe técnico de interventoría se emite bajo el riguroso cumplimiento del marco legal colombiano vigente para infraestructura de iluminación pública:
             </p>
@@ -649,7 +697,7 @@ export const InformeRecibidoConformidad = ({
             </h2>
           </div>
 
-          <div className="border border-slate-300 rounded-xl p-4 bg-slate-50 text-xs text-slate-800 font-medium leading-relaxed space-y-2 print-border-clean">
+          <div className="border border-slate-300 rounded-xl p-4 bg-slate-50 text-xs text-slate-800 font-medium leading-relaxed space-y-2 print-border-clean print-justify">
             <p className="font-semibold text-slate-900">
               {filing.observacionesGenerales || 'En calidad de Interventoría Técnica Especializada INTECOAL S.A.S., previa revisión minuciosa del expediente digital radicado, se emite el presente dictamen técnico de conformidad.'}
             </p>
@@ -728,7 +776,7 @@ export const InformeRecibidoConformidad = ({
                           className="bg-slate-900 hover:bg-slate-800 text-[#D9CF43] font-black text-[10px] px-3 py-1.5 rounded-lg shadow transition-all inline-flex items-center space-x-1 cursor-pointer scale-105"
                         >
                           <PenTool className="w-3 h-3" />
-                          <span>Crear / Subir Firma Digital (Rol 1)</span>
+                          <span>Crear / Subir Firma Digital</span>
                         </button>
                       </div>
                     ) : (
@@ -740,7 +788,7 @@ export const InformeRecibidoConformidad = ({
 
                     <div className="hidden print:block w-full text-center py-5">
                       <div className="border-b-2 border-slate-800 w-48 mx-auto mb-1"></div>
-                      <span className="text-[9px] font-bold text-slate-600 uppercase">Firma Autógrafa / Director Interventoría</span>
+                      <span className="text-[9px] font-bold text-slate-600 uppercase">Firma Autógrafa / Responsable de Revisión</span>
                     </div>
                   </>
                 )}
@@ -748,10 +796,10 @@ export const InformeRecibidoConformidad = ({
 
               <div className="text-center pt-1 border-t border-slate-200">
                 <p className="font-extrabold text-slate-900 text-xs">
-                  {filing.metadata.firmaInterventoria?.nombreSignatario || filing.metadata.responsableRevision || 'John Fredy Castro'}
+                  {filing.metadata.firmaInterventoria?.nombreSignatario || filing.metadata.responsableRevision || 'Responsable de Revisión'}
                 </p>
                 <p className="text-[10px] font-bold text-slate-500 uppercase">
-                  {filing.metadata.firmaInterventoria?.cargo || 'Director de Interventoría'}
+                  {filing.metadata.firmaInterventoria?.cargo || 'Responsable de Revisión'}
                 </p>
               </div>
             </div>
@@ -821,7 +869,7 @@ export const InformeRecibidoConformidad = ({
                           className="bg-slate-800 hover:bg-slate-700 text-white font-black text-[10px] px-3 py-1.5 rounded-lg shadow transition-all inline-flex items-center space-x-1 cursor-pointer scale-105"
                         >
                           <PenTool className="w-3 h-3" />
-                          <span>Crear / Subir Firma Digital (Rol 2)</span>
+                          <span>Crear / Subir Firma Digital</span>
                         </button>
                       </div>
                     ) : (
@@ -885,12 +933,12 @@ export const InformeRecibidoConformidad = ({
           role={signingRole}
           defaultName={
             signingRole === 'interventoria'
-              ? (currentUser?.role === 'interventor' ? currentUser?.name : filing.metadata.responsableRevision) || filing.metadata.responsableRevision || 'John Fredy Castro'
+              ? (currentUser?.role === 'interventor' ? currentUser?.name : filing.metadata.responsableRevision) || filing.metadata.responsableRevision || 'Responsable de Revisión'
               : (currentUser?.role === 'contratista' ? currentUser?.name : filing.metadata.responsable) || filing.metadata.responsable || 'Director de Obra'
           }
           defaultRole={
             signingRole === 'interventoria'
-              ? 'Director de Interventoría (INTECOAL S.A.S.)'
+              ? 'Responsable de Revisión (INTECOAL S.A.S.)'
               : 'Representante Técnico Contratista'
           }
           initialSignature={

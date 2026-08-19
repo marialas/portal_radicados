@@ -6,10 +6,10 @@ import {
   Clock, 
   AlertCircle, 
   Eye, 
-  FolderGit2, 
   Plus, 
   FileSpreadsheet,
-  Edit3
+  Edit3,
+  Trash2
 } from 'lucide-react';
 
 export const RadicacionesList = ({
@@ -17,8 +17,8 @@ export const RadicacionesList = ({
   onSelectFiling,
   onEvaluateFiling,
   onNewFiling,
-  onSelectOneDrive,
   onUpdateStatus,
+  onDeleteFiling,
   userRole = 'interventor',
   currentUser
 }) => {
@@ -27,24 +27,23 @@ export const RadicacionesList = ({
   const [selectedEstado, setSelectedEstado] = useState('TODOS');
   const [selectedTipo, setSelectedTipo] = useState('TODOS');
 
-  const userFilings = (userRole === 'contratista' && currentUser)
-    ? filings.filter(f => {
-        const userEmailClean = (currentUser.email || '').toLowerCase().trim();
-        const respEmailClean = (f.metadata.correoResponsable || '').toLowerCase().trim();
-        const userCompanyClean = (currentUser.company || '').toLowerCase().trim();
-        const filingCompanyClean = (f.metadata.contratista || '').toLowerCase().trim();
+  const deletableFilingId = React.useMemo(() => {
+    if (!filings.length || !onDeleteFiling) return null;
+    if (userRole !== 'contratista') return null;
+    const mostRecent = filings.reduce((a, b) => {
+      const da = new Date(a.fechaRadicacion || 0);
+      const db = new Date(b.fechaRadicacion || 0);
+      return db > da ? b : a;
+    });
+    const creatorEmail = (mostRecent.creadorEmail || mostRecent.metadata?.creadorEmail || '').toLowerCase().trim();
+    const userEmail = (currentUser?.email || '').toLowerCase().trim();
+    if (creatorEmail && userEmail && creatorEmail !== userEmail) return null;
+    return mostRecent.id;
+  }, [filings, currentUser, onDeleteFiling, userRole]);
 
-        const emailMatch = Boolean(userEmailClean && respEmailClean && (userEmailClean === respEmailClean || respEmailClean.includes(userEmailClean) || userEmailClean.includes(respEmailClean)));
-        const companyMatch = Boolean(userCompanyClean && filingCompanyClean && (filingCompanyClean.includes(userCompanyClean) || userCompanyClean.includes(filingCompanyClean)));
-
-        return emailMatch || companyMatch;
-      })
-    : filings;
-
-  const filtered = userFilings.filter(f => {
+  const filtered = filings.filter(f => {
     const matchesSearch = 
       f.numeroRadicado.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      f.metadata.codigoProyecto.toLowerCase().includes(searchTerm.toLowerCase()) ||
       f.metadata.nombreProyecto.toLowerCase().includes(searchTerm.toLowerCase()) ||
       f.metadata.contratista.toLowerCase().includes(searchTerm.toLowerCase()) ||
       f.metadata.municipio.toLowerCase().includes(searchTerm.toLowerCase());
@@ -56,14 +55,14 @@ export const RadicacionesList = ({
     return matchesSearch && matchesMuni && matchesEstado && matchesTipo;
   });
 
-  const totalCount = userFilings.length;
-  const aprobadasCount = userFilings.filter(f => f.estado === 'Aprobado' || f.porcentajeCumplimiento === 100).length;
-  const conObsCount = userFilings.filter(f => f.estado === 'Con Observaciones' || f.estado === 'Subsanación Requerida').length;
+  const totalCount = filings.length;
+  const aprobadasCount = filings.filter(f => f.estado === 'Aprobado' || f.porcentajeCumplimiento === 100).length;
+  const conObsCount = filings.filter(f => f.estado === 'Con Observaciones').length;
   const avgCompliance = totalCount > 0 
-    ? Math.round(userFilings.reduce((acc, f) => acc + f.porcentajeCumplimiento, 0) / totalCount) 
+    ? Math.round(filings.reduce((acc, f) => acc + f.porcentajeCumplimiento, 0) / totalCount) 
     : 0;
 
-  const municipiosList = Array.from(new Set(userFilings.map(f => f.metadata.municipio)));
+  const municipiosList = Array.from(new Set(filings.map(f => f.metadata.municipio)));
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-8 font-sans">
@@ -76,7 +75,7 @@ export const RadicacionesList = ({
             <span className="text-3xl font-black text-gray-900 mt-1 block">
               {totalCount}
             </span>
-            <span className="text-xs text-gray-400 mt-1 block">Registradas en M365</span>
+            <span className="text-xs text-gray-400 mt-1 block">Radicaciones Registradas</span>
           </div>
           <div className="bg-gray-100 p-3 rounded-lg text-[#0D0D0D]">
             <FileCheck2 className="w-6 h-6 text-[#D9CF43]" />
@@ -106,7 +105,7 @@ export const RadicacionesList = ({
             <span className="text-3xl font-black text-amber-600 mt-1 block">
               {conObsCount}
             </span>
-            <span className="text-xs text-amber-700 mt-1 block font-semibold">Pendiente Subsanación</span>
+            <span className="text-xs text-amber-700 mt-1 block font-semibold">Requiere Revisión</span>
           </div>
           <div className="bg-amber-50 p-3 rounded-lg text-amber-600">
             <Clock className="w-6 h-6" />
@@ -137,7 +136,7 @@ export const RadicacionesList = ({
                 Histórico de Radicaciones Documentales
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
-                Consulte el estado, lista de chequeo y carpeta de OneDrive de cada entrega de proyecto.
+                Consulte el estado y la lista de chequeo de cada entrega de proyecto.
               </p>
             </div>
 
@@ -145,7 +144,7 @@ export const RadicacionesList = ({
               <button
                 onClick={onNewFiling}
                 className="bg-[#1E222A] hover:bg-slate-800 text-[#D9CF43] font-black text-xs px-4 py-2.5 rounded-lg shadow transition-all flex items-center justify-center space-x-2 shrink-0 cursor-pointer"
-                title="Radicar nuevo expediente de alumbrado público (Rol 2)"
+                title="Radicar nuevo expediente de alumbrado público"
               >
                 <Plus className="w-4 h-4 text-[#D9CF43]" />
                 <span>NUEVA RADICACIÓN</span>
@@ -185,10 +184,9 @@ export const RadicacionesList = ({
                 className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-[#D9CF43]"
               >
                 <option value="TODOS">Todos los Estados</option>
-                <option value="Aprobado">Aprobado</option>
                 <option value="Radicado">Radicado</option>
+                <option value="Aprobado">Aprobado</option>
                 <option value="Con Observaciones">Con Observaciones</option>
-                <option value="Subsanación Requerida">Subsanación Requerida</option>
               </select>
             </div>
 
@@ -213,7 +211,7 @@ export const RadicacionesList = ({
             <thead>
               <tr className="bg-[#0D0D0D] text-white text-xs font-extrabold uppercase tracking-wider">
                 <th className="py-3 px-4">N° Radicado</th>
-                <th className="py-3 px-4">Código Proyecto</th>
+                <th className="py-3 px-4">Proyecto</th>
                 <th className="py-3 px-4">Municipio</th>
                 <th className="py-3 px-4">Contratista</th>
                 <th className="py-3 px-4 text-center">Tipo</th>
@@ -233,10 +231,9 @@ export const RadicacionesList = ({
                 </tr>
               ) : (
                 filtered.map((filing) => {
-                  let badgeBg = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+                  let badgeBg = 'bg-blue-100 text-blue-800 border-blue-300';
+                  if (filing.estado === 'Aprobado') badgeBg = 'bg-emerald-100 text-emerald-800 border-emerald-300';
                   if (filing.estado === 'Con Observaciones') badgeBg = 'bg-amber-100 text-amber-800 border-amber-300';
-                  if (filing.estado === 'Subsanación Requerida') badgeBg = 'bg-red-100 text-red-800 border-red-300';
-                  if (filing.estado === 'Radicado') badgeBg = 'bg-blue-100 text-blue-800 border-blue-300';
 
                   return (
                     <tr key={filing.id} className="hover:bg-amber-50/30 transition-colors">
@@ -246,7 +243,7 @@ export const RadicacionesList = ({
                         </span>
                       </td>
                       <td className="py-3 px-4 font-extrabold text-gray-800">
-                        {filing.metadata.codigoProyecto}
+                        {filing.metadata.nombreProyecto}
                       </td>
                       <td className="py-3 px-4 font-medium text-gray-700">
                         {filing.metadata.municipio}
@@ -283,16 +280,14 @@ export const RadicacionesList = ({
                               title="Cambiar estado como Revisor de Interventoría"
                             >
                               <option value="Aprobado">✓ Aprobado</option>
-                              <option value="Radicado">📋 Radicado</option>
                               <option value="Con Observaciones">⚠️ Con Observaciones</option>
-                              <option value="Subsanación Requerida">❌ Subsanación Requerida</option>
                             </select>
                             <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
-                              filing.estado === 'Aprobado' || filing.m365Synced
+                              filing.estado === 'Aprobado'
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : 'bg-gray-100 text-gray-500'
                             }`}>
-                              {filing.estado === 'Aprobado' || filing.m365Synced ? '☁️ Sincronizado M365' : '⏳ Pendiente Carga'}
+                              {filing.estado === 'Aprobado' ? '✓ Cargado en SharePoint' : '⏳ Pendiente de Aprobación'}
                             </span>
                           </div>
                         ) : (
@@ -301,11 +296,11 @@ export const RadicacionesList = ({
                               {filing.estado}
                             </span>
                             <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
-                              filing.estado === 'Aprobado' || filing.m365Synced
+                              filing.estado === 'Aprobado'
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : 'bg-gray-100 text-gray-500'
                             }`}>
-                              {filing.estado === 'Aprobado' || filing.m365Synced ? '☁️ Sincronizado M365' : '⏳ Pendiente Carga'}
+                              {filing.estado === 'Aprobado' ? '✓ Cargado en SharePoint' : '⏳ Pendiente de Aprobación'}
                             </span>
                           </div>
                         )}
@@ -335,14 +330,16 @@ export const RadicacionesList = ({
                             <span>Informe</span>
                           </button>
 
-                          <button
-                            onClick={() => onSelectOneDrive(filing)}
-                            className="bg-sky-50 hover:bg-sky-100 text-sky-900 font-bold text-xs px-2.5 py-1.5 rounded transition-colors border border-sky-300 flex items-center space-x-1"
-                            title="Ver Visor Documental M365 / OneDrive / SharePoint"
-                          >
-                            <FolderGit2 className="w-3.5 h-3.5 text-sky-700" />
-                            <span>M365 / Nube</span>
-                          </button>
+                          {onDeleteFiling && filing.id === deletableFilingId && (
+                            <button
+                              onClick={() => onDeleteFiling(filing.id)}
+                              className="bg-red-50 hover:bg-red-100 text-red-700 font-extrabold text-xs px-2.5 py-1.5 rounded flex items-center space-x-1 transition-colors border border-red-200 shadow-sm"
+                              title="Eliminar este radicado (solo el más reciente)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Eliminar</span>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

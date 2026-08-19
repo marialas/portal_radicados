@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { DOCUMENT_CATALOG } from '../data/documentsCatalog';
+import { formatNameFromEmail } from '../lib/msalConfig';
 import { 
   CheckCircle2, 
   AlertTriangle, 
@@ -50,18 +51,18 @@ export const EvaluacionRadicacion = ({
         fileType: 'application/pdf',
         uploadDate: '',
         status: 'PENDIENTE',
-        folderPath: `/Documentos_Radicacion/${filing.metadata.codigoProyecto}/${doc.folderGroup}/`,
+        folderPath: `/Documentos_Radicacion/${filing.numeroRadicado}/${doc.folderGroup}/`,
         notes: ''
       };
     });
   });
 
-  const [estadoGeneral, setEstadoGeneral] = useState(filing.estado || 'En Revisión');
+  const [estadoGeneral, setEstadoGeneral] = useState(filing.estado || 'Radicado');
   const [observacionesGenerales, setObservacionesGenerales] = useState(
     filing.observacionesGenerales || ''
   );
   const [responsableRevision, setResponsableRevision] = useState(
-    filing.metadata.responsableRevision || 'John Fredy Castro (INTECOAL SAS)'
+    filing.metadata.responsableRevision || formatNameFromEmail(currentUser?.email) || currentUser?.name || 'Responsable de Revisión'
   );
   const [firmaInterventoria, setFirmaInterventoria] = useState(
     filing.metadata.firmaInterventoria
@@ -133,9 +134,7 @@ export const EvaluacionRadicacion = ({
     let autoEstado = estadoGeneral;
     if (porcentajeCumplimiento === 100) {
       autoEstado = 'Aprobado';
-    } else if (noCumpleCount > 0) {
-      autoEstado = 'Subsanación Requerida';
-    } else if (conObsCount > 0) {
+    } else if (noCumpleCount > 0 || conObsCount > 0) {
       autoEstado = 'Con Observaciones';
     }
 
@@ -169,12 +168,11 @@ export const EvaluacionRadicacion = ({
 
       if (res.ok) {
         if (autoEstado === 'Aprobado') {
-          // Disparar sincronización explícita a M365
-          await fetch(`/api/sharepoint/sync-filing/${filing.id}`, { method: 'POST' }).catch(() => {});
+          // La carga a SharePoint se ejecuta automáticamente en el backend al aprobar
           updatedFiling.m365Synced = true;
-          setSaveSuccessMsg('¡Radicado APROBADO y sincronizado/cargado automáticamente en Microsoft 365 SharePoint/OneDrive!');
+          setSaveSuccessMsg('¡Radicado APROBADO y cargado automáticamente en SharePoint!');
         } else {
-          setSaveSuccessMsg('¡Evaluación guardada exitosamente en el sistema e historial M365!');
+          setSaveSuccessMsg('¡Evaluación guardada exitosamente!');
         }
       }
     } catch (err) {
@@ -242,7 +240,7 @@ export const EvaluacionRadicacion = ({
               title="Descargar paquete ZIP con la carpeta del proyecto y PDFs para subir a SharePoint"
             >
               <Download className="w-4 h-4 text-[#1E222A]" />
-              <span>📦 Descargar ZIP M365</span>
+              <span>📦 Descargar ZIP del Expediente</span>
             </button>
 
             <button
@@ -253,11 +251,11 @@ export const EvaluacionRadicacion = ({
                   ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/80' 
                   : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
               }`}
-              title="Crear, editar o eliminar firma de Interventoría (Rol 1)"
+              title="Crear, editar o eliminar firma de Interventoría"
             >
               <PenTool className="w-4 h-4 text-[#D9CF43]" />
               <span>
-                {firmaInterventoria ? '✓ Firma Revisor Estampada' : 'Firmar Digitalmente (Rol 1)'}
+                {firmaInterventoria ? '✓ Firma Revisor Estampada' : 'Firmar Digitalmente'}
               </span>
             </button>
 
@@ -289,8 +287,8 @@ export const EvaluacionRadicacion = ({
             <span className="font-mono font-black text-[#D9CF43] text-sm block">{filing.numeroRadicado}</span>
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Proyecto / Código</span>
-            <span className="font-bold text-gray-200 block truncate">{filing.metadata.codigoProyecto} - {filing.metadata.nombreProyecto}</span>
+            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Radicado</span>
+            <span className="font-bold text-gray-200 block truncate">{filing.numeroRadicado} - {filing.metadata.nombreProyecto}</span>
           </div>
           <div>
             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Contratista</span>
@@ -386,9 +384,6 @@ export const EvaluacionRadicacion = ({
               >
                 <option value="Aprobado">✓ Aprobado (Recibido a Conformidad)</option>
                 <option value="Con Observaciones">⚠️ Con Observaciones</option>
-                <option value="Subsanación Requerida">❌ Subsanación Requerida</option>
-                <option value="En Revisión">🔍 En Revisión Técnica</option>
-                <option value="Radicado">📋 Radicado</option>
               </select>
             </div>
           </div>
@@ -396,7 +391,7 @@ export const EvaluacionRadicacion = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-bold text-gray-700 block mb-1">
-                Ingeniero / Revisor de Interventoría
+                Responsable de Revisión
               </label>
               <input
                 type="text"
@@ -422,7 +417,7 @@ export const EvaluacionRadicacion = ({
                     )
                   ) : (
                     <span className="text-[10px] bg-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded">
-                      🔒 Exclusivo Rol 1
+                      🔒 Exclusivo del Revisor
                     </span>
                   )}
                 </div>
@@ -469,7 +464,7 @@ export const EvaluacionRadicacion = ({
                       </button>
                     ) : (
                       <p className="text-[10px] text-gray-500 italic text-center">
-                        Solo un usuario con Rol 1 (Revisor / Interventor) puede firmar este dictamen.
+                        Solo el Responsable de Revisión puede firmar este dictamen.
                       </p>
                     )}
                   </div>
@@ -630,14 +625,14 @@ export const EvaluacionRadicacion = ({
                       )}
 
                       <a
-                        href={getOneDriveCloudUrl(filing?.rutaOneDrive, filing?.metadata?.codigoProyecto)}
+                        href={getOneDriveCloudUrl(filing?.rutaOneDrive, filing?.numeroRadicado)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="bg-slate-900 hover:bg-slate-800 text-[#D9CF43] font-bold text-[11px] px-2.5 py-1 rounded-lg border border-slate-700 inline-flex items-center space-x-1.5 transition-colors shadow-sm"
-                        title="Abrir carpeta de este proyecto en SharePoint / OneDrive Nube M365"
+                        title="Abrir carpeta de este proyecto en el repositorio SharePoint"
                       >
                         <Cloud className="w-3.5 h-3.5 text-[#D9CF43]" />
-                        <span>OneDrive Nube</span>
+                        <span>Ver en SharePoint</span>
                         <ExternalLink className="w-3 h-3 text-gray-300" />
                       </a>
                     </div>
@@ -730,7 +725,7 @@ export const EvaluacionRadicacion = ({
           <div className="flex items-center space-x-2 text-xs text-gray-300 font-medium">
             <Info className="w-4 h-4 text-[#D9CF43]" />
             <span>
-              Recuerde guardar la evaluación para actualizar el expediente en Microsoft 365 y generar el Informe Final.
+              Recuerde guardar la evaluación para actualizar el expediente y generar el Informe Final.
             </span>
           </div>
 
@@ -759,8 +754,8 @@ export const EvaluacionRadicacion = ({
       {showSignatureModal && (
         <FirmaDigitalModal
           role="interventoria"
-          defaultName={currentUser?.name || responsableRevision || 'John Fredy Castro'}
-          defaultRole="Director de Interventoría (INTECOAL SAS)"
+          defaultName={currentUser?.name || responsableRevision || 'Responsable de Revisión'}
+          defaultRole="Responsable de Revisión (INTECOAL SAS)"
           initialSignature={firmaInterventoria}
           onSaveSignature={(sig) => {
             setFirmaInterventoria(sig);

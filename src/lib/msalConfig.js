@@ -2,11 +2,9 @@ import { PublicClientApplication, LogLevel } from '@azure/msal-browser';
 
 // Configuración por defecto de Azure AD / Entra ID (INTECOAL SAS / Microsoft 365)
 export const DEFAULT_AZURE_CONFIG = {
-  clientId: import.meta.env.VITE_MSAL_CLIENT_ID || '8b9b82ba-f748-4a0e-a576-830cc1aea945', // Id. de aplicación (cliente) de INTECOAL
-  tenantId: (import.meta.env.VITE_MSAL_TENANT_ID && import.meta.env.VITE_MSAL_TENANT_ID !== 'ac1f8037-4133-4353-9ea4-5c65819815cb') 
-    ? import.meta.env.VITE_MSAL_TENANT_ID 
-    : 'organizations', // 'organizations' o 'common' permite inicio de sesión Multitenant con cualquier M365 (SENA, INTECOAL, Contratistas)
-  redirectUri: import.meta.env.VITE_MSAL_REDIRECT_URI || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'),
+  clientId: import.meta.env.VITE_MSAL_CLIENT_ID || '',
+  tenantId: import.meta.env.VITE_MSAL_TENANT_ID || 'organizations',
+  redirectUri: import.meta.env.VITE_MSAL_REDIRECT_URI || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173'),
   scopes: ['User.Read', 'openid', 'profile', 'email']
 };
 
@@ -88,7 +86,13 @@ export function formatNameFromEmail(email, m365DisplayName = null) {
 
   const words = prefix.split(/\s+/).filter(Boolean);
   const capitalized = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-  return capitalized.join(' ');
+  const nombre = capitalized.join(' ');
+
+  const empresa = extractCompanyFromEmail(email);
+  if (empresa && empresa !== 'EMPRESA REGISTRADA') {
+    return `${nombre} ${empresa}`;
+  }
+  return nombre;
 }
 
 export function extractCompanyFromEmail(email) {

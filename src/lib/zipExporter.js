@@ -7,7 +7,7 @@ import JSZip from 'jszip';
  */
 export async function downloadFilingZip(filing) {
   const zip = new JSZip();
-  const rootFolderName = filing.metadata?.codigoProyecto || 'EXPEDIENTE_RETILAP';
+  const rootFolderName = filing.numeroRadicado || 'EXPEDIENTE_RETILAP';
   const projectFolder = zip.folder(rootFolderName);
 
   // Subcarpetas estándar M365
@@ -24,9 +24,6 @@ INTERVENTORÍA Y CONSULTORÍA S.A.S. - INTECOAL S.A.S.
 
 DATOS DEL EXPEDIENTE:
 ---------------------
-Código del Proyecto: ${filing.metadata?.codigoProyecto || 'N/A'}
-Municipio: ${filing.metadata?.municipio || 'N/A'}
-Contratista: ${filing.metadata?.contratista || 'N/A'}
 Número de Radicado: ${filing.numeroRadicado || 'N/A'}
 Fecha de Radicación: ${filing.fechaRadicacion || 'N/A'}
 Estado: ${filing.estado || 'Aprobado'}
@@ -86,8 +83,6 @@ BT
 0 -30 Td
 (REQUISITO RETILAP: ${archivo.docCode} - ${sanitizeName(archivo.docName)}) Tj
 0 -20 Td
-(CODIGO PROYECTO: ${filing.metadata?.codigoProyecto || 'N/A'}) Tj
-0 -20 Td
 (NUMERO DE RADICADO: ${filing.numeroRadicado || 'N/A'}) Tj
 0 -20 Td
 (ESTADO VERIFICACION: CUMPLE / APROBADO EN M365) Tj
@@ -139,14 +134,13 @@ export function downloadRadicacionCSV(filing) {
   const values = [
     `"${filing.numeroRadicado || ''}"`,
     `"${filing.numeroRadicado || ''}"`,
-    `"${filing.metadata?.codigoProyecto || ''}"`,
     `"${filing.metadata?.municipio || ''}"`,
     `"${filing.metadata?.contratista || ''}"`,
     `"${filing.metadata?.tipoEntrega || 'AP'}"`,
     `"${filing.estado || 'Aprobado'}"`,
     `"${filing.porcentajeCumplimiento || 100}%"`,
     `"${filing.documentosOk || 21}"`,
-    `"https://interventoriayconsultoriaal.sharepoint.com/sites/VerificacinRETILAP/Documentos_Radicacion/${filing.metadata?.codigoProyecto || ''}"`
+    `"https://interventoriayconsultoriaal.sharepoint.com/sites/VerificacinRETILAP/Documentos_Radicacion/${filing.numeroRadicado || ''}"`
   ];
 
   const csvContent = "\uFEFF" + headers.join(",") + "\n" + values.join(",");
@@ -154,7 +148,7 @@ export function downloadRadicacionCSV(filing) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.setAttribute("href", url);
-  link.setAttribute("download", `Fila_SharePoint_Radicaciones_AP_${filing.metadata?.codigoProyecto || 'PRY'}.csv`);
+  link.setAttribute("download", `Fila_SharePoint_Radicaciones_AP_${filing.numeroRadicado || 'RAD'}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -167,14 +161,13 @@ export function downloadRadicacionCSV(filing) {
 export async function copySharePointRowData(filing) {
   const text = `Title: ${filing.numeroRadicado}
 NumeroRadicado: ${filing.numeroRadicado}
-CodigoProyecto: ${filing.metadata?.codigoProyecto}
 Municipio: ${filing.metadata?.municipio}
 Operador: ${filing.metadata?.contratista}
 TipoEntrega: ${filing.metadata?.tipoEntrega || 'AP'}
 Estado: ${filing.estado || 'Aprobado'}
 PorcentajeCumplimiento: ${filing.porcentajeCumplimiento}%
 DocumentosOk: ${filing.documentosOk || 21}
-RutaOneDrive: https://interventoriayconsultoriaal.sharepoint.com/sites/VerificacinRETILAP/Documentos_Radicacion/${filing.metadata?.codigoProyecto}`;
+RutaOneDrive: https://interventoriayconsultoriaal.sharepoint.com/sites/VerificacinRETILAP/Documentos_Radicacion/${filing.numeroRadicado}`;
 
   await navigator.clipboard.writeText(text);
 }

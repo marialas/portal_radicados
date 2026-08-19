@@ -2,7 +2,6 @@ import React from 'react';
 import { 
   PlusCircle, 
   ListFilter, 
-  FolderGit2, 
   Settings, 
   ShieldCheck, 
   ChevronRight
@@ -29,14 +28,6 @@ export const Sidebar = ({
       subtitle: userRole === 'interventor' ? 'Aprobar o Subsanar Expedientes' : 'Historial de Expedientes',
       icon: ListFilter,
       badge: filingCount,
-      roles: ['interventor', 'contratista']
-    },
-    {
-      id: 'onedrive',
-      label: 'OneDrive & SharePoint',
-      subtitle: 'Visor Documental Nube',
-      icon: FolderGit2,
-      badge: null,
       roles: ['interventor', 'contratista']
     }
   ];

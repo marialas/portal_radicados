@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { formatNameFromEmail } from '../lib/msalConfig';
 import { DOCUMENT_CATALOG } from '../data/documentsCatalog';
 import { 
   FileUp, 
@@ -18,8 +19,6 @@ import {
   ChevronRight,
   ChevronLeft,
   FileText,
-  Sparkles,
-  UploadCloud,
   PenTool,
   ShieldCheck,
   Edit3
@@ -30,21 +29,18 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [direction, setDirection] = useState(1);
 
-  const [isDragging, setIsDragging] = useState(false);
-
   const [selectedFiles, setSelectedFiles] = useState({});
   const [naDocs, setNaDocs] = useState([]);
   const [activeCategory, setActiveCategory] = useState('todos');
 
   const [metadata, setMetadata] = useState({
-    codigoProyecto: `INT-2026-0${Math.floor(Math.random() * 80) + 20}`,
     nombreProyecto: 'MODERNIZACION Y REPOSICION LUMINARIAS ALUMBRADO PUBLICO',
     municipio: 'CALIMA-DARIEN',
-    contratista: currentUser?.company || 'ELECTROINGENIERIA S.A.S.',
+    contratista: formatNameFromEmail(currentUser?.email) || currentUser?.company || 'ELECTROINGENIERIA S.A.S.',
     nitContratista: '891903664',
-    responsableRevision: 'John Fredy Castro',
-    responsable: currentUser?.name || 'John Fredy Castro',
-    correoResponsable: currentUser?.email || 'jcastro@electroingenieria.com.co',
+    responsableRevision: formatNameFromEmail(currentUser?.email) || currentUser?.name || 'Responsable de Revisión',
+    responsable: formatNameFromEmail(currentUser?.email) || currentUser?.name || 'Responsable',
+    correoResponsable: currentUser?.email || '',
     tipoEntrega: 'Inicial',
     fechaEntrega: new Date().toISOString().split('T')[0],
     observaciones: 'Radicación inicial de expediente técnico para verificación documental de interventoría.'
@@ -61,6 +57,10 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
   const [firmaContratista, setFirmaContratista] = useState(null);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [customDocs, setCustomDocs] = useState([]);
+  const [showAddDocModal, setShowAddDocModal] = useState(false);
+  const [newDoc, setNewDoc] = useState({ code: '', name: '', category: 'diseno', description: '' });
 
   const steps = [
     { 
@@ -81,7 +81,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
       number: 3, 
       id: 'firma', 
       title: 'Paso 3: Firma Digital', 
-      subtitle: 'Declaración de conformidad y envío M365',
+      subtitle: 'Declaración de conformidad y radicación',
       icon: PenTool
     }
   ];
@@ -117,31 +117,6 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
     }
   };
 
-  const handleDropzoneFiles = (filesList) => {
-    if (!filesList || filesList.length === 0) return;
-    
-    const updated = { ...selectedFiles };
-    Array.from(filesList).forEach((file) => {
-      const nameUpper = file.name.toUpperCase();
-      const matchedDoc = DOCUMENT_CATALOG.find(d => 
-        nameUpper.includes(d.code) || 
-        nameUpper.includes(`DOC_${d.id}`) ||
-        nameUpper.includes(d.name.toUpperCase().slice(0, 10))
-      );
-
-      if (matchedDoc) {
-        updated[matchedDoc.id] = file;
-      } else {
-        const emptyDoc = DOCUMENT_CATALOG.find(d => !updated[d.id] && !naDocs.includes(d.id));
-        if (emptyDoc) {
-          updated[emptyDoc.id] = file;
-        }
-      }
-    });
-
-    setSelectedFiles(updated);
-  };
-
   const handleToggleNA = (docId) => {
     if (naDocs.includes(docId)) {
       setNaDocs(naDocs.filter(id => id !== docId));
@@ -153,13 +128,49 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
     }
   };
 
-  const totalDocs = DOCUMENT_CATALOG.length;
+  const handleAddCustomDoc = () => {
+    if (!newDoc.code.trim() || !newDoc.name.trim()) {
+      alert('Debe ingresar el código y nombre del documento.');
+      return;
+    }
+    const allDocs = [...DOCUMENT_CATALOG, ...customDocs];
+    if (allDocs.some(d => d.code.toUpperCase() === newDoc.code.trim().toUpperCase())) {
+      alert(`El código "${newDoc.code.trim()}" ya existe. Use uno diferente.`);
+      return;
+    }
+    const catLabels = { diseno: 'Documentos de Diseño', luminarias: 'Luminarias y Materiales', constructor: 'Documentos del Constructor', dictamenes: 'Dictámenes y Permisos' };
+    const id = 100 + customDocs.length;
+    setCustomDocs([...customDocs, {
+      id,
+      code: newDoc.code.trim().toUpperCase(),
+      name: newDoc.name.trim(),
+      category: newDoc.category,
+      categoryName: catLabels[newDoc.category] || 'Documento Adicional',
+      required: false,
+      folderGroup: 'Documentos_Adicionales',
+      description: newDoc.description.trim() || 'Documento adicional agregado manualmente.',
+      esManual: true
+    }]);
+    setNewDoc({ code: '', name: '', category: 'diseno', description: '' });
+    setShowAddDocModal(false);
+  };
+
+  const handleRemoveCustomDoc = (docId) => {
+    setCustomDocs(customDocs.filter(d => d.id !== docId));
+    const updatedFiles = { ...selectedFiles };
+    delete updatedFiles[docId];
+    setSelectedFiles(updatedFiles);
+    setNaDocs(naDocs.filter(id => id !== docId));
+  };
+
+  const allDocs = [...DOCUMENT_CATALOG, ...customDocs];
+  const totalDocs = allDocs.length;
   const attachedCount = Object.keys(selectedFiles).length;
   const naCount = naDocs.length;
   const totalCompleted = attachedCount + naCount;
   const percentage = Math.round((totalCompleted / totalDocs) * 100);
 
-  const missingMandatory = DOCUMENT_CATALOG.filter(d => d.required && !selectedFiles[d.id] && !naDocs.includes(d.id));
+  const missingMandatory = allDocs.filter(d => d.required && !selectedFiles[d.id] && !naDocs.includes(d.id));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -186,9 +197,19 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
       formData.append('elementos', JSON.stringify(elementos));
       formData.append('naDocs', JSON.stringify(naDocs));
 
+      const docsAdicionales = customDocs.map(doc => ({
+        docId: doc.id,
+        docCode: doc.code,
+        docName: doc.name,
+        category: doc.category,
+        description: doc.description,
+        esManual: true
+      }));
+      formData.append('docsAdicionales', JSON.stringify(docsAdicionales));
+
       Object.entries(selectedFiles).forEach(([docId, file]) => {
-        const docDef = DOCUMENT_CATALOG.find(d => d.id === parseInt(docId, 10));
-        const fieldName = docDef ? `archivo_${docDef.code}` : `archivo_${docId}`;
+        const docDef = allDocs.find(d => d.id === parseInt(docId, 10));
+        const fieldName = docDef?.esManual ? `archivo_custom_${docId}` : docDef ? `archivo_${docDef.code}` : `archivo_${docId}`;
         formData.append(fieldName, file);
       });
 
@@ -219,16 +240,16 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
   };
 
   const categories = [
-    { id: 'todos', label: 'Todos (21)' },
-    { id: 'diseno', label: '1. Diseño (7)' },
-    { id: 'luminarias', label: '2. Luminarias (7)' },
-    { id: 'constructor', label: '3. Constructor (4)' },
-    { id: 'dictamenes', label: '4. Dictámenes (3)' }
+    { id: 'todos', label: `Todos (${allDocs.length})` },
+    { id: 'diseno', label: `1. Diseño (${allDocs.filter(d => d.category === 'diseno').length})` },
+    { id: 'luminarias', label: `2. Luminarias (${allDocs.filter(d => d.category === 'luminarias').length})` },
+    { id: 'constructor', label: `3. Constructor (${allDocs.filter(d => d.category === 'constructor').length})` },
+    { id: 'dictamenes', label: `4. Dictámenes (${allDocs.filter(d => d.category === 'dictamenes').length})` }
   ];
 
   const filteredDocs = activeCategory === 'todos' 
-    ? DOCUMENT_CATALOG 
-    : DOCUMENT_CATALOG.filter(d => d.category === activeCategory);
+    ? allDocs 
+    : allDocs.filter(d => d.category === activeCategory);
 
   const stepVariants = {
     enter: (dir) => ({
@@ -348,61 +369,16 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                           PASO 1 DE 3
                         </span>
                         <h2 className="text-xl font-black text-[#0D0D0D] tracking-tight mt-1.5">
-                          Carga del Pliego Técnico y Expediente RETILAP
+                          Expediente Técnico del Proyecto
                         </h2>
                       </div>
 
                       <div className="flex items-center space-x-2 bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm shrink-0">
                         <span className="text-xs font-bold text-gray-600">Archivos:</span>
-                        <span className="text-sm font-black text-[#0D0D0D]">{totalCompleted} / 21</span>
+                        <span className="text-sm font-black text-[#0D0D0D]">{totalCompleted} / {totalDocs}</span>
                         <span className="text-xs font-extrabold text-[#0D0D0D] bg-[#D9CF43] px-2 py-0.5 rounded">
                           {percentage}%
                         </span>
-                      </div>
-                    </div>
-
-                    <div
-                      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                      onDragLeave={() => setIsDragging(false)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setIsDragging(false);
-                        if (e.dataTransfer.files) {
-                          handleDropzoneFiles(e.dataTransfer.files);
-                        }
-                      }}
-                      className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center transition-all duration-200 cursor-pointer ${
-                        isDragging 
-                          ? 'border-[#D9CF43] bg-[#D9CF43]/15 scale-[1.01]' 
-                          : 'border-[#BFBA6B] bg-gradient-to-b from-white to-[#BFBA6B]/10 hover:border-[#D9CF43] hover:bg-[#D9CF43]/10'
-                      }`}
-                    >
-                      <input
-                        type="file"
-                        multiple
-                        accept=".pdf,.zip,.rar,.dwg,.doc,.docx"
-                        onChange={(e) => e.target.files && handleDropzoneFiles(e.target.files)}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                      />
-
-                      <div className="flex flex-col items-center justify-center space-y-3">
-                        <div className="w-14 h-14 rounded-2xl bg-[#0D0D0D] text-[#D9CF43] flex items-center justify-center shadow-md">
-                          <UploadCloud className="w-7 h-7" />
-                        </div>
-                        <div>
-                          <p className="text-base font-extrabold text-[#0D0D0D]">
-                            Arrastre y suelte aquí los archivos del expediente técnico
-                          </p>
-                          <p className="text-xs text-gray-600 mt-1">
-                            Formatos soportados: PDF, ZIP, DWG, DOCX · El sistema asociará automáticamente los archivos según su código RETILAP.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          className="px-5 py-2.5 bg-[#0D0D0D] text-[#D9CF43] text-xs font-black rounded-xl shadow hover:bg-gray-800 transition-all pointer-events-none"
-                        >
-                          Examinar Carpetas o Archivos
-                        </button>
                       </div>
                     </div>
 
@@ -410,24 +386,34 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <h3 className="text-sm font-black text-[#0D0D0D] uppercase tracking-wide flex items-center gap-2">
                           <FileText className="w-4 h-4 text-[#BFBA6B]" />
-                          Lista de Verificación de los 21 Documentos
+                          Lista de Verificación Documental
                         </h3>
 
-                        <div className="flex flex-wrap gap-1 bg-white p-1 rounded-xl border border-gray-300">
-                          {categories.map(cat => (
-                            <button
-                              key={cat.id}
-                              type="button"
-                              onClick={() => setActiveCategory(cat.id)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all ${
-                                activeCategory === cat.id
-                                  ? 'bg-[#0D0D0D] text-[#D9CF43] shadow-md'
-                                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                              }`}
-                            >
-                              {cat.label}
-                            </button>
-                          ))}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap gap-1 bg-white p-1 rounded-xl border border-gray-300">
+                            {categories.map(cat => (
+                              <button
+                                key={cat.id}
+                                type="button"
+                                onClick={() => setActiveCategory(cat.id)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all ${
+                                  activeCategory === cat.id
+                                    ? 'bg-[#0D0D0D] text-[#D9CF43] shadow-md'
+                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                                }`}
+                              >
+                                {cat.label}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddDocModal(true)}
+                            className="inline-flex items-center space-x-1.5 bg-[#0D0D0D] hover:bg-gray-800 text-[#D9CF43] font-extrabold text-xs px-3.5 py-2 rounded-xl transition-all shadow-md"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Agregar Documento</span>
+                          </button>
                         </div>
                       </div>
 
@@ -505,6 +491,17 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                                 <div className="flex flex-wrap items-center gap-2 shrink-0">
                                   {statusBadge}
 
+                                  {doc.esManual && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveCustomDoc(doc.id)}
+                                      className="text-red-500 hover:text-red-700 p-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-all"
+                                      title="Eliminar documento adicional"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+
                                   {!doc.required && (
                                     <label className="flex items-center space-x-1.5 text-xs font-bold text-gray-700 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 shadow-sm">
                                       <input
@@ -523,7 +520,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                                       <span>{file ? 'Cambiar PDF' : 'Adjuntar PDF'}</span>
                                       <input
                                         type="file"
-                                        accept=".pdf,.zip,.rar,.dwg,.doc,.docx"
+                                        accept=".pdf"
                                         onChange={(e) => handleFileChange(doc.id, e)}
                                         className="hidden"
                                       />
@@ -586,23 +583,6 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
 
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div className="space-y-1">
-                          <label className="block text-xs font-bold text-gray-700 uppercase">
-                            Código Interno INTECOAL *
-                          </label>
-                          <div className="relative">
-                            <Hash className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
-                            <input
-                              type="text"
-                              name="codigoProyecto"
-                              required
-                              value={metadata.codigoProyecto}
-                              onChange={handleMetaChange}
-                              className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-300 rounded-xl text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#D9CF43]"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="lg:col-span-2 space-y-1">
                           <label className="block text-xs font-bold text-gray-700 uppercase">
                             Nombre Completo del Proyecto / Obra *
                           </label>
@@ -672,7 +652,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
 
                         <div className="space-y-1">
                           <label className="block text-xs font-bold text-gray-700 uppercase">
-                            Ingeniero Responsable *
+                            Responsable de Revisión - Interventoría / Contratista *
                           </label>
                           <div className="relative">
                             <User className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
@@ -817,7 +797,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                         <div className="flex items-center justify-between border-b border-gray-200 pb-2">
                           <span className="text-xs font-black uppercase text-gray-600">Resumen del Expediente</span>
                           <span className="text-xs font-bold text-[#0D0D0D] bg-[#D9CF43] px-2 py-0.5 rounded">
-                            {metadata.codigoProyecto}
+                            {metadata.numeroRadicado || 'Se asigna al crear'}
                           </span>
                         </div>
 
@@ -856,7 +836,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
 
                         <div className="mt-3 text-[11px] text-gray-400 border-t border-gray-800 pt-2 flex items-center justify-between">
                           <span>Ítems Físicos: <strong className="text-white">{elementos.length}</strong></span>
-                          <span>Destino M365: <strong className="text-[#D9CF43]">SharePoint / OneDrive</strong></span>
+                          <span>Carga en SharePoint: <strong className="text-[#D9CF43]">al aprobar el radicado</strong></span>
                         </div>
                       </div>
                     </div>
@@ -865,7 +845,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                       <div className="flex items-center justify-between border-b border-gray-200 pb-2">
                         <h3 className="text-xs font-black uppercase text-[#0D0D0D] tracking-wider flex items-center gap-2">
                           <PenTool className="w-4 h-4 text-[#BFBA6B]" />
-                          Firma Digital del Contratista (Rol 2)
+                          Firma Digital del Contratista
                         </h3>
                         <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                           Ley 527 de 1999
@@ -933,7 +913,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                             className="px-4 py-2 bg-[#1E222A] hover:bg-slate-800 text-[#D9CF43] font-bold text-xs rounded-xl shadow transition-all shrink-0 flex items-center space-x-1.5"
                           >
                             <PenTool className="w-4 h-4" />
-                            <span>Crear / Subir Firma (Rol 2)</span>
+                            <span>Crear / Subir Firma</span>
                           </button>
                         </div>
                       )}
@@ -964,16 +944,6 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                             Confirmación de recepción documental preliminar e inicio del proceso de revisión para generación del Informe Recibido a Conformidad.
                           </div>
                         </label>
-                      </div>
-                    </div>
-
-                    <div className="bg-[#BFBA6B]/20 border border-[#BFBA6B] rounded-2xl p-4 flex items-start space-x-3 text-xs text-gray-900">
-                      <Sparkles className="w-5 h-5 text-[#0D0D0D] shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-black">Integración Directa con Microsoft 365</p>
-                        <p className="mt-0.5 text-gray-700">
-                          Al hacer clic en "Radicar Documentación", se generará automáticamente el número de radicado con código QR, se registrará el elemento en la Lista SharePoint <strong className="text-[#0D0D0D]">Radicaciones_AP</strong> y se subirá el expediente a OneDrive.
-                        </p>
                       </div>
                     </div>
                   </div>
@@ -1030,12 +1000,92 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                 className="w-full sm:w-auto px-8 py-3 rounded-xl font-black text-xs bg-[#D9CF43] hover:bg-amber-400 text-[#0D0D0D] transition-all shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 active:scale-95 uppercase tracking-wider"
               >
                 <FileUp className="w-4 h-4 text-[#0D0D0D]" />
-                <span>{isSubmitting ? 'Radicando en M365...' : 'RADICAR DOCUMENTACIÓN'}</span>
+                <span>{isSubmitting ? 'Radicando...' : 'RADICAR DOCUMENTACIÓN'}</span>
               </button>
             )}
           </div>
         </div>
       </form>
+
+      {showAddDocModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-md p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-black text-[#0D0D0D]">Agregar Documento Adicional</h3>
+              <button type="button" onClick={() => setShowAddDocModal(false)} className="text-gray-400 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-gray-700 uppercase">Código del Documento *</label>
+                <input
+                  type="text"
+                  maxLength={10}
+                  value={newDoc.code}
+                  onChange={(e) => setNewDoc({ ...newDoc, code: e.target.value })}
+                  placeholder="Ej: X1, ADD-01"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-xl text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#D9CF43]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-gray-700 uppercase">Nombre del Documento *</label>
+                <input
+                  type="text"
+                  value={newDoc.name}
+                  onChange={(e) => setNewDoc({ ...newDoc, name: e.target.value })}
+                  placeholder="Ej: Certificado de calibration"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-xl text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#D9CF43]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-gray-700 uppercase">Categoría</label>
+                <select
+                  value={newDoc.category}
+                  onChange={(e) => setNewDoc({ ...newDoc, category: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-xl text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#D9CF43]"
+                >
+                  <option value="diseno">Documentos de Diseño</option>
+                  <option value="luminarias">Luminarias y Materiales</option>
+                  <option value="constructor">Documentos del Constructor</option>
+                  <option value="dictamenes">Dictámenes y Permisos</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-gray-700 uppercase">Descripción (opcional)</label>
+                <textarea
+                  rows={2}
+                  value={newDoc.description}
+                  onChange={(e) => setNewDoc({ ...newDoc, description: e.target.value })}
+                  placeholder="Breve descripción del documento"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-xl text-sm text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#D9CF43]"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddDocModal(false)}
+                className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleAddCustomDoc}
+                className="px-5 py-2 bg-[#0D0D0D] hover:bg-gray-800 text-[#D9CF43] text-xs font-black rounded-xl shadow transition-all"
+              >
+                Agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showSignatureModal && (
         <FirmaDigitalModal

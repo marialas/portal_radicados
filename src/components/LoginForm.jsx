@@ -131,7 +131,7 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
                 </div>
                 <div>
                   <div className="flex items-center space-x-1.5">
-                    <span className="font-extrabold text-sm text-gray-900">Revisor / Interventor</span>
+                    <span className="font-extrabold text-sm text-gray-900">Responsable de Revisión</span>
                     <span className="text-[10px] font-black uppercase bg-[#1E222A] text-[#D9CF43] px-1.5 py-0.5 rounded">
                       INTECOAL
                     </span>
@@ -161,7 +161,7 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
                 </div>
                 <div>
                   <div className="flex items-center space-x-1.5">
-                    <span className="font-extrabold text-sm text-gray-900">Creador / Contratista</span>
+                    <span className="font-extrabold text-sm text-gray-900">Contratista</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-1 leading-snug">
                     Acceso para erradicar nuevos proyectos y cargar documentación técnica.

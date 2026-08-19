@@ -27,7 +27,7 @@ export const FirmaDigitalModal = ({
     return 'dibujar';
   });
   
-  const [nombreSignatario, setNombreSignatario] = useState(initialSignature?.nombreSignatario || defaultName || '');
+  const [nombreSignatario, setNombreSignatario] = useState(initialSignature?.nombreSignatario || '');
   const [cargo, setCargo] = useState(initialSignature?.cargo || defaultRole || '');
   const [tarjetaProfesional, setTarjetaProfesional] = useState(initialSignature?.tarjetaProfesional || '');
   
@@ -39,20 +39,20 @@ export const FirmaDigitalModal = ({
 
   const [uploadedImage, setUploadedImage] = useState(initialSignature?.dataUrl || null);
 
-  const [typedText, setTypedText] = useState(initialSignature?.nombreSignatario || defaultName || '');
+  const [typedText, setTypedText] = useState(initialSignature?.nombreSignatario || '');
   const [fontStyle, setFontStyle] = useState('cursive1');
 
   useEffect(() => {
-    setNombreSignatario(initialSignature?.nombreSignatario || defaultName || '');
+    setNombreSignatario(initialSignature?.nombreSignatario || '');
     setCargo(initialSignature?.cargo || defaultRole || '');
     setTarjetaProfesional(initialSignature?.tarjetaProfesional || '');
-    setTypedText(initialSignature?.nombreSignatario || defaultName || '');
+    setTypedText(initialSignature?.nombreSignatario || '');
     setUploadedImage(initialSignature?.dataUrl || null);
     setHasDrawn(!!initialSignature?.dataUrl);
     if (initialSignature?.tipoFirma === 'imagen') setActiveTab('cargar');
     else if (initialSignature?.tipoFirma === 'texto') setActiveTab('texto');
     else setActiveTab('dibujar');
-  }, [initialSignature, defaultName, defaultRole]);
+  }, [initialSignature, defaultRole]);
 
   useEffect(() => {
     if (activeTab === 'dibujar' && canvasRef.current) {
@@ -174,6 +174,11 @@ export const FirmaDigitalModal = ({
   const handleConfirm = () => {
     let finalDataUrl = '';
 
+    if (!nombreSignatario.trim()) {
+      alert('Por favor ingrese su nombre completo para la firma.');
+      return;
+    }
+
     if (activeTab === 'dibujar') {
       if (!canvasRef.current || !hasDrawn) {
         alert('Por favor trace su firma en el recuadro antes de guardar.');
@@ -196,7 +201,7 @@ export const FirmaDigitalModal = ({
 
     const signature = {
       dataUrl: finalDataUrl,
-      nombreSignatario: nombreSignatario || defaultName,
+      nombreSignatario: nombreSignatario,
       cargo: cargo || defaultRole,
       tarjetaProfesional: tarjetaProfesional.trim() ? tarjetaProfesional : undefined,
       fechaFirma: new Date().toISOString(),
@@ -231,7 +236,7 @@ export const FirmaDigitalModal = ({
                 <span>Módulo de Firma Electrónica Segura (Ley 527)</span>
               </span>
               <h3 className="text-xl font-black text-white mt-1">
-                {role === 'interventoria' ? 'Firma de Interventoría (Rol 1 Revisor)' : 'Firma del Contratista de Obra (Rol 2 Contratista)'}
+                {role === 'interventoria' ? 'Firma de Interventoría' : 'Firma del Contratista de Obra'}
               </h3>
             </div>
           </div>
@@ -257,7 +262,7 @@ export const FirmaDigitalModal = ({
                 value={cargo}
                 onChange={(e) => setCargo(e.target.value)}
                 className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-xl font-semibold text-gray-900 focus:ring-2 focus:ring-[#D9CF43]"
-                placeholder="Ej. Director de Interventoría"
+                placeholder="Ej. Responsable de Revisión"
               />
             </div>
             <div>
@@ -267,7 +272,7 @@ export const FirmaDigitalModal = ({
                 value={tarjetaProfesional}
                 onChange={(e) => setTarjetaProfesional(e.target.value)}
                 className="w-full px-3 py-1.5 bg-white border border-gray-300 rounded-xl font-mono text-gray-900 focus:ring-2 focus:ring-[#D9CF43]"
-                placeholder="Ej. MP-1928374-RETIE"
+                placeholder="Ej. 1234567 - Ingeniero Civil"
               />
             </div>
           </div>
@@ -414,7 +419,7 @@ export const FirmaDigitalModal = ({
                   value={typedText}
                   onChange={(e) => setTypedText(e.target.value)}
                   className="w-full px-4 py-2.5 bg-slate-50 border border-gray-300 rounded-xl font-bold text-sm focus:ring-2 focus:ring-[#D9CF43]"
-                  placeholder="Ej. Ing. John Fredy Castro"
+                  placeholder="Su nombre aquí"
                 />
               </div>
 
