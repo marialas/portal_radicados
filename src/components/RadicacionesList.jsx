@@ -57,6 +57,7 @@ export const RadicacionesList = ({
 
   const totalCount = filings.length;
   const aprobadasCount = filings.filter(f => f.estado === 'Aprobado' || f.porcentajeCumplimiento === 100).length;
+  const enRevisionCount = filings.filter(f => f.estado === 'En Revisión').length;
   const conObsCount = filings.filter(f => f.estado === 'Con Observaciones').length;
   const avgCompliance = totalCount > 0 
     ? Math.round(filings.reduce((acc, f) => acc + f.porcentajeCumplimiento, 0) / totalCount) 
@@ -94,6 +95,21 @@ export const RadicacionesList = ({
           </div>
           <div className="bg-emerald-50 p-3 rounded-lg text-emerald-600">
             <CheckCircle2 className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm flex items-center justify-between">
+          <div>
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
+              En Revisión
+            </span>
+            <span className="text-3xl font-black text-blue-600 mt-1 block">
+              {enRevisionCount}
+            </span>
+            <span className="text-xs text-blue-700 mt-1 block font-semibold">En Proceso de Revisión</span>
+          </div>
+          <div className="bg-blue-50 p-3 rounded-lg text-blue-600">
+            <Clock className="w-6 h-6" />
           </div>
         </div>
 
@@ -185,6 +201,7 @@ export const RadicacionesList = ({
               >
                 <option value="TODOS">Todos los Estados</option>
                 <option value="Radicado">Radicado</option>
+                <option value="En Revisión">En Revisión</option>
                 <option value="Aprobado">Aprobado</option>
                 <option value="Con Observaciones">Con Observaciones</option>
               </select>
@@ -232,6 +249,7 @@ export const RadicacionesList = ({
               ) : (
                 filtered.map((filing) => {
                   let badgeBg = 'bg-blue-100 text-blue-800 border-blue-300';
+                  if (filing.estado === 'En Revisión') badgeBg = 'bg-blue-100 text-blue-800 border-blue-300';
                   if (filing.estado === 'Aprobado') badgeBg = 'bg-emerald-100 text-emerald-800 border-emerald-300';
                   if (filing.estado === 'Con Observaciones') badgeBg = 'bg-amber-100 text-amber-800 border-amber-300';
 
@@ -279,15 +297,18 @@ export const RadicacionesList = ({
                               className={`text-[11px] font-extrabold px-2.5 py-1 rounded-full border focus:outline-none cursor-pointer ${badgeBg}`}
                               title="Cambiar estado como Revisor de Interventoría"
                             >
+                              <option value="En Revisión">🔍 En Revisión</option>
                               <option value="Aprobado">✓ Aprobado</option>
                               <option value="Con Observaciones">⚠️ Con Observaciones</option>
                             </select>
                             <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
                               filing.estado === 'Aprobado'
                                 ? 'bg-emerald-100 text-emerald-800'
+                                : filing.estado === 'En Revisión'
+                                ? 'bg-blue-100 text-blue-800'
                                 : 'bg-gray-100 text-gray-500'
                             }`}>
-                              {filing.estado === 'Aprobado' ? '✓ Cargado en SharePoint' : '⏳ Pendiente de Aprobación'}
+                              {filing.estado === 'Aprobado' ? '✓ Cargado en SharePoint' : filing.estado === 'En Revisión' ? '🔍 En Revisión' : '⏳ Pendiente de Aprobación'}
                             </span>
                           </div>
                         ) : (
@@ -298,9 +319,11 @@ export const RadicacionesList = ({
                             <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
                               filing.estado === 'Aprobado'
                                 ? 'bg-emerald-100 text-emerald-800'
+                                : filing.estado === 'En Revisión'
+                                ? 'bg-blue-100 text-blue-800'
                                 : 'bg-gray-100 text-gray-500'
                             }`}>
-                              {filing.estado === 'Aprobado' ? '✓ Cargado en SharePoint' : '⏳ Pendiente de Aprobación'}
+                              {filing.estado === 'Aprobado' ? '✓ Cargado en SharePoint' : filing.estado === 'En Revisión' ? '🔍 En Revisión' : '⏳ Pendiente de Aprobación'}
                             </span>
                           </div>
                         )}

@@ -9,6 +9,7 @@
 
 export type FilingStatus = 
   | 'Radicado'
+  | 'En Revisión'
   | 'Aprobado'
   | 'Con Observaciones';
 
@@ -100,6 +101,7 @@ export interface M365Config {
 
 export const FILING_STATUSES: FilingStatus[] = [
   'Radicado',
+  'En Revisión',
   'Aprobado',
   'Con Observaciones'
 ];
