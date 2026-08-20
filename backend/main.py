@@ -57,14 +57,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Portal INTECOAL - Radicación Técnica", lifespan=lifespan)
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5500")
-cors_origins = [FRONTEND_URL]
-if FRONTEND_URL != "http://localhost:5500":
-    cors_origins.append("http://localhost:5500")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+cors_origins = [FRONTEND_URL, "http://localhost:5173", "http://localhost:8000"]
+if FRONTEND_URL not in cors_origins:
+    cors_origins.append(FRONTEND_URL)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
