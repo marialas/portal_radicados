@@ -925,8 +925,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                             className="mt-0.5 rounded border-gray-300 text-[#0D0D0D] focus:ring-[#D9CF43]"
                           />
                           <div className="text-xs text-gray-800">
-                            <span className="font-extrabold text-[#0D0D0D] block">Declaración del Contratista de Obra ({metadata.contratista})</span>
-                            Certifico que los archivos y memorias técnicas adjuntas corresponden a la información física instalada en terreno cumpliendo la Res. 40150/2024.
+                            <span className="font-extrabold text-[#0D0D0D] block">Declaración del Contratista ({metadata.contratista})</span>
                           </div>
                         </label>
 
@@ -939,7 +938,6 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                           />
                           <div className="text-xs text-gray-800">
                             <span className="font-extrabold text-[#0D0D0D] block">Aprobación de la Interventoría INTECOAL SAS</span>
-                            Confirmación de recepción documental preliminar e inicio del proceso de revisión para generación del Informe Recibido a Conformidad.
                           </div>
                         </label>
                       </div>
