@@ -23,23 +23,6 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
 
   const displayError = errorMsg || externalError;
 
-  const validateEmail = (email, role) => {
-    if (!email || !email.includes('@')) {
-      return 'Por favor ingrese un correo electrónico válido.';
-    }
-    const lowerEmail = email.toLowerCase().trim();
-    if (role === 'revisor') {
-      if (!lowerEmail.endsWith('@intecoalsas.com')) {
-        return 'El perfil Revisor solo permite correos @intecoalsas.com.';
-      }
-    } else {
-      if (lowerEmail.endsWith('@gmail.com')) {
-        return 'El perfil Contratista no permite correos @gmail.com.';
-      }
-    }
-    return null;
-  };
-
   const handleM365Login = async () => {
     setErrorMsg(null);
     setIsLoading(true);
@@ -54,37 +37,8 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
       onLoginSuccess(userSession, 'lista');
     } catch (err) {
       setIsLoading(false);
-      setErrorMsg('Error de autenticación con Microsoft 365 MSAL: ' + (err.message || 'Verifique las políticas de su Tenant Azure AD o use el ingreso directo por correo.'));
+      setErrorMsg('Error de autenticación con Microsoft 365 MSAL: ' + (err.message || 'Verifique las políticas de su Tenant Azure AD.'));
     }
-  };
-
-  const handleDirectEmailLogin = (e) => {
-    if (e) e.preventDefault();
-    setErrorMsg(null);
-
-    const validationError = validateEmail(userEmail, activeRole);
-    if (validationError) {
-      setErrorMsg(validationError);
-      return;
-    }
-
-    setIsLoading(true);
-
-    setTimeout(() => {
-      setIsLoading(false);
-      const companyDerived = extractCompanyFromEmail(userEmail);
-      const nameFormatted = formatNameFromEmail(userEmail);
-
-      const roleToUse = activeRole === 'revisor' ? 'interventor' : 'contratista';
-      const userSession = {
-        isAuthenticated: true,
-        name: nameFormatted,
-        email: userEmail.toLowerCase(),
-        role: roleToUse,
-        company: companyDerived
-      };
-      onLoginSuccess(userSession, 'lista');
-    }, 300);
   };
 
   return (
