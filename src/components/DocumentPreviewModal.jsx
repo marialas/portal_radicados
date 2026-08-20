@@ -28,6 +28,11 @@ export function getOneDriveCloudUrl(rutaOneDrive, numeroRadicado) {
 export const DocumentPreviewModal = ({ docItem, filing, onClose }) => {
   const [localPdfUrl, setLocalPdfUrl] = useState(null);
   const [localFileName, setLocalFileName] = useState(null);
+  const [zoomLevel, setZoomLevel] = useState(100);
+
+  const zoomIn = () => setZoomLevel(prev => Math.min(prev + 15, 300));
+  const zoomOut = () => setZoomLevel(prev => Math.max(prev - 15, 50));
+  const zoomReset = () => setZoomLevel(100);
 
   if (!docItem) return null;
 
@@ -145,24 +150,23 @@ startxref
 
         {/* Toolbar de Controles */}
         <div className="bg-slate-850 px-6 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-900/60">
-          {activeTab === 'preview' && hasFile && (
+          {hasFile && (
             <div className="flex flex-wrap items-center gap-2 text-gray-300">
-              {/* Botones de modo de vista */}
+              {/* Zoom Controls */}
               <div className="flex items-center space-x-1 bg-slate-800 p-1 rounded-lg border border-slate-700">
-                <button
-                  onClick={() => setViewMode('iframe')}
-                  className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
-                    viewMode === 'iframe'
-                      ? 'bg-blue-600 text-white shadow'
-                      : 'text-gray-300 hover:text-white'
-                  }`}
-                  title="Ver documento PDF original en el visor integrado del navegador"
-                >
-                  📄 Visor PDF Original
+                <button onClick={zoomOut} className="px-2 py-1 rounded text-xs font-bold text-gray-300 hover:text-white hover:bg-slate-700 transition-all" title="Alejar (lupa)">
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <span className="px-2 py-1 text-xs font-mono font-bold text-[#D9CF43] min-w-[40px] text-center">{zoomLevel}%</span>
+                <button onClick={zoomIn} className="px-2 py-1 rounded text-xs font-bold text-gray-300 hover:text-white hover:bg-slate-700 transition-all" title="Acercar (lupa)">
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <button onClick={zoomReset} className="px-2 py-1 rounded text-xs font-bold text-gray-300 hover:text-white hover:bg-slate-700 transition-all" title="Restablecer zoom">
+                  <Maximize2 className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              {/* Carga directa de PDF local para visualizar */}
+              {/* Carga directa de PDF local */}
               <label className="cursor-pointer bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs px-2.5 py-1.5 rounded-lg flex items-center space-x-1.5 transition-colors shadow shrink-0">
                 <UploadCloud className="w-4 h-4" />
                 <span>Cargar PDF Local</span>
@@ -176,7 +180,6 @@ startxref
                       const url = URL.createObjectURL(file);
                       setLocalPdfUrl(url);
                       setLocalFileName(file.name);
-                      setViewMode('iframe');
                     }
                   }}
                 />
@@ -253,7 +256,7 @@ startxref
                   </div>
                 )}
 
-                <div className="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-2xl">
+                <div className="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-2xl" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}>
                   <iframe
                     src={localPdfUrl || docItem.fileUrl || docItem.blobUrl || `/api/files/view/${filing?.id || 'demo'}/${docItem.docId || docItem.docCode}`}
                     className="w-full h-[640px] border-0 bg-slate-900"
