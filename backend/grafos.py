@@ -459,17 +459,19 @@ class GraphService:
                             import json
                             rad = json.loads(raw_json)
                             rad["m365Synced"] = True
+                            if not rad.get("creadorEmail"):
+                                rad["creadorEmail"] = rad.get("metadata", {}).get("creadorEmail", "") or fields.get("CreadorEmail", "")
                             radicaciones.append(rad)
                             continue
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            print(f"[GRAPH] RawJson parse error para {fields.get('Title', '?')}: {e}")
 
                     numero = fields.get("NumeroRadicado", fields.get("Title", ""))
                     if not numero:
                         continue
 
                     estado_sp = fields.get("Estado", "Pendiente_Firma")
-                    estado_map = {"Aprobado": "Aprobado", "Revision": "Con Observaciones", "Pendiente_Firma": "Radicado"}
+                    estado_map = {"Aprobado": "Aprobado", "Revision": "Con Observaciones", "Pendiente_Firma": "Radicado", "En_Revision": "En Revisión"}
                     estado = estado_map.get(estado_sp, "Radicado")
 
                     docs_str = fields.get("DocumentosOk", "0/21")
@@ -536,7 +538,22 @@ class GraphService:
         docs_str = f"{radicacion.get('documentosOk', 0)}/{radicacion.get('totalDocumentos', 21)}"
 
         import json
-        raw_json = json.dumps(radicacion, ensure_ascii=False, default=str)
+
+        rad_clean = {k: v for k, v in radicacion.items() if k != "archivos" or not v}
+        if "archivos" in radicacion and radicacion["archivos"]:
+            rad_clean["archivos"] = []
+            for a in radicacion["archivos"]:
+                rad_clean["archivos"].append({
+                    "docId": a.get("docId"),
+                    "docCode": a.get("docCode", ""),
+                    "docName": a.get("docName", ""),
+                    "fileName": a.get("fileName", ""),
+                    "status": a.get("status", ""),
+                    "notes": a.get("notes", ""),
+                    "esManual": a.get("esManual", False),
+                })
+
+        raw_json = json.dumps(rad_clean, ensure_ascii=False, default=str)
 
         campos_todos = {
             "Title": numero,
@@ -554,7 +571,7 @@ class GraphService:
             "FechaRadicacion": radicacion.get("fechaRadicacion", "")[:10],
             "RutaOneDrive": f"/Documentos_Radicacion/{numero}/",
             "CreadorEmail": radicacion.get("creadorEmail", "") or meta.get("creadorEmail", ""),
-            "RawJson": raw_json[:60000] if len(raw_json) > 60000 else raw_json,
+            "RawJson": raw_json[:64000] if len(raw_json) > 64000 else raw_json,
         }
 
         try:

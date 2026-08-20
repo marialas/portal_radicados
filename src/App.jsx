@@ -123,6 +123,13 @@ export default function App() {
   useEffect(() => {
     fetchFilings();
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user.isAuthenticated) {
+        fetchFilings();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     const urlHash = typeof window !== 'undefined' ? window.location.hash : '';
     const hasMsalHash = urlHash && (urlHash.includes('code=') || urlHash.includes('id_token=') || urlHash.includes('error='));
 
@@ -238,9 +245,13 @@ export default function App() {
       console.warn('MSAL redirect check warning:', err);
       setIsProcessingMsal(false);
     });
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
-  const fetchFilings = async () => {
+  const fetchFilings = async (retryCount = 0) => {
     try {
       const params = new URLSearchParams();
       if (user.email && user.isAuthenticated) {
@@ -251,15 +262,23 @@ export default function App() {
       const res = await fetch(`/api/radicacion/lista${qs ? '?' + qs : ''}`);
       if (res.ok) {
         const json = await res.json();
-        if (json.data && json.data.length > 0) {
+        if (json.data) {
           setFilings(json.data);
-          if (!selectedFiling) {
+          if (json.data.length > 0 && !selectedFiling) {
             setSelectedFiling(json.data[0]);
           }
         }
+      } else if (retryCount < 3) {
+        await new Promise(r => setTimeout(r, 3000));
+        fetchFilings(retryCount + 1);
       }
     } catch (err) {
-      console.warn('Backend endpoint unreachable, using in-memory store', err);
+      if (retryCount < 3) {
+        await new Promise(r => setTimeout(r, 3000));
+        fetchFilings(retryCount + 1);
+      } else {
+        console.warn('Backend no disponible después de reintentos', err);
+      }
     }
   };
 
