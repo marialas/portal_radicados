@@ -342,30 +342,6 @@ export const InformeRecibidoConformidad = ({
 
         {/* DOCUMENT HEADER & FORMAL EXECUTIVE HEADING */}
         <div className="space-y-4 page-break-avoid">
-          {/* CONTROL DE DOCUMENTO OFICIAL */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-700 border border-slate-300 rounded-lg px-3 py-2 bg-slate-50 page-break-avoid print-border-clean">
-            <div className="space-y-0.5">
-              <span className="block text-slate-500 text-[8px]">N° Radicado</span>
-              <span className="font-black text-slate-900">{filing.numeroRadicado}</span>
-            </div>
-            <div className="space-y-0.5">
-              <span className="block text-slate-500 text-[8px]">Versión</span>
-              <span className="font-black text-slate-900">1.0</span>
-            </div>
-            <div className="space-y-0.5">
-              <span className="block text-slate-500 text-[8px]">Referencia Radicado</span>
-              <span className="font-black text-slate-900">{filing.numeroRadicado}</span>
-            </div>
-            <div className="space-y-0.5">
-              <span className="block text-slate-500 text-[8px]">Fecha de Emisión</span>
-              <span className="font-black text-slate-900">{formattedDate}</span>
-            </div>
-            <div className="space-y-0.5">
-              <span className="block text-slate-500 text-[8px]">Clasificación</span>
-              <span className="font-black text-slate-900">Público · Interventoría</span>
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-700 font-medium bg-slate-50 p-3.5 rounded-xl border border-slate-200 print-border-clean">
             <div className="space-y-1">
               <div><strong className="text-slate-900">CIUDAD Y FECHA:</strong> Villavicencio (Meta), {formattedDate}</div>
@@ -413,9 +389,6 @@ export const InformeRecibidoConformidad = ({
                 {filing.metadata.nombreProyecto}
               </div>
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                <span className="bg-slate-900 text-[#D9CF43] text-[10px] font-mono font-bold px-2.5 py-0.5 rounded border border-slate-700">
-                  Radicado: {filing.numeroRadicado}
-                </span>
                 <span className="bg-slate-100 text-slate-900 text-[10px] font-bold px-2.5 py-0.5 rounded border border-slate-300">
                   Ubicación: {filing.metadata.municipio} (Meta)
                 </span>
