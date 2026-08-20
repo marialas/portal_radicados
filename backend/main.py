@@ -436,12 +436,12 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado):
             radicacion["m365Synced"] = False
             print(f"[MAIN] SharePoint sync FALLO para {radicacion['numeroRadicado']}: {e}")
 
-    if body.estado == "Con Observaciones" and graph_service and body.estado != estado_anterior:
+    if graph_service and body.estado != estado_anterior:
         try:
             await graph_service.enviar_correo_estado(radicacion, estado_anterior, body.observaciones)
-            print(f"[MAIN] Correo observaciones enviado al contratista {radicacion['numeroRadicado']}")
+            print(f"[MAIN] Correo de cambio de estado enviado para {radicacion['numeroRadicado']}: {estado_anterior} -> {body.estado}")
         except Exception as e:
-            print(f"[MAIN] Error correo observaciones: {e}")
+            print(f"[MAIN] Error correo cambio de estado: {e}")
 
     return {"ok": True, "data": radicacion}
 
