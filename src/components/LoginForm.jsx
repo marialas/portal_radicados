@@ -42,13 +42,6 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
 
   const handleM365Login = async () => {
     setErrorMsg(null);
-
-    const validationError = validateEmail(userEmail, activeRole);
-    if (validationError) {
-      setErrorMsg(validationError);
-      return;
-    }
-
     setIsLoading(true);
 
     try {
