@@ -75,20 +75,31 @@ async def lifespan(app: FastAPI):
     cargar_db()
     if GraphService:
         graph_service = GraphService()
-        print(f"[STARTUP] GraphService OK | isConnected={graph_service.obtener_config()['isConnected']}")
+        cfg = graph_service.obtener_config()
+        print(f"[STARTUP] GraphService OK | isConnected={cfg.get('isConnected')}")
         try:
             await graph_service.asegurar_columna_rawjson()
         except Exception as e:
             print(f"[STARTUP] No se pudo verificar columna RawJson: {e}")
         if len(radicaciones_db) == 0:
-            try:
-                sp_rads = await graph_service.cargar_radicaciones_desde_sharepoint()
-                if sp_rads:
-                    radicaciones_db.extend(sp_rads)
-                    guardar_db()
-                    print(f"[STARTUP] Cargados {len(sp_rads)} radicaciones desde SharePoint")
-            except Exception as e:
-                print(f"[STARTUP] No se pudieron cargar radicaciones de SharePoint: {e}")
+            print("[STARTUP] DB local vacía, intentando cargar desde SharePoint...")
+            for attempt in range(3):
+                try:
+                    sp_rads = await graph_service.cargar_radicaciones_desde_sharepoint()
+                    if sp_rads:
+                        radicaciones_db.extend(sp_rads)
+                        guardar_db()
+                        print(f"[STARTUP] OK: {len(sp_rads)} radicaciones cargadas desde SharePoint")
+                    else:
+                        print("[STARTUP] SharePoint devolvió 0 radicaciones")
+                    break
+                except Exception as e:
+                    print(f"[STARTUP] ERROR cargando de SharePoint (intento {attempt+1}/3): {e}")
+                    if attempt < 2:
+                        import asyncio
+                        await asyncio.sleep(3 * (attempt + 1))
+        else:
+            print(f"[STARTUP] DB local tiene {len(radicaciones_db)} radicaciones, omitiendo carga SP")
     else:
         print("[STARTUP] GraphService NO DISPONIBLE - grafos.py no importado")
     yield
@@ -387,11 +398,16 @@ async def crear_radicacion(request: Request):
             print(f"[MAIN] Error correo confirmacion: {e}")
 
     if graph_service:
-        try:
-            await graph_service.guardar_radicacion_en_sharepoint(radicacion)
-            print(f"[MAIN] Radicado {numero} guardado en SharePoint")
-        except Exception as e:
-            print(f"[MAIN] Error guardando en SharePoint: {e}")
+        for attempt in range(3):
+            try:
+                await graph_service.guardar_radicacion_en_sharepoint(radicacion)
+                print(f"[MAIN] Radicado {numero} guardado en SharePoint (intento {attempt+1})")
+                break
+            except Exception as e:
+                print(f"[MAIN] Error guardando en SharePoint (intento {attempt+1}/3): {e}")
+                if attempt < 2:
+                    import asyncio
+                    await asyncio.sleep(2 * (attempt + 1))
 
     return {"data": radicacion, "ok": True}
 
@@ -450,10 +466,16 @@ async def subir_archivo(
     guardar_db()
 
     if graph_service:
-        try:
-            await graph_service.guardar_radicacion_en_sharepoint(radicacion)
-        except Exception as e:
-            print(f"[MAIN] Error sync SharePoint archivo: {e}")
+        for attempt in range(3):
+            try:
+                await graph_service.guardar_radicacion_en_sharepoint(radicacion)
+                print(f"[MAIN] Archivo de {radicacion['numeroRadicado']} sincronizado a SharePoint (intento {attempt+1})")
+                break
+            except Exception as e:
+                print(f"[MAIN] Error sync SharePoint archivo (intento {attempt+1}/3): {e}")
+                if attempt < 2:
+                    import asyncio
+                    await asyncio.sleep(2 * (attempt + 1))
 
     return {"ok": True, "data": radicacion}
 
@@ -508,11 +530,16 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado):
     guardar_db()
 
     if graph_service:
-        try:
-            await graph_service.guardar_radicacion_en_sharepoint(radicacion)
-            print(f"[MAIN] Estado de {radicacion['numeroRadicado']} sincronizado a SharePoint")
-        except Exception as e:
-            print(f"[MAIN] Error sync SharePoint estado: {e}")
+        for attempt in range(3):
+            try:
+                await graph_service.guardar_radicacion_en_sharepoint(radicacion)
+                print(f"[MAIN] Estado de {radicacion['numeroRadicado']} sincronizado a SharePoint (intento {attempt+1})")
+                break
+            except Exception as e:
+                print(f"[MAIN] Error sync SharePoint estado (intento {attempt+1}/3): {e}")
+                if attempt < 2:
+                    import asyncio
+                    await asyncio.sleep(2 * (attempt + 1))
 
     return {"ok": True, "data": radicacion}
 
@@ -549,10 +576,16 @@ async def actualizar_metadata(identificador: str, body: ActualizacionMetadata):
     guardar_db()
 
     if graph_service:
-        try:
-            await graph_service.guardar_radicacion_en_sharepoint(radicacion)
-        except Exception as e:
-            print(f"[MAIN] Error sync SharePoint metadata: {e}")
+        for attempt in range(3):
+            try:
+                await graph_service.guardar_radicacion_en_sharepoint(radicacion)
+                print(f"[MAIN] Metadata de {radicacion['numeroRadicado']} sincronizada a SharePoint (intento {attempt+1})")
+                break
+            except Exception as e:
+                print(f"[MAIN] Error sync SharePoint metadata (intento {attempt+1}/3): {e}")
+                if attempt < 2:
+                    import asyncio
+                    await asyncio.sleep(2 * (attempt + 1))
 
     return {"ok": True, "data": radicacion}
 
