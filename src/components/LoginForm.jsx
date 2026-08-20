@@ -37,8 +37,36 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
       onLoginSuccess(userSession, 'lista');
     } catch (err) {
       setIsLoading(false);
-      setErrorMsg('Error de autenticación con Microsoft 365 MSAL: ' + (err.message || 'Verifique las políticas de su Tenant Azure AD.'));
+      setErrorMsg('Error de autenticación con Microsoft 365 MSAL: ' + (err.message || 'Verifique las políticas de su Tenant Azure AD o use el ingreso directo por correo.'));
     }
+  };
+
+  const handleDirectEmailLogin = (e) => {
+    if (e) e.preventDefault();
+    setErrorMsg(null);
+
+    if (!userEmail || !userEmail.includes('@')) {
+      setErrorMsg('Por favor ingrese un correo electrónico válido (ej. anyeli_cabezas@soy.sena.edu.co).');
+      return;
+    }
+
+    setIsLoading(true);
+
+    setTimeout(() => {
+      setIsLoading(false);
+      const companyDerived = extractCompanyFromEmail(userEmail);
+      const nameFormatted = formatNameFromEmail(userEmail);
+
+      const roleToUse = activeRole === 'revisor' ? 'interventor' : 'contratista';
+      const userSession = {
+        isAuthenticated: true,
+        name: nameFormatted,
+        email: userEmail.toLowerCase(),
+        role: roleToUse,
+        company: companyDerived
+      };
+      onLoginSuccess(userSession, 'lista');
+    }, 300);
   };
 
   return (

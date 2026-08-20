@@ -180,28 +180,10 @@ export default function App() {
 
         const roleToAssign = savedRole || 'contratista';
 
-        const validateEmailDomain = (email, role) => {
-          if (!email) return true;
-          const lower = email.toLowerCase().trim();
-          if (role === 'interventor') {
-            return lower.endsWith('@intecoalsas.com');
-          }
-          return !lower.endsWith('@gmail.com');
-        };
-
         if (account) {
           const email = (account?.username || '').toLowerCase();
           const nameFormatted = formatNameFromEmail(email, account?.name);
           const company = extractCompanyFromEmail(email);
-
-          if (!validateEmailDomain(email, roleToAssign)) {
-            cleanPendingMsalStorage();
-            const msg = roleToAssign === 'interventor'
-              ? 'El perfil Revisor solo permite correos @intecoalsas.com.'
-              : 'El perfil Contratista no permite correos @gmail.com.';
-            setMsalAuthError(msg);
-            return;
-          }
 
           const newUser = {
             isAuthenticated: true,
@@ -220,16 +202,6 @@ export default function App() {
           setActiveTab('lista');
         } else if (wasAttemptingMsal && pendingEmail) {
           const userEmailToUse = pendingEmail.toLowerCase();
-
-          if (!validateEmailDomain(userEmailToUse, roleToAssign)) {
-            cleanPendingMsalStorage();
-            const msg = roleToAssign === 'interventor'
-              ? 'El perfil Revisor solo permite correos @intecoalsas.com.'
-              : 'El perfil Contratista no permite correos @gmail.com.';
-            setMsalAuthError(msg);
-            return;
-          }
-
           const company = extractCompanyFromEmail(userEmailToUse);
           const nameFormatted = formatNameFromEmail(userEmailToUse);
 
