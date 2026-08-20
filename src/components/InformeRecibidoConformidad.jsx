@@ -183,13 +183,13 @@ export const InformeRecibidoConformidad = ({
   const verificationUrl = `${window.location.origin}/verificar?radicado=${encodeURIComponent(filing.numeroRadicado)}`;
 
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 font-sans">
+    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6" style={{ fontFamily: "'Arial Narrow', Arial, sans-serif" }}>
       {/* Print Styles for Official Executive Letterhead */}
       <style>{`
         @media print {
           @page {
             size: letter portrait;
-            margin: 0;
+            margin: 2.54cm;
           }
           header, aside, nav, .print\\:hidden {
             display: none !important;
@@ -207,20 +207,21 @@ export const InformeRecibidoConformidad = ({
             padding: 0 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
-            font-size: 11px !important;
+            font-size: 12px !important;
           }
           .print-canvas {
             margin: 0 !important;
-            padding: 12mm 12mm 12mm 12mm !important;
+            padding: 0 !important;
             width: 100% !important;
             border: none !important;
             box-shadow: none !important;
             border-radius: 0 !important;
-            font-family: Georgia, 'Times New Roman', serif !important;
+            font-family: 'Arial Narrow', Arial, sans-serif !important;
             font-size: 12px !important;
+            line-height: 1.4 !important;
           }
           .print-canvas > * + * {
-            margin-top: 1rem !important;
+            margin-top: 0.8rem !important;
           }
           .page-break-avoid {
             break-inside: avoid !important;
