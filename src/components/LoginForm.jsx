@@ -23,8 +23,32 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
 
   const displayError = errorMsg || externalError;
 
+  const validateEmail = (email, role) => {
+    if (!email || !email.includes('@')) {
+      return 'Por favor ingrese un correo electrónico válido.';
+    }
+    const lowerEmail = email.toLowerCase().trim();
+    if (role === 'revisor') {
+      if (!lowerEmail.endsWith('@intecoalsas.com')) {
+        return 'El perfil Revisor solo permite correos @intecoalsas.com.';
+      }
+    } else {
+      if (lowerEmail.endsWith('@gmail.com')) {
+        return 'El perfil Contratista no permite correos @gmail.com.';
+      }
+    }
+    return null;
+  };
+
   const handleM365Login = async () => {
     setErrorMsg(null);
+
+    const validationError = validateEmail(userEmail, activeRole);
+    if (validationError) {
+      setErrorMsg(validationError);
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -45,8 +69,9 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
     if (e) e.preventDefault();
     setErrorMsg(null);
 
-    if (!userEmail || !userEmail.includes('@')) {
-      setErrorMsg('Por favor ingrese un correo electrónico válido (ej. anyeli_cabezas@soy.sena.edu.co).');
+    const validationError = validateEmail(userEmail, activeRole);
+    if (validationError) {
+      setErrorMsg(validationError);
       return;
     }
 
