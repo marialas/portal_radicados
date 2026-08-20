@@ -4,8 +4,6 @@ import {
   FileText, 
   Download, 
   Printer, 
-  Cloud, 
-  ExternalLink, 
   CheckCircle2, 
   AlertTriangle, 
   XCircle, 
@@ -17,13 +15,6 @@ import {
   Maximize2,
   UploadCloud
 } from 'lucide-react';
-
-export function getOneDriveCloudUrl(rutaOneDrive, numeroRadicado) {
-  if (rutaOneDrive && (rutaOneDrive.startsWith('http://') || rutaOneDrive.startsWith('https://')) && !rutaOneDrive.includes('Documentos_Radicacion')) {
-    return rutaOneDrive;
-  }
-  return `https://interventoriayconsultoriaal.sharepoint.com/sites/VerificacinRETILAP/Shared%20Documents`;
-}
 
 export const DocumentPreviewModal = ({ docItem, filing, onClose }) => {
   const [localPdfUrl, setLocalPdfUrl] = useState(null);
@@ -38,7 +29,6 @@ export const DocumentPreviewModal = ({ docItem, filing, onClose }) => {
 
   const isNA = docItem.status === 'N/A' || docItem.fileName === 'N/A';
   const hasFile = docItem.fileName && docItem.fileName !== 'N/A';
-  const cloudUrl = getOneDriveCloudUrl(filing?.rutaOneDrive, filing?.numeroRadicado);
 
   const handleDownloadPdf = () => {
     // Generar archivo PDF binario estructurado para descarga real
@@ -128,17 +118,6 @@ startxref
           </div>
 
           <div className="flex items-center space-x-2 shrink-0">
-            <a
-              href={cloudUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden sm:inline-flex bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3 py-2 rounded-lg items-center space-x-1.5 transition-colors"
-              title="Abrir directorio en SharePoint/OneDrive Nube M365"
-            >
-              <Cloud className="w-4 h-4" />
-              <span>Abrir en M365 Nube</span>
-              <ExternalLink className="w-3.5 h-3.5 ml-0.5" />
-            </a>
             <button
               onClick={onClose}
               className="p-2 hover:bg-slate-800 rounded-lg text-gray-400 hover:text-white transition-colors"
@@ -245,7 +224,7 @@ startxref
                   <div className="bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs px-3 py-1.5 rounded-lg flex items-center space-x-2 w-full justify-between">
                     <div className="flex items-center space-x-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>Mostrando archivo PDF local cargado: <strong>{localFileName}</strong></span>
+                      <span>Mostrando archivo PDF local: <strong>{localFileName}</strong></span>
                     </div>
                     <button 
                       onClick={() => { setLocalPdfUrl(null); setLocalFileName(null); }}
@@ -256,13 +235,36 @@ startxref
                   </div>
                 )}
 
-                <div className="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-2xl" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}>
-                  <iframe
-                    src={localPdfUrl || docItem.fileUrl || docItem.blobUrl || `/api/files/view/${filing?.id || 'demo'}/${docItem.docId || docItem.docCode}`}
-                    className="w-full h-[640px] border-0 bg-slate-900"
-                    title={localFileName || docItem.fileName || docItem.docName}
-                  />
-                </div>
+                {localPdfUrl ? (
+                  <div className="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-2xl" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}>
+                    <iframe
+                      src={localPdfUrl}
+                      className="w-full h-[640px] border-0 bg-slate-900"
+                      title={localFileName || docItem.fileName || docItem.docName}
+                    />
+                  </div>
+                ) : docItem.fileUrl || docItem.blobUrl ? (
+                  <div className="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-2xl" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}>
+                    <iframe
+                      src={docItem.fileUrl || docItem.blobUrl}
+                      className="w-full h-[640px] border-0 bg-slate-900"
+                      title={docItem.fileName || docItem.docName}
+                    />
+                  </div>
+                ) : (
+                  <div className="bg-slate-900 border-2 border-dashed border-amber-900/50 rounded-2xl p-12 text-center max-w-xl mx-auto space-y-4 my-8">
+                    <div className="w-16 h-16 bg-amber-950/40 text-amber-400 rounded-full flex items-center justify-center mx-auto border border-amber-500/30">
+                      <FileText className="w-8 h-8" />
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-bold text-amber-300 mb-1">Archivo no disponible en el servidor</h4>
+                      <p className="text-xs text-gray-400 max-w-md mx-auto">
+                        El archivo <strong>{docItem.fileName}</strong> no se encuentra almacenado en el servidor actual.
+                        Puede cargar el PDF localmente usando el botón "Cargar PDF Local" para visualizarlo aquí.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
