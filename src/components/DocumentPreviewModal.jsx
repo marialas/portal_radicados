@@ -26,14 +26,8 @@ export function getOneDriveCloudUrl(rutaOneDrive, numeroRadicado) {
 }
 
 export const DocumentPreviewModal = ({ docItem, filing, onClose }) => {
-  const [zoomLevel, setZoomLevel] = useState(100);
-  const [activeTab, setActiveTab] = useState('preview'); // 'preview' | 'metadata'
-  const [viewMode, setViewMode] = useState('iframe'); // 'iframe' | 'ficha'
   const [localPdfUrl, setLocalPdfUrl] = useState(null);
   const [localFileName, setLocalFileName] = useState(null);
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = 2;
 
   if (!docItem) return null;
 
@@ -151,29 +145,6 @@ startxref
 
         {/* Toolbar de Controles */}
         <div className="bg-slate-850 px-6 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-900/60">
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setActiveTab('preview')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
-                activeTab === 'preview'
-                  ? 'bg-[#D9CF43] text-slate-950 shadow'
-                  : 'bg-slate-800 text-gray-300 hover:bg-slate-700'
-              }`}
-            >
-              Vista Previa Documento
-            </button>
-            <button
-              onClick={() => setActiveTab('metadata')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
-                activeTab === 'metadata'
-                  ? 'bg-[#D9CF43] text-slate-950 shadow'
-                  : 'bg-slate-800 text-gray-300 hover:bg-slate-700'
-              }`}
-            >
-              Metadatos y Auditoría
-            </button>
-          </div>
-
           {activeTab === 'preview' && hasFile && (
             <div className="flex flex-wrap items-center gap-2 text-gray-300">
               {/* Botones de modo de vista */}
@@ -188,17 +159,6 @@ startxref
                   title="Ver documento PDF original en el visor integrado del navegador"
                 >
                   📄 Visor PDF Original
-                </button>
-                <button
-                  onClick={() => setViewMode('ficha')}
-                  className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
-                    viewMode === 'ficha'
-                      ? 'bg-blue-600 text-white shadow'
-                      : 'text-gray-300 hover:text-white'
-                  }`}
-                  title="Ver dictamen y resumen de metadatos RETILAP"
-                >
-                  📋 Dictamen RETILAP
                 </button>
               </div>
 
@@ -245,262 +205,64 @@ startxref
 
         {/* Cuerpo del Modal */}
         <div className="p-6 overflow-y-auto flex-1 bg-slate-950/80">
-          {activeTab === 'preview' ? (
-            <div>
-              {isNA ? (
-                <div className="bg-slate-900 border-2 border-dashed border-slate-700 rounded-2xl p-12 text-center max-w-xl mx-auto space-y-4 my-8">
-                  <div className="w-16 h-16 bg-slate-800 text-gray-400 rounded-full flex items-center justify-center mx-auto">
-                    <MinusCircle className="w-8 h-8" />
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-bold text-white mb-1">Documento Marcado como "No Aplica" (N/A)</h4>
-                    <p className="text-xs text-gray-400 max-w-md mx-auto">
-                      El contratista u operador indicó que este requisito técnico no es aplicable al alcance de esta entrega.
-                    </p>
-                    {docItem.notes && (
-                      <div className="mt-4 bg-slate-850 p-3 rounded-lg border border-slate-800 text-left">
-                        <span className="text-[10px] font-bold text-[#D9CF43] uppercase block">Justificación / Observación:</span>
-                        <p className="text-xs text-gray-300 italic mt-0.5">{docItem.notes}</p>
-                      </div>
-                    )}
-                  </div>
+          <div>
+            {isNA ? (
+              <div className="bg-slate-900 border-2 border-dashed border-slate-700 rounded-2xl p-12 text-center max-w-xl mx-auto space-y-4 my-8">
+                <div className="w-16 h-16 bg-slate-800 text-gray-400 rounded-full flex items-center justify-center mx-auto">
+                  <MinusCircle className="w-8 h-8" />
                 </div>
-              ) : !hasFile ? (
-                <div className="bg-slate-900 border-2 border-dashed border-amber-900/50 rounded-2xl p-12 text-center max-w-xl mx-auto space-y-4 my-8">
-                  <div className="w-16 h-16 bg-amber-950/40 text-amber-400 rounded-full flex items-center justify-center mx-auto border border-amber-500/30">
-                    <AlertTriangle className="w-8 h-8" />
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-bold text-amber-300 mb-1">Sin Archivo Adjunto</h4>
-                    <p className="text-xs text-gray-400 max-w-md mx-auto">
-                      Aún no se ha subido el archivo correspondiente a este código de verificación.
-                    </p>
-                  </div>
-                </div>
-              ) : viewMode === 'iframe' ? (
-                /* Visor PDF original renderizado en iframe */
-                <div className="w-full flex flex-col items-center justify-center space-y-3 my-1">
-                  {localFileName && (
-                    <div className="bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs px-3 py-1.5 rounded-lg flex items-center space-x-2 w-full justify-between">
-                      <div className="flex items-center space-x-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>Mostrando archivo PDF local cargado: <strong>{localFileName}</strong></span>
-                      </div>
-                      <button 
-                        onClick={() => { setLocalPdfUrl(null); setLocalFileName(null); }}
-                        className="text-xs text-gray-400 hover:text-white underline"
-                      >
-                        Restablecer
-                      </button>
+                <div>
+                  <h4 className="text-lg font-bold text-white mb-1">Documento Marcado como "No Aplica" (N/A)</h4>
+                  <p className="text-xs text-gray-400 max-w-md mx-auto">
+                    El contratista u operador indicó que este requisito técnico no es aplicable al alcance de esta entrega.
+                  </p>
+                  {docItem.notes && (
+                    <div className="mt-4 bg-slate-850 p-3 rounded-lg border border-slate-800 text-left">
+                      <span className="text-[10px] font-bold text-[#D9CF43] uppercase block">Justificación / Observación:</span>
+                      <p className="text-xs text-gray-300 italic mt-0.5">{docItem.notes}</p>
                     </div>
                   )}
-
-                  <div className="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-2xl">
-                    <iframe
-                      src={localPdfUrl || docItem.fileUrl || docItem.blobUrl || `/api/files/view/${filing?.id || 'demo'}/${docItem.docId || docItem.docCode}`}
-                      className="w-full h-[640px] border-0 bg-slate-900"
-                      title={localFileName || docItem.fileName || docItem.docName}
-                    />
-                  </div>
-                </div>
-              ) : (
-                /* Visor interactivo del dictamen RETILAP */
-                <div className="flex justify-center transition-all duration-200">
-                  <div 
-                    style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
-                    className="bg-white text-slate-900 rounded-xl shadow-2xl p-8 sm:p-12 w-full max-w-3xl border border-gray-300 space-y-6 my-2"
-                  >
-                    {/* Encabezado oficial del PDF */}
-                    <div className="border-b-2 border-slate-900 pb-4 flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-[#1E222A] text-[#D9CF43] rounded-lg flex items-center justify-center font-black text-xl">
-                          I
-                        </div>
-                        <div>
-                          <div className="font-extrabold text-slate-900 text-sm tracking-wide uppercase">
-                            INTECOAL S.A.S. - INTERVENTORÍA Y CONSULTORÍA
-                          </div>
-                          <div className="text-[10px] font-bold text-gray-500 uppercase">
-                            Sistema Integrado de Gestión RETILAP • Alumbrado Público
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[10px] font-bold text-gray-500">CÓDIGO DE CONTROL</div>
-                        <div className="text-xs font-mono font-bold text-slate-800">{docItem.docCode}-M365</div>
-                      </div>
-                    </div>
-
-                    {/* Banner de metadatos del documento */}
-                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                      <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Radicado</span>
-                        <span className="font-bold text-slate-900">{filing?.numeroRadicado || 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Municipio</span>
-                        <span className="font-bold text-slate-900">{filing?.metadata?.municipio || 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Contratista</span>
-                        <span className="font-bold text-slate-900">{filing?.metadata?.contratista || 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Archivo Adjunto</span>
-                        <span className="font-bold text-emerald-700 truncate block">{docItem.fileName}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Fecha Radicado</span>
-                        <span className="font-bold text-slate-800">{docItem.uploadDate || '2026-03-12'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase block">Sello M365</span>
-                        <span className="font-bold text-blue-700 flex items-center space-x-1">
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          <span>Verificado M365</span>
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Título del documento */}
-                    <div className="text-center py-4 border-y border-gray-200">
-                      <span className="bg-slate-200 text-slate-800 font-black text-xs px-2.5 py-1 rounded uppercase tracking-wider mb-2 inline-block">
-                        REQUISITO {docItem.docCode}
-                      </span>
-                      <h2 className="text-xl font-black text-slate-900 uppercase">
-                        {docItem.docName}
-                      </h2>
-                      <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
-                        Certificación técnica y documental de conformidad según especificaciones RETILAP 40150 / 2024.
-                      </p>
-                    </div>
-
-                    {/* Cuerpo simulado del PDF con contenido oficial según la página elegida */}
-                    {currentPage === 1 ? (
-                      <div className="space-y-4 text-xs text-slate-700 leading-relaxed font-sans">
-                        <p>
-                          Por medio del presente documento se certifica y constata la radicación y cumplimiento formal de las especificaciones requeridas en el apartado <strong>{docItem.docCode}</strong> para el proyecto de alumbrado público <strong>{filing?.metadata?.nombreProyecto || 'EXPANSIÓN Y MODERNIZACIÓN ALUMBRADO PÚBLICO'}</strong>.
-                        </p>
-
-                        <div className="bg-slate-100 p-4 rounded-lg border-l-4 border-emerald-600 space-y-2">
-                          <div className="font-bold text-slate-900 text-xs">RESUMEN DE VERIFICACIÓN TÉCNICA (PÁGINA 1):</div>
-                          <ul className="list-disc pl-4 space-y-1 text-gray-600">
-                            <li>Cumplimiento de rotulado e identificadores técnicos según norma RETILAP 40150.</li>
-                            <li>Certificados de laboratorio acreditado ONAC anexados correctamente.</li>
-                            <li>Verificación de compatibilidad electromagnética y grado de protección IP/IK.</li>
-                            <li>Registro de firma y aprobación por parte de la interventoría técnica Intecoal S.A.S.</li>
-                          </ul>
-                        </div>
-
-                        <p className="text-gray-500 text-[11px] italic">
-                          Documento digitalizado almacenado en el repositorio de custodia documental de INTECOAL S.A.S.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4 text-xs text-slate-700 leading-relaxed font-sans">
-                        <div className="font-bold text-slate-900 text-xs uppercase border-b border-gray-200 pb-1">
-                          ANEXO TÉCNICO Y PRUEBAS FOTOMÉTRICAS (PÁGINA 2)
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200 text-[11px]">
-                          <div><strong>Laboratorio:</strong> LAB-ONAC #104-RET</div>
-                          <div><strong>Eficiencia Luminosa:</strong> 135 lm/W</div>
-                          <div><strong>Factor de Potencia:</strong> &gt; 0.95</div>
-                          <div><strong>Distorsión THD:</strong> &lt; 10%</div>
-                          <div><strong>Protección Sobretensión:</strong> 10 kV / 10 kA</div>
-                          <div><strong>Grado Protección:</strong> IP66 / IK08</div>
-                        </div>
-
-                        <div className="border border-slate-300 rounded p-3 text-center bg-slate-100 font-mono text-[10px] text-slate-600">
-                          [GRAFICO FOTOMÉTRICO CURVA IES / RETILAP - VERIFICADO]
-                        </div>
-
-                        <p className="text-gray-500 text-[11px] italic">
-                          Pruebas realizadas bajo temperatura controlada de 25°C según requerimientos capítulo 4 RETILAP.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Firma y Sello final */}
-                    <div className="pt-8 border-t border-gray-300 flex items-end justify-between">
-                      <div className="space-y-1">
-                        <div className="w-36 h-12 border-b-2 border-slate-900 flex items-end pb-1 font-serif text-slate-800 italic text-sm">
-                          {filing?.metadata?.responsableRevision || 'Responsable de Revisión'}
-                        </div>
-                        <div className="text-[10px] font-bold text-[#1E222A]">REVISOR DE INTERVENTORÍA</div>
-                        <div className="text-[9px] text-gray-500">INTECOAL S.A.S. • RETILAP</div>
-                      </div>
-
-                      <div className="bg-emerald-50 border-2 border-emerald-500 p-3 rounded-xl text-center shadow-sm">
-                        <CheckCircle2 className="w-6 h-6 text-emerald-600 mx-auto mb-1" />
-                        <div className="text-[10px] font-black text-emerald-900 uppercase">CUMPLE RETILAP</div>
-                        <div className="text-[9px] text-emerald-700 font-bold">FECHA: {docItem.uploadDate || '2026-03-12'}</div>
-                      </div>
-                    </div>
-
-                    {/* Pie de página PDF */}
-                    <div className="text-center pt-4 text-[9px] text-gray-400 border-t border-gray-200">
-                      Página {currentPage} de {totalPages} • INTECOAL S.A.S. — Sistema de Control y Custodia Documental RETILAP © 2026
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Tab de Metadatos y Auditoría SharePoint */
-            <div className="space-y-6 max-w-3xl mx-auto">
-              <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-3">
-                <h4 className="text-sm font-bold text-[#D9CF43] flex items-center space-x-2">
-                  <Cloud className="w-4 h-4" />
-                  <span>Ubicación y Registro en Microsoft 365</span>
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-400 block uppercase">Código Documento</span>
-                    <span className="font-mono text-white font-bold">{docItem.docCode}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-400 block uppercase">Nombre Requisito</span>
-                    <span className="text-white font-semibold">{docItem.docName}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-400 block uppercase">Nombre de Archivo en Nube</span>
-                    <span className="font-mono text-emerald-400 font-bold">{docItem.fileName || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-400 block uppercase">Tamaño estimado</span>
-                    <span className="text-gray-300 font-mono">{docItem.fileSize ? `${(docItem.fileSize / (1024*1024)).toFixed(2)} MB` : 'N/A'}</span>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <span className="text-[10px] font-bold text-gray-400 block uppercase">Ruta de Carpeta OneDrive / SharePoint</span>
-                    <span className="font-mono text-xs bg-slate-950 p-2 rounded border border-slate-800 text-amber-300 block break-all">
-                      {docItem.folderPath || `/Documentos_Radicacion/${filing?.numeroRadicado}/`}
-                    </span>
-                  </div>
                 </div>
               </div>
-
-              <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-3">
-                <h4 className="text-sm font-bold text-white flex items-center space-x-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span>Enlace Directo a Microsoft SharePoint Online</span>
-                </h4>
-                <p className="text-xs text-gray-400">
-                  Haz clic en el siguiente botón corporativo para abrir la carpeta raíz del proyecto directamente en SharePoint Online:
-                </p>
-                <a
-                  href={cloudUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-3 rounded-xl inline-flex items-center space-x-2 transition-all shadow-md"
-                >
-                  <Cloud className="w-4 h-4" />
-                  <span>Abrir Carpeta {filing?.numeroRadicado} en SharePoint / OneDrive</span>
-                  <ExternalLink className="w-4 h-4 ml-1" />
-                </a>
+            ) : !hasFile ? (
+              <div className="bg-slate-900 border-2 border-dashed border-amber-900/50 rounded-2xl p-12 text-center max-w-xl mx-auto space-y-4 my-8">
+                <div className="w-16 h-16 bg-amber-950/40 text-amber-400 rounded-full flex items-center justify-center mx-auto border border-amber-500/30">
+                  <AlertTriangle className="w-8 h-8" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-bold text-amber-300 mb-1">Sin Archivo Adjunto</h4>
+                  <p className="text-xs text-gray-400 max-w-md mx-auto">
+                    Aún no se ha subido el archivo correspondiente a este código de verificación.
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="w-full flex flex-col items-center justify-center space-y-3 my-1">
+                {localFileName && (
+                  <div className="bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs px-3 py-1.5 rounded-lg flex items-center space-x-2 w-full justify-between">
+                    <div className="flex items-center space-x-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Mostrando archivo PDF local cargado: <strong>{localFileName}</strong></span>
+                    </div>
+                    <button 
+                      onClick={() => { setLocalPdfUrl(null); setLocalFileName(null); }}
+                      className="text-xs text-gray-400 hover:text-white underline"
+                    >
+                      Restablecer
+                    </button>
+                  </div>
+                )}
+
+                <div className="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-2xl">
+                  <iframe
+                    src={localPdfUrl || docItem.fileUrl || docItem.blobUrl || `/api/files/view/${filing?.id || 'demo'}/${docItem.docId || docItem.docCode}`}
+                    className="w-full h-[640px] border-0 bg-slate-900"
+                    title={localFileName || docItem.fileName || docItem.docName}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer del Modal */}

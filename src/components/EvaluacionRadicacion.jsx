@@ -624,18 +624,6 @@ export const EvaluacionRadicacion = ({
                           <span>Sin archivo adjunto</span>
                         </button>
                       )}
-
-                      <a
-                        href={getOneDriveCloudUrl(filing?.rutaOneDrive, filing?.numeroRadicado)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bg-slate-900 hover:bg-slate-800 text-[#D9CF43] font-bold text-[11px] px-2.5 py-1 rounded-lg border border-slate-700 inline-flex items-center space-x-1.5 transition-colors shadow-sm"
-                        title="Abrir carpeta de este proyecto en el repositorio SharePoint"
-                      >
-                        <Cloud className="w-3.5 h-3.5 text-[#D9CF43]" />
-                        <span>Ver en SharePoint</span>
-                        <ExternalLink className="w-3 h-3 text-gray-300" />
-                      </a>
                     </div>
                   </div>
 
