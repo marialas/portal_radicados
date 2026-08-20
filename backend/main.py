@@ -76,6 +76,19 @@ async def lifespan(app: FastAPI):
     if GraphService:
         graph_service = GraphService()
         print(f"[STARTUP] GraphService OK | isConnected={graph_service.obtener_config()['isConnected']}")
+        try:
+            await graph_service.asegurar_columna_rawjson()
+        except Exception as e:
+            print(f"[STARTUP] No se pudo verificar columna RawJson: {e}")
+        if len(radicaciones_db) == 0:
+            try:
+                sp_rads = await graph_service.cargar_radicaciones_desde_sharepoint()
+                if sp_rads:
+                    radicaciones_db.extend(sp_rads)
+                    guardar_db()
+                    print(f"[STARTUP] Cargados {len(sp_rads)} radicaciones desde SharePoint")
+            except Exception as e:
+                print(f"[STARTUP] No se pudieron cargar radicaciones de SharePoint: {e}")
     else:
         print("[STARTUP] GraphService NO DISPONIBLE - grafos.py no importado")
     yield
@@ -228,6 +241,13 @@ async def eliminar_radicacion(identificador: str, email: Optional[str] = Query(N
 
     radicaciones_db.pop(0)
     guardar_db()
+
+    if graph_service:
+        try:
+            await graph_service.eliminar_radicacion_de_sharepoint(identificador)
+        except Exception as e:
+            print(f"[MAIN] Error eliminando de SharePoint: {e}")
+
     return {"ok": True, "mensaje": "Radicación eliminada"}
 
 
@@ -366,6 +386,13 @@ async def crear_radicacion(request: Request):
         except Exception as e:
             print(f"[MAIN] Error correo confirmacion: {e}")
 
+    if graph_service:
+        try:
+            await graph_service.guardar_radicacion_en_sharepoint(radicacion)
+            print(f"[MAIN] Radicado {numero} guardado en SharePoint")
+        except Exception as e:
+            print(f"[MAIN] Error guardando en SharePoint: {e}")
+
     return {"data": radicacion, "ok": True}
 
 
@@ -422,6 +449,12 @@ async def subir_archivo(
     radicacion["fechaActualizacion"] = datetime.now(timezone.utc).isoformat()
     guardar_db()
 
+    if graph_service:
+        try:
+            await graph_service.guardar_radicacion_en_sharepoint(radicacion)
+        except Exception as e:
+            print(f"[MAIN] Error sync SharePoint archivo: {e}")
+
     return {"ok": True, "data": radicacion}
 
 
@@ -473,6 +506,14 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado):
             print(f"[MAIN] Error correo cambio de estado: {e}")
 
     guardar_db()
+
+    if graph_service:
+        try:
+            await graph_service.guardar_radicacion_en_sharepoint(radicacion)
+            print(f"[MAIN] Estado de {radicacion['numeroRadicado']} sincronizado a SharePoint")
+        except Exception as e:
+            print(f"[MAIN] Error sync SharePoint estado: {e}")
+
     return {"ok": True, "data": radicacion}
 
 
@@ -506,6 +547,12 @@ async def actualizar_metadata(identificador: str, body: ActualizacionMetadata):
 
     radicacion["fechaActualizacion"] = datetime.now(timezone.utc).isoformat()
     guardar_db()
+
+    if graph_service:
+        try:
+            await graph_service.guardar_radicacion_en_sharepoint(radicacion)
+        except Exception as e:
+            print(f"[MAIN] Error sync SharePoint metadata: {e}")
 
     return {"ok": True, "data": radicacion}
 

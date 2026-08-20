@@ -433,3 +433,193 @@ class GraphService:
         resultados["message"] = "Todos los pasos OK" if todos_ok else "Algunos pasos fallaron - revisa los detalles"
 
         return resultados
+
+    async def cargar_radicaciones_desde_sharepoint(self):
+        token = await self._obtener_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        radicaciones = []
+        url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items"
+        params = {"$expand": "fields", "$top": 500}
+
+        async with httpx.AsyncClient(timeout=30.0) as cliente:
+            try:
+                resp = await cliente.get(url, headers=headers, params=params)
+                if resp.status_code != 200:
+                    print(f"[GRAPH] Error leyendo lista: {resp.status_code}")
+                    return []
+
+                items = resp.json().get("value", [])
+                print(f"[GRAPH] {len(items)} items encontrados en lista SharePoint")
+
+                for item in items:
+                    fields = item.get("fields", {})
+                    raw_json = fields.get("RawJson", "")
+                    if raw_json:
+                        try:
+                            import json
+                            rad = json.loads(raw_json)
+                            rad["m365Synced"] = True
+                            radicaciones.append(rad)
+                            continue
+                        except Exception:
+                            pass
+
+                    numero = fields.get("NumeroRadicado", fields.get("Title", ""))
+                    if not numero:
+                        continue
+
+                    estado_sp = fields.get("Estado", "Pendiente_Firma")
+                    estado_map = {"Aprobado": "Aprobado", "Revision": "Con Observaciones", "Pendiente_Firma": "Radicado"}
+                    estado = estado_map.get(estado_sp, "Radicado")
+
+                    docs_str = fields.get("DocumentosOk", "0/21")
+                    try:
+                        docs_ok = int(docs_str.split("/")[0])
+                    except Exception:
+                        docs_ok = 0
+
+                    try:
+                        pct = int(fields.get("PorcentajeConformidad", 0))
+                    except Exception:
+                        pct = 0
+
+                    rad = {
+                        "id": item.get("id", ""),
+                        "numeroRadicado": numero,
+                        "metadata": {
+                            "nombreProyecto": fields.get("NombreProyecto", numero),
+                            "municipio": fields.get("Municipio", ""),
+                            "contratista": fields.get("Operador", ""),
+                            "nitContratista": fields.get("NIT", ""),
+                            "responsable": fields.get("Responsable", ""),
+                            "correoResponsable": fields.get("CorreoResponsable", ""),
+                            "tipoEntrega": fields.get("TipoEntrega", "Inicial"),
+                            "creadorEmail": fields.get("CreadorEmail", ""),
+                        },
+                        "estado": estado,
+                        "documentosOk": docs_ok,
+                        "totalDocumentos": 21,
+                        "fechaRadicacion": fields.get("FechaRadicacion", ""),
+                        "fechaActualizacion": fields.get("FechaRadicacion", ""),
+                        "porcentajeCumplimiento": pct,
+                        "archivos": [],
+                        "elementosEntregados": [],
+                        "observacionesGenerales": "",
+                        "creadorEmail": fields.get("CreadorEmail", ""),
+                        "creadorName": "",
+                        "m365Synced": True,
+                    }
+                    radicaciones.append(rad)
+
+                print(f"[GRAPH] {len(radicaciones)} radicaciones reconstruidas desde SharePoint")
+                return radicaciones
+
+            except Exception as e:
+                print(f"[GRAPH] Error cargando radicaciones: {e}")
+                return []
+
+    async def guardar_radicacion_en_sharepoint(self, radicacion):
+        token = await self._obtener_token()
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        meta = radicacion["metadata"]
+        numero = radicacion["numeroRadicado"]
+
+        estado_map = {
+            "Aprobado": "Aprobado",
+            "Con Observaciones": "Revision",
+            "Radicado": "Pendiente_Firma",
+            "En Revisión": "En_Revision",
+        }
+        estado_sp = estado_map.get(radicacion.get("estado", ""), "Pendiente_Firma")
+
+        docs_str = f"{radicacion.get('documentosOk', 0)}/{radicacion.get('totalDocumentos', 21)}"
+
+        import json
+        raw_json = json.dumps(radicacion, ensure_ascii=False, default=str)
+
+        campos_todos = {
+            "Title": numero,
+            "NumeroRadicado": numero,
+            "NombreProyecto": meta.get("nombreProyecto", numero),
+            "Municipio": meta.get("municipio", ""),
+            "Operador": meta.get("contratista", ""),
+            "NIT": meta.get("nitContratista", ""),
+            "Responsable": meta.get("responsable", ""),
+            "CorreoResponsable": meta.get("correoResponsable", ""),
+            "TipoEntrega": meta.get("tipoEntrega", ""),
+            "Estado": estado_sp,
+            "DocumentosOk": docs_str,
+            "PorcentajeConformidad": radicacion.get("porcentajeCumplimiento", 0),
+            "FechaRadicacion": radicacion.get("fechaRadicacion", "")[:10],
+            "RutaOneDrive": f"/Documentos_Radicacion/{numero}/",
+            "CreadorEmail": radicacion.get("creadorEmail", "") or meta.get("creadorEmail", ""),
+            "RawJson": raw_json[:60000] if len(raw_json) > 60000 else raw_json,
+        }
+
+        try:
+            cols_existentes = await self._columnas_lista()
+            campos = {k: v for k, v in campos_todos.items() if k in cols_existentes}
+            col_faltantes = [k for k in campos_todos if k not in cols_existentes]
+            if col_faltantes:
+                print(f"[GRAPH] Columnas no encontradas (se omiten): {col_faltantes}")
+        except Exception:
+            campos = campos_todos
+
+        existente = await self._buscar_por_titulo(numero)
+
+        async with httpx.AsyncClient(timeout=30.0) as cliente:
+            if existente:
+                item_id = existente["id"]
+                url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items/{item_id}"
+                resp = await cliente.patch(url, headers=headers, json={"fields": campos})
+                print(f"[GRAPH] Item {numero} actualizado en SharePoint: {resp.status_code}")
+            else:
+                url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items"
+                resp = await cliente.post(url, headers=headers, json={"fields": campos})
+                print(f"[GRAPH] Item {numero} creado en SharePoint: {resp.status_code}")
+
+    async def eliminar_radicacion_de_sharepoint(self, numero):
+        token = await self._obtener_token()
+        headers = {"Authorization": f"Bearer {token}"}
+
+        existente = await self._buscar_por_titulo(numero)
+        if not existente:
+            return
+
+        url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items/{existente['id']}"
+        async with httpx.AsyncClient(timeout=30.0) as cliente:
+            resp = await cliente.delete(url, headers=headers)
+            print(f"[GRAPH] Item {numero} eliminado de SharePoint: {resp.status_code}")
+
+    async def asegurar_columna_rawjson(self):
+        token = await self._obtener_token()
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        try:
+            cols = await self._columnas_lista()
+            if "RawJson" in cols:
+                print("[GRAPH] Columna RawJson ya existe")
+                return
+        except Exception:
+            pass
+
+        url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/columns"
+        columna = {
+            "name": "RawJson",
+            "text": {"maxLength": 65535},
+            "displayName": "RawJson",
+        }
+        async with httpx.AsyncClient(timeout=30.0) as cliente:
+            resp = await cliente.post(url, headers=headers, json=columna)
+            if resp.status_code in (200, 201):
+                print("[GRAPH] Columna RawJson creada OK")
+            else:
+                print(f"[GRAPH] Error creando columna RawJson: {resp.status_code} {resp.text[:200]}")
+
+        for col_name in ["NombreProyecto", "CreadorEmail"]:
+            if col_name not in cols:
+                col_data = {"name": col_name, "text": {"maxLength": 255}, "displayName": col_name}
+                async with httpx.AsyncClient(timeout=30.0) as cliente:
+                    resp = await cliente.post(url, headers=headers, json=col_data)
+                    print(f"[GRAPH] Columna {col_name}: {resp.status_code}")
