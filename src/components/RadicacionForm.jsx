@@ -34,26 +34,24 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
   const [activeCategory, setActiveCategory] = useState('todos');
 
   const [metadata, setMetadata] = useState({
-    nombreProyecto: 'MODERNIZACION Y REPOSICION LUMINARIAS ALUMBRADO PUBLICO',
-    municipio: 'CALIMA-DARIEN',
-    contratista: formatNameFromEmail(currentUser?.email) || currentUser?.company || 'ELECTROINGENIERIA S.A.S.',
-    nitContratista: '891903664',
-    responsableRevision: formatNameFromEmail(currentUser?.email) || currentUser?.name || 'Responsable de Revisión',
-    responsable: formatNameFromEmail(currentUser?.email) || currentUser?.name || 'Responsable',
+    nombreProyecto: '',
+    municipio: '',
+    contratista: '',
+    nitContratista: '',
+    responsableRevision: '',
+    responsable: '',
     correoResponsable: currentUser?.email || '',
-    tipoEntrega: 'Inicial',
-    fechaEntrega: new Date().toISOString().split('T')[0],
-    observaciones: 'Radicación inicial de expediente técnico para verificación documental de interventoría.'
+    tipoEntrega: '',
+    fechaEntrega: '',
+    observaciones: ''
   });
 
   const [elementos, setElementos] = useState([
-    { id: 1, elemento: 'Luminarias', cantidad: 75, especificacion: 'Referencia: LED-100W / Potencia: 100 W / CCT 4000K / IP66' },
-    { id: 2, elemento: 'Brazos', cantidad: 75, especificacion: 'Galvanizado en caliente 1.5 pulgadas x 1.5m' },
-    { id: 3, elemento: 'Fotoceldas', cantidad: 75, especificacion: 'Fotocelda electrónica 105-305V ANSI C136.10' }
+    { id: 1, elemento: '', cantidad: 0, especificacion: '' },
   ]);
 
-  const [firmadoPorContratista, setFirmadoPorContratista] = useState(true);
-  const [firmadoPorInterventor, setFirmadoPorInterventor] = useState(true);
+  const [firmadoPorContratista, setFirmadoPorContratista] = useState(false);
+  const [firmadoPorInterventor, setFirmadoPorInterventor] = useState(false);
   const [firmaContratista, setFirmaContratista] = useState(null);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
