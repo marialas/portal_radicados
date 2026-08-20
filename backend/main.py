@@ -40,13 +40,39 @@ MAX_TAMANIO_BYTES = 50 * 1024 * 1024
 UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
 
+DATA_DIR = Path(__file__).resolve().parent / "data"
+DATA_DIR.mkdir(exist_ok=True)
+DATA_FILE = DATA_DIR / "radicaciones.json"
+
 radicaciones_db = []
 graph_service = None
+
+
+def guardar_db():
+    try:
+        DATA_FILE.write_text(json.dumps(radicaciones_db, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        print(f"[DB] Error guardando: {e}")
+
+
+def cargar_db():
+    global radicaciones_db
+    try:
+        if DATA_FILE.exists():
+            radicaciones_db = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+            print(f"[DB] Cargados {len(radicaciones_db)} radicaciones desde disco")
+        else:
+            radicaciones_db = []
+            print("[DB] No hay archivo previo, base vacía")
+    except Exception as e:
+        print(f"[DB] Error cargando: {e}")
+        radicaciones_db = []
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global graph_service
+    cargar_db()
     if GraphService:
         graph_service = GraphService()
         print(f"[STARTUP] GraphService OK | isConnected={graph_service.obtener_config()['isConnected']}")
@@ -201,6 +227,7 @@ async def eliminar_radicacion(identificador: str, email: Optional[str] = Query(N
         )
 
     radicaciones_db.pop(0)
+    guardar_db()
     return {"ok": True, "mensaje": "Radicación eliminada"}
 
 
@@ -324,6 +351,7 @@ async def crear_radicacion(request: Request):
     }
 
     radicaciones_db.insert(0, radicacion)
+    guardar_db()
 
     print(f"[MAIN] graph_service={'DISPONIBLE' if graph_service else 'NULL'}")
 
@@ -392,6 +420,7 @@ async def subir_archivo(
     )
     radicacion["porcentajeCumplimiento"] = calcular_porcentaje(radicacion["archivos"])
     radicacion["fechaActualizacion"] = datetime.now(timezone.utc).isoformat()
+    guardar_db()
 
     return {"ok": True, "data": radicacion}
 
@@ -443,6 +472,7 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado):
         except Exception as e:
             print(f"[MAIN] Error correo cambio de estado: {e}")
 
+    guardar_db()
     return {"ok": True, "data": radicacion}
 
 
@@ -475,6 +505,7 @@ async def actualizar_metadata(identificador: str, body: ActualizacionMetadata):
         radicacion["observacionesGenerales"] = body.observacionesGenerales
 
     radicacion["fechaActualizacion"] = datetime.now(timezone.utc).isoformat()
+    guardar_db()
 
     return {"ok": True, "data": radicacion}
 
