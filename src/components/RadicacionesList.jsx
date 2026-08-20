@@ -30,11 +30,7 @@ export const RadicacionesList = ({
   const deletableFilingId = React.useMemo(() => {
     if (!filings.length || !onDeleteFiling) return null;
     if (userRole !== 'contratista') return null;
-    const mostRecent = filings.reduce((a, b) => {
-      const da = new Date(a.fechaRadicacion || 0);
-      const db = new Date(b.fechaRadicacion || 0);
-      return db > da ? b : a;
-    });
+    const mostRecent = filings[0];
     const creatorEmail = (mostRecent.creadorEmail || mostRecent.metadata?.creadorEmail || '').toLowerCase().trim();
     const userEmail = (currentUser?.email || '').toLowerCase().trim();
     if (creatorEmail && userEmail && creatorEmail !== userEmail) return null;
