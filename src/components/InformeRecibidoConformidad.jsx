@@ -272,8 +272,8 @@ export const InformeRecibidoConformidad = ({
             <PenTool className="w-4 h-4 text-emerald-800" />
             <span>
               {isRol2Contratista
-                ? (filing.metadata.firmaContratista ? '✓ Firma Contratista' : 'Firmar Digitalmente')
-                : (filing.metadata.firmaInterventoria ? '✓ Firma Revisor' : 'Firmar Digitalmente')
+                ? (filing.metadata.firmaContratista ? 'Firma Contratista' : 'Firmar Digitalmente')
+                : (filing.metadata.firmaInterventoria ? 'Firma Revisor' : 'Firmar Digitalmente')
               }
             </span>
           </button>
@@ -301,7 +301,7 @@ export const InformeRecibidoConformidad = ({
 
       {/* Helper notice for PDF printing */}
       <div className="mb-6 bg-slate-100 border border-slate-300 text-slate-700 p-3 rounded-xl text-xs flex items-center space-x-2 print:hidden shadow-sm">
-        <span className="font-extrabold text-slate-900 text-sm">💡 Tip de Impresión PDF:</span>
+        <span className="font-extrabold text-slate-900 text-sm">Tip de Impresión PDF:</span>
         <span>El informe se imprime con formato carta y sin las marcas del navegador (URL, fecha, páginas). En la ventana de impresión, selecciona <strong>"Guardar como PDF"</strong> y elige <strong>Letter</strong> como tamaño si no viene preseleccionado.</span>
       </div>
 

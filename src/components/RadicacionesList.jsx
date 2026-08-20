@@ -293,9 +293,9 @@ export const RadicacionesList = ({
                               className={`text-[11px] font-extrabold px-2.5 py-1 rounded-full border focus:outline-none cursor-pointer ${badgeBg}`}
                               title="Cambiar estado como Revisor de Interventoría"
                             >
-                              <option value="En Revisión">🔍 En Revisión</option>
-                              <option value="Aprobado">✓ Aprobado</option>
-                              <option value="Con Observaciones">⚠️ Con Observaciones</option>
+                              <option value="En Revisión">En Revisión</option>
+                              <option value="Aprobado">Aprobado</option>
+                              <option value="Con Observaciones">Con Observaciones</option>
                             </select>
                             <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
                               filing.estado === 'Aprobado'
@@ -304,7 +304,7 @@ export const RadicacionesList = ({
                                 ? 'bg-blue-100 text-blue-800'
                                 : 'bg-gray-100 text-gray-500'
                             }`}>
-                              {filing.estado === 'Aprobado' ? '✓ Cargado en SharePoint' : filing.estado === 'En Revisión' ? '🔍 En Revisión' : '⏳ Pendiente de Aprobación'}
+                              {filing.estado === 'Aprobado' ? 'Cargado en SharePoint' : filing.estado === 'En Revisión' ? 'En Revisión' : 'Pendiente de Aprobación'}
                             </span>
                           </div>
                         ) : (
@@ -319,7 +319,7 @@ export const RadicacionesList = ({
                                 ? 'bg-blue-100 text-blue-800'
                                 : 'bg-gray-100 text-gray-500'
                             }`}>
-                              {filing.estado === 'Aprobado' ? '✓ Cargado en SharePoint' : filing.estado === 'En Revisión' ? '🔍 En Revisión' : '⏳ Pendiente de Aprobación'}
+                              {filing.estado === 'Aprobado' ? 'Cargado en SharePoint' : filing.estado === 'En Revisión' ? 'En Revisión' : 'Pendiente de Aprobación'}
                             </span>
                           </div>
                         )}

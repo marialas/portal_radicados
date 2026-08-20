@@ -392,7 +392,7 @@ export const FirmaDigitalModal = ({
                       className="max-h-28 mx-auto object-contain rounded border p-2 bg-white"
                     />
                     <span className="text-xs text-emerald-700 font-bold block">
-                      ✓ Imagen cargada correctamente. Puede cambiarla seleccionando otra.
+                      Imagen cargada correctamente. Puede cambiarla seleccionando otra.
                     </span>
                   </div>
                 ) : (

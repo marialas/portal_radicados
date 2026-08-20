@@ -255,7 +255,7 @@ export const EvaluacionRadicacion = ({
             >
               <PenTool className="w-4 h-4 text-[#D9CF43]" />
               <span>
-                {firmaInterventoria ? '✓ Firma Revisor Estampada' : 'Firmar Digitalmente'}
+                {firmaInterventoria ? 'Firma Revisor Estampada' : 'Firmar Digitalmente'}
               </span>
             </button>
 
@@ -382,9 +382,9 @@ export const EvaluacionRadicacion = ({
                 onChange={(e) => setEstadoGeneral(e.target.value)}
                 className="bg-slate-900 text-[#D9CF43] font-black text-xs px-3.5 py-2 rounded-xl border border-slate-700 focus:ring-2 focus:ring-[#D9CF43] cursor-pointer"
               >
-                <option value="Aprobado">✓ Aprobado (Recibido a Conformidad)</option>
-                <option value="En Revisión">🔍 En Revisión</option>
-                <option value="Con Observaciones">⚠️ Con Observaciones</option>
+                <option value="Aprobado">Aprobado (Recibido a Conformidad)</option>
+                <option value="En Revisión">En Revisión</option>
+                <option value="Con Observaciones">Con Observaciones</option>
               </select>
             </div>
           </div>
@@ -690,7 +690,7 @@ export const EvaluacionRadicacion = ({
                   <div className="lg:col-span-4 space-y-1.5">
                     <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block flex items-center justify-between">
                       <span>Observación del Revisor</span>
-                      {item.notes && <span className="text-emerald-700 font-bold">✓ Con nota</span>}
+                      {item.notes && <span className="text-emerald-700 font-bold">Con nota</span>}
                     </label>
 
                     <div className="relative">

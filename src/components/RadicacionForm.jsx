@@ -866,7 +866,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                             </div>
                             <div>
                               <span className="text-xs font-black text-emerald-950 block">
-                                ✓ {firmaContratista.nombreSignatario || metadata.responsable}
+                                {firmaContratista.nombreSignatario || metadata.responsable}
                               </span>
                               <span className="text-[11px] text-emerald-800 font-semibold block">
                                 {firmaContratista.cargo || 'Representante Técnico Contratista'}
