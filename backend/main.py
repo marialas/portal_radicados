@@ -284,6 +284,10 @@ async def crear_radicacion(request: Request):
     nuevo_id = generar_id()
     total_docs = len(CATALOGO_21_DOCUMENTOS) + len(docs_adic)
 
+    for r in radicaciones_db:
+        if r.get("numeroRadicado") == numero:
+            raise HTTPException(status_code=409, detail=f"El número de radicado {numero} ya existe. Intente nuevamente.")
+
     upload_dir = UPLOADS_DIR / nuevo_id
     upload_dir.mkdir(parents=True, exist_ok=True)
 

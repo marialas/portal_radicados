@@ -155,11 +155,13 @@ GRUPOS_CARPETA = {
 def generar_numero_radicado(radicaciones_existentes=None):
     year = datetime.now().year
     max_consecutivo = 0
+    existentes = set()
 
     if radicaciones_existentes:
         for r in radicaciones_existentes:
             num = r.get("numeroRadicado", "")
             if num.startswith(f"RAD-{year}-"):
+                existentes.add(num)
                 try:
                     consecutivo = int(num.split("-")[-1])
                     if consecutivo > max_consecutivo:
@@ -168,7 +170,13 @@ def generar_numero_radicado(radicaciones_existentes=None):
                     pass
 
     nuevo_consecutivo = max_consecutivo + 1
-    return f"RAD-{year}-{nuevo_consecutivo:03d}"
+    numero = f"RAD-{year}-{nuevo_consecutivo:03d}"
+
+    while numero in existentes:
+        nuevo_consecutivo += 1
+        numero = f"RAD-{year}-{nuevo_consecutivo:03d}"
+
+    return numero
 
 
 def generar_id():
