@@ -52,9 +52,10 @@ export const RadicacionesList = ({
   });
 
   const totalCount = filings.length;
-  const aprobadasCount = filings.filter(f => f.estado === 'Aprobado' || f.porcentajeCumplimiento === 100).length;
+  const aprobadasCount = filings.filter(f => f.estado === 'Aprobado').length;
   const enRevisionCount = filings.filter(f => f.estado === 'En Revisión').length;
   const conObsCount = filings.filter(f => f.estado === 'Con Observaciones').length;
+  const pendientesCount = filings.filter(f => f.estado === 'Radicado').length;
   const avgCompliance = totalCount > 0 
     ? Math.round(filings.reduce((acc, f) => acc + f.porcentajeCumplimiento, 0) / totalCount) 
     : 0;
@@ -63,16 +64,16 @@ export const RadicacionesList = ({
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-8 font-sans">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
-              Total Radicaciones
+              Total
             </span>
             <span className="text-3xl font-black text-gray-900 mt-1 block">
               {totalCount}
             </span>
-            <span className="text-xs text-gray-400 mt-1 block">Radicaciones Registradas</span>
+            <span className="text-xs text-gray-400 mt-1 block">Radicaciones</span>
           </div>
           <div className="bg-gray-100 p-3 rounded-lg text-[#0D0D0D]">
             <FileCheck2 className="w-6 h-6 text-[#D9CF43]" />
@@ -82,12 +83,12 @@ export const RadicacionesList = ({
         <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
-              Recibidos a Conformidad
+              Aprobados
             </span>
             <span className="text-3xl font-black text-emerald-600 mt-1 block">
               {aprobadasCount}
             </span>
-            <span className="text-xs text-emerald-700 mt-1 block font-semibold">100% Documentos OK</span>
+            <span className="text-xs text-emerald-700 mt-1 block font-semibold">Recibidos a Conformidad</span>
           </div>
           <div className="bg-emerald-50 p-3 rounded-lg text-emerald-600">
             <CheckCircle2 className="w-6 h-6" />
@@ -102,7 +103,7 @@ export const RadicacionesList = ({
             <span className="text-3xl font-black text-blue-600 mt-1 block">
               {enRevisionCount}
             </span>
-            <span className="text-xs text-blue-700 mt-1 block font-semibold">En Proceso de Revisión</span>
+            <span className="text-xs text-blue-700 mt-1 block font-semibold">En Proceso</span>
           </div>
           <div className="bg-blue-50 p-3 rounded-lg text-blue-600">
             <Clock className="w-6 h-6" />
@@ -121,6 +122,21 @@ export const RadicacionesList = ({
           </div>
           <div className="bg-amber-50 p-3 rounded-lg text-amber-600">
             <Clock className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm flex items-center justify-between">
+          <div>
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
+              Pendientes
+            </span>
+            <span className="text-3xl font-black text-gray-500 mt-1 block">
+              {pendientesCount}
+            </span>
+            <span className="text-xs text-gray-500 mt-1 block font-semibold">Sin Evaluar</span>
+          </div>
+          <div className="bg-gray-50 p-3 rounded-lg text-gray-400">
+            <FileCheck2 className="w-6 h-6" />
           </div>
         </div>
 
