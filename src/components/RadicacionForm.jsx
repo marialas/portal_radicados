@@ -518,7 +518,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                                       <span>{file ? 'Cambiar PDF' : 'Adjuntar PDF'}</span>
                                       <input
                                         type="file"
-                                        accept=".pdf"
+                                        accept=".pdf,.dwg,.dxf,.jpeg,.jpg,.png,.tiff,.tif,.bmp,.gif"
                                         onChange={(e) => handleFileChange(doc.id, e)}
                                         className="hidden"
                                       />

@@ -151,7 +151,7 @@ startxref
                 <span>Cargar PDF Local</span>
                 <input
                   type="file"
-                  accept="application/pdf"
+                  accept=".pdf,.dwg,.dxf,.jpeg,.jpg,.png,.tiff,.tif,.bmp,.gif"
                   className="hidden"
                   onChange={(e) => {
                     if (e.target.files && e.target.files[0]) {

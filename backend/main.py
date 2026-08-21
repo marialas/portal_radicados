@@ -34,6 +34,17 @@ TOKEN_EXPIRE_HOURS = 24
 
 MIME_PERMITIDOS = {
     "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/tiff",
+    "image/bmp",
+    "image/gif",
+    "application/dwg",
+    "application/dxf",
+    "application/x-dwg",
+    "application/x-dxf",
+    "application/acad",
+    "application/octet-stream",
 }
 MAX_TAMANIO_BYTES = 50 * 1024 * 1024
 
@@ -295,7 +306,7 @@ async def crear_radicacion(request: Request):
     for field_name, upload_file in uploaded_files.items():
         mime = upload_file.content_type or ""
         if mime not in MIME_PERMITIDOS:
-            raise HTTPException(status_code=400, detail=f"Tipo no permitido: {mime}. Solo PDF.")
+            raise HTTPException(status_code=400, detail=f"Tipo no permitido: {mime}. Solo PDF, imágenes (JPEG, PNG, TIFF, BMP, GIF) y AutoCAD (DWG, DXF).")
 
         contenido = await upload_file.read()
         if len(contenido) > MAX_TAMANIO_BYTES:
@@ -435,7 +446,7 @@ async def subir_archivo(
     if mime not in MIME_PERMITIDOS:
         raise HTTPException(
             status_code=400,
-            detail=f"Tipo de archivo no permitido: {mime}. Solo se aceptan archivos PDF.",
+            detail=f"Tipo de archivo no permitido: {mime}. Solo se aceptan PDF, imágenes y AutoCAD.",
         )
 
     contenido = await archivo.read()
