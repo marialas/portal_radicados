@@ -3,13 +3,13 @@ import { PublicClientApplication, LogLevel } from '@azure/msal-browser';
 // Configuración por defecto de Azure AD / Entra ID (INTECOAL SAS / Microsoft 365)
 export const DEFAULT_AZURE_CONFIG = {
   clientId: import.meta.env.VITE_MSAL_CLIENT_ID || '',
-  tenantId: import.meta.env.VITE_MSAL_TENANT_ID || 'organizations',
+  tenantId: import.meta.env.VITE_MSAL_TENANT_ID || 'common',
   redirectUri: import.meta.env.VITE_MSAL_REDIRECT_URI || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173'),
   scopes: ['User.Read', 'openid', 'profile', 'email']
 };
 
 export function createMsalClient(clientId, tenantId, redirectUri) {
-  const activeTenant = tenantId || DEFAULT_AZURE_CONFIG.tenantId || 'organizations';
+  const activeTenant = tenantId || DEFAULT_AZURE_CONFIG.tenantId || 'common';
   const activeRedirectUri = redirectUri || DEFAULT_AZURE_CONFIG.redirectUri;
   const config = {
     auth: {
