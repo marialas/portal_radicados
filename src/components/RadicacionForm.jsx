@@ -50,8 +50,6 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
     { id: 1, elemento: '', cantidad: 0, especificacion: '' },
   ]);
 
-  const [firmadoPorContratista, setFirmadoPorContratista] = useState(false);
-  const [firmadoPorInterventor, setFirmadoPorInterventor] = useState(false);
   const [firmaContratista, setFirmaContratista] = useState(null);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -916,31 +914,6 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                         </div>
                       )}
 
-                      <div className="space-y-3 pt-2">
-                        <label className="flex items-start space-x-3 p-3 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
-                          <input
-                            type="checkbox"
-                            checked={firmadoPorContratista}
-                            onChange={(e) => setFirmadoPorContratista(e.target.checked)}
-                            className="mt-0.5 rounded border-gray-300 text-[#0D0D0D] focus:ring-[#D9CF43]"
-                          />
-                          <div className="text-xs text-gray-800">
-                            <span className="font-extrabold text-[#0D0D0D] block">Declaración del Contratista ({metadata.contratista})</span>
-                          </div>
-                        </label>
-
-                        <label className="flex items-start space-x-3 p-3 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
-                          <input
-                            type="checkbox"
-                            checked={firmadoPorInterventor}
-                            onChange={(e) => setFirmadoPorInterventor(e.target.checked)}
-                            className="mt-0.5 rounded border-gray-300 text-[#0D0D0D] focus:ring-[#D9CF43]"
-                          />
-                          <div className="text-xs text-gray-800">
-                            <span className="font-extrabold text-[#0D0D0D] block">Aprobación de la Interventoría INTECOAL SAS</span>
-                          </div>
-                        </label>
-                      </div>
                     </div>
                   </div>
                 )}
@@ -992,7 +965,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
             ) : (
               <button
                 type="submit"
-                disabled={isSubmitting || !firmadoPorContratista}
+                disabled={isSubmitting}
                 className="w-full sm:w-auto px-8 py-3 rounded-xl font-black text-xs bg-[#D9CF43] hover:bg-amber-400 text-[#0D0D0D] transition-all shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 active:scale-95 uppercase tracking-wider"
               >
                 <FileUp className="w-4 h-4 text-[#0D0D0D]" />
