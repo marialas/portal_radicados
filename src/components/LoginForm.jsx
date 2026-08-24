@@ -217,6 +217,44 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
             </div>
           </div>
 
+          {/* Opción B: Ingreso directo por correo */}
+          <div className="bg-gradient-to-r from-gray-50 via-gray-100 to-gray-50 border-2 border-gray-200 rounded-2xl p-5 space-y-3">
+            <div className="flex items-center space-x-3.5">
+              <div className="w-10 h-10 bg-[#1E222A] rounded-xl flex items-center justify-center shrink-0">
+                <Mail className="w-5 h-5 text-[#D9CF43]" />
+              </div>
+              <div>
+                <span className="font-extrabold text-sm text-gray-900">
+                  Ingreso Directo por Correo
+                </span>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Para cuentas personales (Gmail, Outlook, etc.) que no tengan Microsoft 365.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleDirectEmailLogin} className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Mail className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="email"
+                  value={userEmail}
+                  onChange={(e) => setUserEmail(e.target.value)}
+                  placeholder="correo@ejemplo.com"
+                  className="w-full pl-9 pr-4 py-3 border border-gray-300 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#D9CF43] focus:border-[#D9CF43] transition-all"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="px-5 py-3 bg-[#1E222A] hover:bg-slate-800 text-[#D9CF43] font-black text-xs rounded-xl transition-all flex items-center justify-center space-x-2 shrink-0 cursor-pointer active:scale-[0.98]"
+              >
+                <ArrowRight className="w-4 h-4" />
+                <span>ENTRAR</span>
+              </button>
+            </form>
+          </div>
+
           {displayError && (
             <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl text-xs text-red-700 space-y-2 animate-fadeIn">
               <div className="flex items-start space-x-2.5">
