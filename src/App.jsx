@@ -28,6 +28,7 @@ export default function App() {
   // Lista de radicaciones cargadas en memoria o backend
   const [filings, setFilings] = useState([]);
   const [selectedFiling, setSelectedFiling] = useState(null);
+  const [editingFiling, setEditingFiling] = useState(null);
 
   // Estado de sesión del usuario SENA / INTECOAL (restaurado de sessionStorage o localStorage si existe)
   const [user, setUser] = useState({
@@ -306,28 +307,15 @@ export default function App() {
   };
 
   const handleFilingCreated = (newRecord) => {
-    setFilings([newRecord, ...filings]);
-    setSelectedFiling(newRecord);
-    setActiveTab('informe');
-  };
-
-  const handleDeleteFiling = async (filingId) => {
-    if (!confirm('¿Está seguro de eliminar este radicado? Esta acción no se puede deshacer.')) return;
-    try {
-      const params = new URLSearchParams();
-      if (user.email) params.set('email', user.email);
-      if (user.role) params.set('rol', user.role);
-      const qs = params.toString();
-      const res = await fetch(`/api/radicacion/${encodeURIComponent(filingId)}${qs ? '?' + qs : ''}`, { method: 'DELETE' });
-      if (res.ok) {
-        setFilings(prev => prev.filter(f => f.id !== filingId));
-        setSelectedFiling(prev => (prev && prev.id === filingId) ? null : prev);
-      } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.detail || 'No se pudo eliminar el radicado.');
-      }
-    } catch {
-      alert('Error de conexión al eliminar.');
+    if (editingFiling) {
+      setFilings(prev => prev.map(f => f.id === newRecord.id ? newRecord : f));
+      setEditingFiling(null);
+      setSelectedFiling(newRecord);
+      setActiveTab('informe');
+    } else {
+      setFilings([newRecord, ...filings]);
+      setSelectedFiling(newRecord);
+      setActiveTab('informe');
     }
   };
 
@@ -413,8 +401,12 @@ export default function App() {
             <ErrorBoundary>
               {activeTab === 'nueva' && (
                 <RadicacionForm
+                  filingToEdit={editingFiling}
                   onSuccess={handleFilingCreated}
-                  onCancel={() => setActiveTab('lista')}
+                  onCancel={() => {
+                    setEditingFiling(null);
+                    setActiveTab('lista');
+                  }}
                   currentUser={user}
                 />
               )}
@@ -430,9 +422,15 @@ export default function App() {
                     setSelectedFiling(record);
                     setActiveTab('evaluacion');
                   }}
-                  onNewFiling={() => setActiveTab('nueva')}
+                  onNewFiling={() => {
+                    setEditingFiling(null);
+                    setActiveTab('nueva');
+                  }}
                   onUpdateStatus={handleUpdateStatus}
-                  onDeleteFiling={handleDeleteFiling}
+                  onEditFiling={(record) => {
+                    setEditingFiling(record);
+                    setActiveTab('nueva');
+                  }}
                   userRole={user.role}
                   currentUser={user}
                 />

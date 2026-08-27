@@ -9,7 +9,7 @@ import {
   Plus, 
   FileSpreadsheet,
   Edit3,
-  Trash2,
+  Pencil,
   History,
   X,
   User
@@ -19,9 +19,9 @@ export const RadicacionesList = ({
   filings,
   onSelectFiling,
   onEvaluateFiling,
+  onEditFiling,
   onNewFiling,
   onUpdateStatus,
-  onDeleteFiling,
   userRole = 'interventor',
   currentUser
 }) => {
@@ -30,16 +30,6 @@ export const RadicacionesList = ({
   const [selectedEstado, setSelectedEstado] = useState('TODOS');
   const [selectedTipo, setSelectedTipo] = useState('TODOS');
   const [historialFiling, setHistorialFiling] = useState(null);
-
-  const deletableFilingId = React.useMemo(() => {
-    if (!filings.length || !onDeleteFiling) return null;
-    if (userRole !== 'contratista') return null;
-    const mostRecent = filings[0];
-    const creatorEmail = (mostRecent.creadorEmail || mostRecent.metadata?.creadorEmail || '').toLowerCase().trim();
-    const userEmail = (currentUser?.email || '').toLowerCase().trim();
-    if (creatorEmail && userEmail && creatorEmail !== userEmail) return null;
-    return mostRecent.id;
-  }, [filings, currentUser, onDeleteFiling, userRole]);
 
   const filtered = filings.filter(f => {
     const matchesSearch = 
@@ -369,6 +359,17 @@ export const RadicacionesList = ({
                             <span>Informe</span>
                           </button>
 
+                          {userRole === 'contratista' && onEditFiling && filing.estado === 'Con Observaciones' && (
+                            <button
+                              onClick={() => onEditFiling(filing)}
+                              className="bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs px-2.5 py-1.5 rounded flex items-center space-x-1 transition-colors border border-amber-300 shadow-sm"
+                              title="Editar este radicado para subsanar las observaciones"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              <span>Editar</span>
+                            </button>
+                          )}
+
                           <button
                             onClick={() => setHistorialFiling(filing)}
                             className="bg-indigo-50 hover:bg-indigo-100 text-indigo-900 font-bold text-xs px-2.5 py-1.5 rounded flex items-center space-x-1 transition-colors border border-indigo-200 shadow-sm"
@@ -377,17 +378,6 @@ export const RadicacionesList = ({
                             <History className="w-3.5 h-3.5" />
                             <span>Historial</span>
                           </button>
-
-                          {onDeleteFiling && filing.id === deletableFilingId && (
-                            <button
-                              onClick={() => onDeleteFiling(filing.id)}
-                              className="bg-red-50 hover:bg-red-100 text-red-700 font-extrabold text-xs px-2.5 py-1.5 rounded flex items-center space-x-1 transition-colors border border-red-200 shadow-sm"
-                              title="Eliminar este radicado (solo el más reciente)"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Eliminar</span>
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>

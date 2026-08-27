@@ -162,6 +162,7 @@ class ActualizacionMetadata(BaseModel):
     archivos: Optional[List[dict]] = None
     estado: Optional[str] = None
     observacionesGenerales: Optional[str] = None
+    elementosEntregados: Optional[List[dict]] = None
 
 
 @app.get("/api/health")
@@ -255,43 +256,10 @@ async def obtener_historial(identificador: str):
 
 @app.delete("/api/radicacion/{identificador}")
 async def eliminar_radicacion(identificador: str, email: Optional[str] = Query(None), rol: Optional[str] = Query(None)):
-    if not radicaciones_db:
-        raise HTTPException(status_code=404, detail="No hay radicaciones")
-
-    ultimo = radicaciones_db[0]
-    if ultimo["id"] != identificador and ultimo["numeroRadicado"] != identificador:
-        raise HTTPException(
-            status_code=400,
-            detail="Solo se puede eliminar el último radicado registrado",
-        )
-
-    if not email:
-        raise HTTPException(status_code=400, detail="Se requiere email del usuario")
-
-    if rol and rol != "contratista":
-        raise HTTPException(
-            status_code=403,
-            detail="Solo el contratista puede eliminar radicaciones",
-        )
-
-    email_lower = email.lower().strip()
-    creador = (ultimo.get("creadorEmail", "") or ultimo.get("metadata", {}).get("creadorEmail", "")).lower().strip()
-    if creador and creador != email_lower:
-        raise HTTPException(
-            status_code=403,
-            detail="No tiene permiso para eliminar este radicado",
-        )
-
-    radicaciones_db.pop(0)
-    guardar_db()
-
-    if graph_service:
-        try:
-            await graph_service.eliminar_radicacion_de_sharepoint(identificador)
-        except Exception as e:
-            print(f"[MAIN] Error eliminando de SharePoint: {e}")
-
-    return {"ok": True, "mensaje": "Radicación eliminada"}
+    raise HTTPException(
+        status_code=403,
+        detail="La eliminación de radicados está deshabilitada para preservar la numeración consecutiva única. Los radicados solo se pueden editar.",
+    )
 
 
 @app.post("/api/radicacion/nueva")
@@ -626,6 +594,8 @@ async def actualizar_metadata(identificador: str, body: ActualizacionMetadata):
         radicacion["estado"] = body.estado
     if body.observacionesGenerales is not None:
         radicacion["observacionesGenerales"] = body.observacionesGenerales
+    if body.elementosEntregados is not None:
+        radicacion["elementosEntregados"] = body.elementosEntregados
 
     radicacion["fechaActualizacion"] = datetime.now(timezone.utc).isoformat()
     guardar_db()

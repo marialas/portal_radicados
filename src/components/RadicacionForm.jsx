@@ -25,32 +25,66 @@ import {
 } from 'lucide-react';
 import { FirmaDigitalModal } from './FirmaDigitalModal';
 
-export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
+export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [direction, setDirection] = useState(1);
 
   const [selectedFiles, setSelectedFiles] = useState({});
-  const [naDocs, setNaDocs] = useState([]);
+  const [naDocs, setNaDocs] = useState(
+    filingToEdit
+      ? (filingToEdit.archivos || [])
+          .filter(a => a.status === 'N/A')
+          .map(a => a.docId)
+      : []
+  );
+  const [archivosPrevios, setArchivosPrevios] = useState(
+    filingToEdit
+      ? Object.fromEntries(
+          (filingToEdit.archivos || [])
+            .filter(a => a.status === 'CUMPLE' || a.status === 'N/A')
+            .map(a => [a.docId, a])
+        )
+      : {}
+  );
   const [activeCategory, setActiveCategory] = useState('todos');
 
-  const [metadata, setMetadata] = useState({
-    nombreProyecto: '',
-    municipio: '',
-    contratista: '',
-    nitContratista: '',
-    responsableRevision: '',
-    responsable: '',
-    correoResponsable: currentUser?.email || '',
-    tipoEntrega: '',
-    fechaEntrega: '',
-    observaciones: ''
-  });
+  const [metadata, setMetadata] = useState(
+    filingToEdit
+      ? {
+          nombreProyecto: filingToEdit.metadata?.nombreProyecto || '',
+          municipio: filingToEdit.metadata?.municipio || '',
+          contratista: filingToEdit.metadata?.contratista || '',
+          nitContratista: filingToEdit.metadata?.nitContratista || '',
+          responsableRevision: filingToEdit.metadata?.responsableRevision || '',
+          responsable: filingToEdit.metadata?.responsable || '',
+          correoResponsable: filingToEdit.metadata?.correoResponsable || currentUser?.email || '',
+          tipoEntrega: filingToEdit.metadata?.tipoEntrega || '',
+          fechaEntrega: filingToEdit.metadata?.fechaEntrega || '',
+          observaciones: filingToEdit.observacionesGenerales || ''
+        }
+      : {
+          nombreProyecto: '',
+          municipio: '',
+          contratista: '',
+          nitContratista: '',
+          responsableRevision: '',
+          responsable: '',
+          correoResponsable: currentUser?.email || '',
+          tipoEntrega: '',
+          fechaEntrega: '',
+          observaciones: ''
+        }
+  );
 
-  const [elementos, setElementos] = useState([
-    { id: 1, elemento: '', cantidad: 0, especificacion: '' },
-  ]);
+  const [elementos, setElementos] = useState(
+    filingToEdit && filingToEdit.elementosEntregados?.length
+      ? filingToEdit.elementosEntregados
+      : [{ id: 1, elemento: '', cantidad: 0, especificacion: '' }]
+  );
 
-  const [firmaContratista, setFirmaContratista] = useState(null);
+  const [firmaContratista, setFirmaContratista] = useState(
+    filingToEdit?.metadata?.firmaContratista || null
+  );
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -110,17 +144,25 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
       const file = e.target.files[0];
       setSelectedFiles(prev => ({ ...prev, [docId]: file }));
       setNaDocs(prev => prev.filter(id => id !== docId));
+      setArchivosPrevios(prev => { const n = { ...prev }; delete n[docId]; return n; });
     }
   };
 
   const handleToggleNA = (docId) => {
     if (naDocs.includes(docId)) {
       setNaDocs(naDocs.filter(id => id !== docId));
+      if (filingToEdit) {
+        const prev = archivosPrevios[docId];
+        if (prev) {
+          setArchivosPrevios({ ...archivosPrevios, [docId]: { ...prev, status: 'CUMPLE' } });
+        }
+      }
     } else {
       setNaDocs([...naDocs, docId]);
       const updatedFiles = { ...selectedFiles };
       delete updatedFiles[docId];
       setSelectedFiles(updatedFiles);
+      setArchivosPrevios(prev => { const n = { ...prev }; delete n[docId]; return n; });
     }
   };
 
@@ -157,16 +199,18 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
     delete updatedFiles[docId];
     setSelectedFiles(updatedFiles);
     setNaDocs(naDocs.filter(id => id !== docId));
+    setArchivosPrevios(prev => { const n = { ...prev }; delete n[docId]; return n; });
   };
 
   const allDocs = [...DOCUMENT_CATALOG, ...customDocs];
   const totalDocs = allDocs.length;
+  const previosCount = Object.keys(archivosPrevios).length;
   const attachedCount = Object.keys(selectedFiles).length;
   const naCount = naDocs.length;
-  const totalCompleted = attachedCount + naCount;
+  const totalCompleted = attachedCount + naCount + previosCount;
   const percentage = Math.round((totalCompleted / totalDocs) * 100);
 
-  const missingMandatory = allDocs.filter(d => d.required && !selectedFiles[d.id] && !naDocs.includes(d.id));
+  const missingMandatory = allDocs.filter(d => d.required && !selectedFiles[d.id] && !naDocs.includes(d.id) && !archivosPrevios[d.id]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -180,8 +224,87 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
     setIsSubmitting(true);
 
     try {
-      const formData = new FormData();
       const userEmail = (currentUser?.email || metadata.correoResponsable || '').toLowerCase().trim();
+
+      if (filingToEdit) {
+        // ====== MODO EDICIÓN: subsanar observaciones sin crear nuevo radicado ======
+        const archivos = (filingToEdit.archivos || []).map(a => ({ ...a }));
+
+        // 1. Subir archivos nuevos/corregidos
+        for (const [docIdStr, file] of Object.entries(selectedFiles)) {
+          const docId = parseInt(docIdStr, 10);
+          const fd = new FormData();
+          fd.append('docId', String(docId));
+          fd.append('archivo', file);
+          const up = await fetch(`/api/radicacion/${filingToEdit.id}/archivo`, {
+            method: 'POST',
+            body: fd
+          });
+          if (up.ok) {
+            const upJson = await up.json().catch(() => null);
+            const updated = upJson?.data?.archivos || archivos;
+            updated.forEach(a => {
+              if (a.docId === docId) {
+                const existing = archivos.find(x => x.docId === docId);
+                if (existing) Object.assign(existing, a);
+              }
+            });
+          }
+        }
+
+        // 2. Actualizar estado de archivos locales según selección
+        Object.entries(selectedFiles).forEach(([docIdStr]) => {
+          const docId = parseInt(docIdStr, 10);
+          const found = archivos.find(a => a.docId === docId);
+          if (found) found.status = 'CUMPLE';
+        });
+        naDocs.forEach(docId => {
+          const found = archivos.find(a => a.docId === docId);
+          if (found) found.status = 'N/A';
+        });
+
+        // 3. Actualizar metadata + archivos del radicado (mantiene el mismo número)
+        const metadataWithSignature = {
+          ...metadata,
+          creadorEmail: userEmail,
+          creadorName: currentUser?.name || metadata.responsable,
+          correoResponsable: metadata.correoResponsable || userEmail,
+          firmaContratista: firmaContratista || undefined
+        };
+        const metaRes = await fetch(`/api/radicacion/${filingToEdit.id}/metadata`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            metadata: metadataWithSignature,
+            archivos,
+            elementosEntregados: elementos
+          })
+        });
+
+        // 4. Reiniciar estado a "En Revisión" para nueva evaluación
+        await fetch(`/api/radicacion/${filingToEdit.id}/estado`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            estado: 'En Revisión',
+            observaciones: '',
+            usuarioEmail: userEmail,
+            usuarioNombre: currentUser?.name || ''
+          })
+        });
+
+        const res = await fetch(`/api/radicacion/${filingToEdit.id}`);
+        const result = await res.json();
+        if (res.ok && result.data) {
+          onSuccess(result.data);
+        } else {
+          alert('Error al guardar los cambios del radicado.');
+        }
+        return;
+      }
+
+      // ====== MODO CREACIÓN: nuevo radicado consecutivo ======
+      const formData = new FormData();
       const metadataWithSignature = {
         ...metadata,
         creadorEmail: userEmail,
@@ -273,8 +396,15 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
             <span>· Portal de Radicación Digital</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-[#1E222A] tracking-tight">
-            Asistente de Radicación de Expediente Técnico
+            {filingToEdit 
+              ? 'Subsanar Observaciones del Expediente'
+              : 'Asistente de Radicación de Expediente Técnico'}
           </h1>
+          {filingToEdit && (
+            <p className="text-xs text-amber-700 font-semibold mt-0.5">
+              Edición del radicado {filingToEdit.numeroRadicado} - mantiene el mismo número. Corrija los documentos señalados y vuelva a enviar para revisión.
+            </p>
+          )}
         </div>
 
         <button
@@ -427,6 +557,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                         {filteredDocs.map((doc) => {
                           const file = selectedFiles[doc.id];
                           const isNA = naDocs.includes(doc.id);
+                          const previo = archivosPrevios[doc.id];
 
                           let cardBorder = 'border-gray-200 bg-white';
                           let statusBadge = (
@@ -438,6 +569,14 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
 
                           if (file) {
                             cardBorder = 'border-emerald-300 bg-emerald-50/50';
+                            statusBadge = (
+                              <span className="bg-emerald-100 text-emerald-900 text-xs font-bold px-2.5 py-1 rounded-lg border border-emerald-300 flex items-center space-x-1">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>NUEVO</span>
+                              </span>
+                            );
+                          } else if (previo) {
+                            cardBorder = 'border-emerald-200 bg-emerald-50/40';
                             statusBadge = (
                               <span className="bg-emerald-100 text-emerald-900 text-xs font-bold px-2.5 py-1 rounded-lg border border-emerald-300 flex items-center space-x-1">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -969,7 +1108,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser }) => {
                 className="w-full sm:w-auto px-8 py-3 rounded-xl font-black text-xs bg-[#D9CF43] hover:bg-amber-400 text-[#0D0D0D] transition-all shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 active:scale-95 uppercase tracking-wider"
               >
                 <FileUp className="w-4 h-4 text-[#0D0D0D]" />
-                <span>{isSubmitting ? 'Radicando...' : 'RADICAR DOCUMENTACIÓN'}</span>
+                <span>{isSubmitting ? (filingToEdit ? 'Guardando...' : 'Radicando...') : (filingToEdit ? 'GUARDAR Y ENVIAR A REVISIÓN' : 'RADICAR DOCUMENTACIÓN')}</span>
               </button>
             )}
           </div>
