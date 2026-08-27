@@ -162,7 +162,9 @@ export const EvaluacionRadicacion = ({
           estado: autoEstado,
           observaciones: observacionesGenerales,
           archivos: archivosState,
-          metadata: updatedFiling.metadata
+          metadata: updatedFiling.metadata,
+          usuarioEmail: currentUser?.email || filing.creadorEmail || '',
+          usuarioNombre: currentUser?.name || ''
         })
       });
 

@@ -9,7 +9,10 @@ import {
   Plus, 
   FileSpreadsheet,
   Edit3,
-  Trash2
+  Trash2,
+  History,
+  X,
+  User
 } from 'lucide-react';
 
 export const RadicacionesList = ({
@@ -26,6 +29,7 @@ export const RadicacionesList = ({
   const [selectedMunicipio, setSelectedMunicipio] = useState('TODOS');
   const [selectedEstado, setSelectedEstado] = useState('TODOS');
   const [selectedTipo, setSelectedTipo] = useState('TODOS');
+  const [historialFiling, setHistorialFiling] = useState(null);
 
   const deletableFilingId = React.useMemo(() => {
     if (!filings.length || !onDeleteFiling) return null;
@@ -365,6 +369,15 @@ export const RadicacionesList = ({
                             <span>Informe</span>
                           </button>
 
+                          <button
+                            onClick={() => setHistorialFiling(filing)}
+                            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-900 font-bold text-xs px-2.5 py-1.5 rounded flex items-center space-x-1 transition-colors border border-indigo-200 shadow-sm"
+                            title="Ver historial de cambios de estado"
+                          >
+                            <History className="w-3.5 h-3.5" />
+                            <span>Historial</span>
+                          </button>
+
                           {onDeleteFiling && filing.id === deletableFilingId && (
                             <button
                               onClick={() => onDeleteFiling(filing.id)}
@@ -383,6 +396,109 @@ export const RadicacionesList = ({
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {historialFiling && (
+        <HistorialModal
+          filing={historialFiling}
+          onClose={() => setHistorialFiling(null)}
+        />
+      )}
+    </div>
+  );
+};
+
+const HistorialModal = ({ filing, onClose }) => {
+  const historial = filing.historial?.length ? filing.historial : [
+    {
+      estado: filing.estado,
+      fecha: filing.fechaRadicacion,
+      usuario: filing.creadorEmail,
+      usuarioNombre: filing.creadorName,
+      observaciones: filing.observacionesGenerales,
+    }
+  ];
+
+  const badgeColor = (estado) => {
+    if (estado === 'Aprobado') return 'bg-emerald-100 text-emerald-800 border-emerald-300';
+    if (estado === 'Con Observaciones') return 'bg-amber-100 text-amber-800 border-amber-300';
+    if (estado === 'En Revisión') return 'bg-blue-100 text-blue-800 border-blue-300';
+    return 'bg-gray-100 text-gray-800 border-gray-300';
+  };
+
+  const formatFecha = (iso) => {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleString('es-CO', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+    } catch {
+      return '';
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
+      <div
+        className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="bg-[#0D0D0D] px-6 py-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-white font-black flex items-center space-x-2">
+              <History className="w-5 h-5 text-[#D9CF43]" />
+              <span>Historial del Radicado</span>
+            </h3>
+            <p className="text-[11px] text-gray-400 mt-0.5 font-mono">
+              {filing.numeroRadicado} - {filing.metadata.nombreProyecto}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 max-h-[70vh] overflow-y-auto">
+          {historial.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-6">Sin movimientos registrados.</p>
+          ) : (
+            <ol className="relative border-l-2 border-gray-200 ml-3 space-y-6">
+              {historial.map((h, idx) => (
+                <li key={idx} className="pl-6 relative">
+                  <span className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-[#D9CF43] border-2 border-white ring-2 ring-[#D9CF43]/30"></span>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full border ${badgeColor(h.estado)}`}>
+                        {h.estado}
+                      </span>
+                      <span className="text-[11px] font-semibold text-gray-500">
+                        {formatFecha(h.fecha || h.fechaActualizacion)}
+                      </span>
+                    </div>
+                    {(h.usuario || h.usuarioNombre) && (
+                      <span className="text-[11px] text-gray-600 flex items-center space-x-1">
+                        <User className="w-3 h-3 text-gray-400" />
+                        <span>
+                          {h.usuarioNombre || h.usuario || 'Usuario'}
+                          {h.usuario && h.usuario !== h.usuarioNombre ? ` (${h.usuario})` : ''}
+                        </span>
+                      </span>
+                    )}
+                    {h.observaciones && (
+                      <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-md px-3 py-2 mt-1">
+                        {h.observaciones}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
       </div>
     </div>

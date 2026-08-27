@@ -336,7 +336,11 @@ export default function App() {
       const res = await fetch(`/api/radicacion/${id}/estado`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estado: newStatus })
+        body: JSON.stringify({ 
+          estado: newStatus,
+          usuarioEmail: user?.email || '',
+          usuarioNombre: user?.name || ''
+        })
       });
       if (res.ok) {
         const json = await res.json();

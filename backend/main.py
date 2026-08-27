@@ -153,6 +153,8 @@ class ActualizacionEstado(BaseModel):
     observaciones: Optional[str] = ""
     archivos: Optional[List[dict]] = None
     metadata: Optional[dict] = None
+    usuarioEmail: Optional[str] = ""
+    usuarioNombre: Optional[str] = ""
 
 
 class ActualizacionMetadata(BaseModel):
@@ -229,6 +231,25 @@ async def obtener_radicacion(identificador: str):
     for r in radicaciones_db:
         if r["id"] == identificador or r["numeroRadicado"] == identificador:
             return {"data": r}
+    raise HTTPException(status_code=404, detail="Radicación no encontrada")
+
+
+@app.get("/api/radicacion/{identificador}/historial")
+async def obtener_historial(identificador: str):
+    for r in radicaciones_db:
+        if r["id"] == identificador or r["numeroRadicado"] == identificador:
+            historial = r.get("historial", [])
+            if not historial:
+                historial = [
+                    {
+                        "estado": r.get("estado", "Radicado"),
+                        "fecha": r.get("fechaRadicacion"),
+                        "usuario": r.get("creadorEmail", ""),
+                        "usuarioNombre": r.get("creadorName", ""),
+                        "observaciones": r.get("observacionesGenerales", ""),
+                    }
+                ]
+            return {"data": historial, "numeroRadicado": r["numeroRadicado"]}
     raise HTTPException(status_code=404, detail="Radicación no encontrada")
 
 
@@ -394,6 +415,15 @@ async def crear_radicacion(request: Request):
         "observacionesGenerales": "",
         "creadorEmail": meta.get("creadorEmail", ""),
         "creadorName": meta.get("creadorName", ""),
+        "historial": [
+            {
+                "estado": "Radicado",
+                "fecha": datetime.now(timezone.utc).isoformat(),
+                "usuario": meta.get("creadorEmail", ""),
+                "usuarioNombre": meta.get("creadorName", ""),
+                "observaciones": "",
+            }
+        ],
     }
 
     radicaciones_db.insert(0, radicacion)
@@ -525,6 +555,16 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado):
         radicacion["metadata"].update(body.metadata)
 
     radicacion["fechaActualizacion"] = datetime.now(timezone.utc).isoformat()
+
+    if "historial" not in radicacion:
+        radicacion["historial"] = []
+    radicacion["historial"].append({
+        "estado": body.estado,
+        "fecha": datetime.now(timezone.utc).isoformat(),
+        "usuario": body.usuarioEmail or "",
+        "usuarioNombre": body.usuarioNombre or "",
+        "observaciones": body.observaciones or "",
+    })
 
     if body.estado == "Aprobado" and graph_service:
         try:

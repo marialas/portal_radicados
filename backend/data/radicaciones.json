@@ -1,1 +1,28 @@
-[]
+[
+  {
+    "id": "69",
+    "numeroRadicado": "RAD-2026-001",
+    "metadata": {
+      "nombreProyecto": "RAD-2026-001",
+      "municipio": "BUGA",
+      "contratista": "Energy ",
+      "nitContratista": "",
+      "responsable": "",
+      "correoResponsable": "",
+      "tipoEntrega": "Subsanación",
+      "creadorEmail": ""
+    },
+    "estado": "Radicado",
+    "documentosOk": 4,
+    "totalDocumentos": 21,
+    "fechaRadicacion": "2026-08-21T07:00:00Z",
+    "fechaActualizacion": "2026-08-21T07:00:00Z",
+    "porcentajeCumplimiento": 18,
+    "archivos": [],
+    "elementosEntregados": [],
+    "observacionesGenerales": "",
+    "creadorEmail": "",
+    "creadorName": "",
+    "m365Synced": true
+  }
+]
