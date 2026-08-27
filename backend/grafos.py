@@ -88,19 +88,21 @@ class GraphService:
 
         meta = radicacion["metadata"]
         numero = radicacion["numeroRadicado"]
-
-        existente = await self._buscar_por_titulo(numero)
-        print(f"[GRAPH] Busqueda item existente: {'FOUND id=' + str(existente['id']) if existente else 'NO ENCONTRADO, se crea nuevo'}")
+        estado = radicacion.get("estado", "Radicado")
 
         estado_map = {
             "Aprobado": "Aprobado",
             "Con Observaciones": "Revision",
             "Radicado": "Pendiente_Firma",
+            "En Revisión": "En_Revision",
         }
-        estado_sp = estado_map.get(radicacion.get("estado", ""), "Pendiente_Firma")
+        estado_sp = estado_map.get(estado, "Pendiente_Firma")
+
+        from datetime import datetime, timezone
+        contador = int(datetime.now(timezone.utc).timestamp())
 
         campos_todos = {
-            "Title": numero,
+            "Title": f"{numero} - {estado} - {contador}",
             "NumeroRadicado": numero,
             "Municipio": meta.get("municipio", ""),
             "Operador": meta.get("contratista", ""),
@@ -125,22 +127,12 @@ class GraphService:
             print(f"[GRAPH] No se pudieron consultar columnas, se envían todos: {e}")
             campos = campos_todos
 
-        print(f"[GRAPH] Campos a enviar a lista: {campos}")
-
+        url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items"
         async with httpx.AsyncClient() as cliente:
-            if existente:
-                item_id = existente["id"]
-                url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items/{item_id}"
-                resp = await cliente.patch(url, headers=headers, json={"fields": campos})
-                print(f"[GRAPH] PATCH item {item_id}: status={resp.status_code} body={resp.text[:300]}")
-                resp.raise_for_status()
-                print(f"[GRAPH] SharePoint item {item_id} actualizado OK")
-            else:
-                url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items"
-                resp = await cliente.post(url, headers=headers, json={"fields": campos})
-                print(f"[GRAPH] POST item nuevo: status={resp.status_code} body={resp.text[:300]}")
-                resp.raise_for_status()
-                print(f"[GRAPH] SharePoint item nuevo creado OK")
+            resp = await cliente.post(url, headers=headers, json={"fields": campos})
+            print(f"[GRAPH] POST item nuevo ({numero} / {estado}): status={resp.status_code} body={resp.text[:300]}")
+            resp.raise_for_status()
+            print(f"[GRAPH] SharePoint item nuevo creado OK")
 
         await self._crear_carpeta_proyecto(numero)
         await self._subir_archivos(radicacion, numero)
@@ -513,7 +505,18 @@ class GraphService:
                     }
                     radicaciones.append(rad)
 
-                print(f"[GRAPH] {len(radicaciones)} radicaciones reconstruidas desde SharePoint")
+                print(f"[GRAPH] {len(radicaciones)} filas encontradas desde SharePoint, deduplicando por radicado...")
+                unicos = {}
+                for rad in radicaciones:
+                    num = rad.get("numeroRadicado", "")
+                    if not num:
+                        continue
+                    fecha = rad.get("fechaActualizacion") or rad.get("fechaRadicacion") or ""
+                    existente = unicos.get(num)
+                    if not existente or (fecha or "") > (existente.get("fechaActualizacion") or existente.get("fechaRadicacion") or ""):
+                        unicos[num] = rad
+                radicaciones = list(unicos.values())
+                print(f"[GRAPH] {len(radicaciones)} radicaciones únicas reconstruidas desde SharePoint")
                 return radicaciones
 
             except Exception as e:
@@ -526,6 +529,7 @@ class GraphService:
 
         meta = radicacion["metadata"]
         numero = radicacion["numeroRadicado"]
+        estado = radicacion.get("estado", "Radicado")
 
         estado_map = {
             "Aprobado": "Aprobado",
@@ -533,7 +537,7 @@ class GraphService:
             "Radicado": "Pendiente_Firma",
             "En Revisión": "En_Revision",
         }
-        estado_sp = estado_map.get(radicacion.get("estado", ""), "Pendiente_Firma")
+        estado_sp = estado_map.get(estado, "Pendiente_Firma")
 
         docs_str = f"{radicacion.get('documentosOk', 0)}/{radicacion.get('totalDocumentos', 21)}"
 
@@ -555,8 +559,12 @@ class GraphService:
 
         raw_json = json.dumps(rad_clean, ensure_ascii=False, default=str)
 
+        from datetime import datetime, timezone
+        ahora = datetime.now(timezone.utc)
+        contador = int(ahora.timestamp())
+
         campos_todos = {
-            "Title": numero,
+            "Title": f"{numero} - {estado} - {contador}",
             "NumeroRadicado": numero,
             "NombreProyecto": meta.get("nombreProyecto", numero),
             "Municipio": meta.get("municipio", ""),
@@ -583,31 +591,32 @@ class GraphService:
         except Exception:
             campos = campos_todos
 
-        existente = await self._buscar_por_titulo(numero)
-
+        url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items"
         async with httpx.AsyncClient(timeout=30.0) as cliente:
-            if existente:
-                item_id = existente["id"]
-                url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items/{item_id}"
-                resp = await cliente.patch(url, headers=headers, json={"fields": campos})
-                print(f"[GRAPH] Item {numero} actualizado en SharePoint: {resp.status_code}")
-            else:
-                url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items"
-                resp = await cliente.post(url, headers=headers, json={"fields": campos})
-                print(f"[GRAPH] Item {numero} creado en SharePoint: {resp.status_code}")
+            resp = await cliente.post(url, headers=headers, json={"fields": campos})
+            print(f"[GRAPH] Item {numero} ({estado}) creado en SharePoint: {resp.status_code}")
 
     async def eliminar_radicacion_de_sharepoint(self, numero):
         token = await self._obtener_token()
         headers = {"Authorization": f"Bearer {token}"}
 
-        existente = await self._buscar_por_titulo(numero)
-        if not existente:
-            return
+        url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items"
+        params = {
+            "$filter": f"fields/NumeroRadicado eq '{numero}'",
+            "$expand": "fields",
+            "$select": "id",
+        }
 
-        url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items/{existente['id']}"
         async with httpx.AsyncClient(timeout=30.0) as cliente:
-            resp = await cliente.delete(url, headers=headers)
-            print(f"[GRAPH] Item {numero} eliminado de SharePoint: {resp.status_code}")
+            resp = await cliente.get(url, headers=headers, params=params)
+            if resp.status_code != 200:
+                print(f"[GRAPH] Error buscando items a eliminar para {numero}: {resp.status_code}")
+                return
+            items = resp.json().get("value", [])
+            for item in items:
+                del_url = f"{url}/{item['id']}"
+                del_resp = await cliente.delete(del_url, headers=headers)
+                print(f"[GRAPH] Item {item['id']} de {numero} eliminado de SharePoint: {del_resp.status_code}")
 
     async def asegurar_columna_rawjson(self):
         token = await self._obtener_token()
