@@ -401,14 +401,16 @@ async def crear_radicacion(request: Request):
 
     if graph_service:
         try:
-            destino = meta.get("correoResponsable", "")
-            if destino:
-                await graph_service.enviar_correo_confirmacion(radicacion, destino)
-                print(f"[MAIN] Correo confirmacion enviado a {destino} para {numero}")
-            else:
-                print(f"[MAIN] Sin correoResponsable, se omite correo de creacion para {numero}")
+            await graph_service.enviar_correo_nuevo_radicado_revisor(radicacion)
+            print(f"[MAIN] Correo de nuevo radicado enviado al revisor para {numero}")
         except Exception as e:
-            print(f"[MAIN] Error correo confirmacion: {e}")
+            print(f"[MAIN] Error correo nuevo radicado al revisor: {e}")
+
+        try:
+            await graph_service.enviar_correo_nuevo_radicado_contratista(radicacion)
+            print(f"[MAIN] Correo de radicado creado enviado al contratista para {numero}")
+        except Exception as e:
+            print(f"[MAIN] Error correo radicado creado al contratista: {e}")
 
     if graph_service:
         for attempt in range(3):
@@ -544,11 +546,21 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado):
             print(f"[MAIN] SharePoint sync FALLO para {radicacion['numeroRadicado']}: {e}")
 
     if graph_service and body.estado != estado_anterior:
-        try:
-            await graph_service.enviar_correo_estado(radicacion, estado_anterior, body.observaciones)
-            print(f"[MAIN] Correo de cambio de estado enviado para {radicacion['numeroRadicado']}: {estado_anterior} -> {body.estado}")
-        except Exception as e:
-            print(f"[MAIN] Error correo cambio de estado: {e}")
+        # Notificar al contratista solo cuando hay un resultado de evaluación (Aprobado / Con Observaciones)
+        if body.estado in ("Aprobado", "Con Observaciones"):
+            try:
+                await graph_service.enviar_correo_estado(radicacion, estado_anterior, body.observaciones)
+                print(f"[MAIN] Correo de estado enviado al contratista para {radicacion['numeroRadicado']}: {estado_anterior} -> {body.estado}")
+            except Exception as e:
+                print(f"[MAIN] Error correo cambio de estado: {e}")
+
+        # Notificar al revisor cuando el contratista corrige un radicado con observaciones (reesubido)
+        if estado_anterior == "Con Observaciones" and body.estado == "En Revisión":
+            try:
+                await graph_service.enviar_correo_reesubido_revisor(radicacion)
+                print(f"[MAIN] Correo de radicado corregido enviado al revisor para {radicacion['numeroRadicado']}")
+            except Exception as e:
+                print(f"[MAIN] Error correo radicado corregido: {e}")
 
     guardar_db()
 
