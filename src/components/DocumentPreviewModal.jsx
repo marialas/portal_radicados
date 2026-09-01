@@ -1,29 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
+
+const CadViewerLazy = lazy(() => import('./CadViewerLazy'));
 import { 
   X, 
   FileText, 
   Download, 
-  Printer, 
-  CheckCircle2, 
-  AlertTriangle, 
-  XCircle, 
   MinusCircle, 
-  ShieldCheck, 
-  Eye, 
-  ZoomIn, 
-  ZoomOut, 
-  Maximize2,
-  UploadCloud
+  AlertTriangle, 
+  Box
 } from 'lucide-react';
 
-export const DocumentPreviewModal = ({ docItem, filing, onClose }) => {
-  const [localPdfUrl, setLocalPdfUrl] = useState(null);
-  const [localFileName, setLocalFileName] = useState(null);
-  const [zoomLevel, setZoomLevel] = useState(100);
+// DXF se visualiza en línea con el visor. DWG/DWF/DWT requieren AutoCAD para visualizarse.
+const esCad = (nombre = '') => {
+  const n = (nombre || '').toLowerCase();
+  return n.endsWith('.dwg') || n.endsWith('.dxf') || n.endsWith('.dwf') || n.endsWith('.dwt');
+};
+const esDxf = (nombre = '') => (nombre || '').toLowerCase().endsWith('.dxf');
 
-  const zoomIn = () => setZoomLevel(prev => Math.min(prev + 15, 300));
-  const zoomOut = () => setZoomLevel(prev => Math.max(prev - 15, 50));
-  const zoomReset = () => setZoomLevel(100);
+export const DocumentPreviewModal = ({ docItem, filing, onClose }) => {
+  const [cadBuffer, setCadBuffer] = useState(null);
+  const [cadLoading, setCadLoading] = useState(false);
+  const [cadError, setCadError] = useState(null);
+
+  const esArchivoCad = esCad(docItem?.fileName);
+  const esDxfFile = esDxf(docItem?.fileName);
+
+  useEffect(() => {
+    if (!esArchivoCad || !esDxfFile) return;
+    if (!docItem?.fileUrl && !docItem?.blobUrl) return;
+    let cancelled = false;
+    const src = docItem.fileUrl || docItem.blobUrl;
+    setCadLoading(true);
+    setCadError(null);
+    fetch(src)
+      .then(res => {
+        if (!res.ok) throw new Error('No disponible en el servidor');
+        return res.arrayBuffer();
+      })
+      .then(buf => {
+        if (!cancelled) {
+          setCadBuffer(buf);
+          setCadLoading(false);
+        }
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setCadError(err.message || 'No se pudo cargar el archivo CAD');
+          setCadLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [docItem?.fileName, docItem?.fileUrl, docItem?.blobUrl, esArchivoCad, esDxfFile]);
 
   if (!docItem) return null;
 
@@ -31,7 +58,90 @@ export const DocumentPreviewModal = ({ docItem, filing, onClose }) => {
   const hasFile = docItem.fileName && docItem.fileName !== 'N/A';
 
   const handleDownloadPdf = () => {
-    // Generar archivo PDF binario estructurado para descarga real
+    // Si el archivo está disponible en el servidor, descargarlo real desde el backend
+    if (docItem.fileUrl || docItem.blobUrl) {
+      const url = docItem.fileUrl || docItem.blobUrl;
+      fetch(url)
+        .then(res => {
+          if (!res.ok) throw new Error('No disponible');
+          return res.blob();
+        })
+        .then(blob => {
+          const objUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = objUrl;
+          a.download = docItem.fileName || `${docItem.docCode}_${docItem.docName}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(objUrl);
+        })
+        .catch(() => {
+          // Respaldar con un PDF local mínimo si el archivo no está en el servidor
+          const pdfContent = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 280 >>
+stream
+BT
+/F1 16 Tf
+50 740 Td
+(INTECOAL S.A.S. - VERIFICACION RETILAP) Tj
+/F1 12 Tf
+0 -30 Td
+(Codigo: ${docItem.docCode}) Tj
+0 -20 Td
+(Requisito: ${docItem.docName}) Tj
+0 -20 Td
+(Radicado: ${filing?.numeroRadicado || 'N/A'}) Tj
+0 -20 Td
+(Municipio: ${filing?.metadata?.municipio || 'N/A'}) Tj
+0 -20 Td
+(Estado: ${docItem.status}) Tj
+0 -30 Td
+(Documento oficial validado y registrado en el portal de Interventoria.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000242 00000 n 
+0000000574 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+645
+%%EOF`;
+
+          const blob = new Blob([pdfContent], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = docItem.fileName || `${docItem.docCode}_Documento_RETILAP.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        });
+      return;
+    }
+
+    // Sin URL del servidor: generar placeholder
     const pdfContent = `%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
@@ -94,8 +204,8 @@ startxref
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-[#1E222A] text-white rounded-2xl shadow-2xl border border-slate-700 w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-3">
+      <div className="bg-[#1E222A] text-white rounded-2xl shadow-2xl border border-slate-700 w-full max-w-[98vw] overflow-hidden flex flex-col h-[96vh] max-h-[96vh]">
         {/* Header del Modal */}
         <div className="bg-slate-900 px-6 py-4 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center space-x-3 truncate">
@@ -132,62 +242,21 @@ startxref
           {hasFile && (
             <div className="flex flex-wrap items-center gap-2 text-gray-300">
               {/* Zoom Controls */}
-              <div className="flex items-center space-x-1 bg-slate-800 p-1 rounded-lg border border-slate-700">
-                <button onClick={zoomOut} className="px-2 py-1 rounded text-xs font-bold text-gray-300 hover:text-white hover:bg-slate-700 transition-all" title="Alejar (lupa)">
-                  <ZoomOut className="w-4 h-4" />
-                </button>
-                <span className="px-2 py-1 text-xs font-mono font-bold text-[#D9CF43] min-w-[40px] text-center">{zoomLevel}%</span>
-                <button onClick={zoomIn} className="px-2 py-1 rounded text-xs font-bold text-gray-300 hover:text-white hover:bg-slate-700 transition-all" title="Acercar (lupa)">
-                  <ZoomIn className="w-4 h-4" />
-                </button>
-                <button onClick={zoomReset} className="px-2 py-1 rounded text-xs font-bold text-gray-300 hover:text-white hover:bg-slate-700 transition-all" title="Restablecer zoom">
-                  <Maximize2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Carga directa de PDF local */}
-              <label className="cursor-pointer bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs px-2.5 py-1.5 rounded-lg flex items-center space-x-1.5 transition-colors shadow shrink-0">
-                <UploadCloud className="w-4 h-4" />
-                <span>Cargar PDF Local</span>
-                <input
-                  type="file"
-                  accept=".pdf,.dwg,.dxf,.jpeg,.jpg,.png,.tiff,.tif,.bmp,.gif"
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      const file = e.target.files[0];
-                      const url = URL.createObjectURL(file);
-                      setLocalPdfUrl(url);
-                      setLocalFileName(file.name);
-                    }
-                  }}
-                />
-              </label>
-
               <button
                 onClick={handleDownloadPdf}
-                className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white px-2.5 py-1.5 rounded-lg font-bold flex items-center space-x-1 shadow transition-colors"
+                className="bg-slate-800 hover:bg-slate-700 text-white px-2.5 py-1.5 rounded-lg font-bold flex items-center space-x-1 shadow transition-colors"
                 title="Descargar archivo PDF al equipo"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Descargar</span>
-              </button>
-
-              <button
-                onClick={() => window.print()}
-                className="bg-slate-800 hover:bg-slate-700 text-gray-200 px-2.5 py-1.5 rounded-lg border border-slate-700 font-bold flex items-center space-x-1.5 hidden md:flex"
-                title="Imprimir"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Imprimir</span>
               </button>
             </div>
           )}
         </div>
 
         {/* Cuerpo del Modal */}
-        <div className="p-6 overflow-y-auto flex-1 bg-slate-950/80">
-          <div>
+        <div className="p-6 flex-1 bg-slate-950/80 min-h-0">
+          <div className="h-full flex flex-col">
             {isNA ? (
               <div className="bg-slate-900 border-2 border-dashed border-slate-700 rounded-2xl p-12 text-center max-w-xl mx-auto space-y-4 my-8">
                 <div className="w-16 h-16 bg-slate-800 text-gray-400 rounded-full flex items-center justify-center mx-auto">
@@ -219,35 +288,82 @@ startxref
                 </div>
               </div>
             ) : (
-              <div className="w-full flex flex-col items-center justify-center space-y-3 my-1">
-                {localFileName && (
-                  <div className="bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs px-3 py-1.5 rounded-lg flex items-center space-x-2 w-full justify-between">
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>Mostrando archivo PDF local: <strong>{localFileName}</strong></span>
+              <div className="w-full flex-1 min-h-0 flex flex-col items-center space-y-3">
+                {esArchivoCad ? (
+                  <div className="w-full flex flex-col items-center space-y-3">
+                    <div className="w-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs px-3 py-1.5 rounded-lg flex items-center space-x-2">
+                      <Box className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Visor CAD de planos: <strong>{docItem.fileName}</strong> — use la rueda del ratón para hacer zoom, arrastre para desplazarse.</span>
                     </div>
-                    <button 
-                      onClick={() => { setLocalPdfUrl(null); setLocalFileName(null); }}
-                      className="text-xs text-gray-400 hover:text-white underline"
-                    >
-                      Restablecer
-                    </button>
-                  </div>
-                )}
 
-                {localPdfUrl ? (
-                  <div className="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-2xl" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}>
-                    <iframe
-                      src={localPdfUrl}
-                      className="w-full h-[640px] border-0 bg-slate-900"
-                      title={localFileName || docItem.fileName || docItem.docName}
-                    />
+                    {!esDxfFile ? (
+                      <div className="w-full bg-slate-900 border border-amber-900/50 rounded-xl px-5 py-6 text-center">
+                        <div className="w-12 h-12 bg-amber-950/40 text-amber-400 rounded-full flex items-center justify-center mx-auto mb-3 border border-amber-500/30">
+                          <Box className="w-6 h-6" />
+                        </div>
+                        <h4 className="text-sm font-bold text-amber-300 mb-1">
+                          Plano DWG no visualizable en línea
+                        </h4>
+                        <p className="text-[11px] text-gray-400 max-w-md mx-auto mb-4">
+                          El formato <strong>{docItem.fileName}</strong> (DWG/DWT/DWF) requiere AutoCAD para abrirse.
+                          Descárguelo en su equipo para revisarlo con el contratista.
+                        </p>
+                        <button
+                          onClick={handleDownloadPdf}
+                          className="bg-[#D9CF43] hover:bg-[#c4ba3c] text-[#1E222A] font-black text-xs px-4 py-2 rounded-lg flex items-center space-x-2 mx-auto"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>Descargar y abrir en AutoCAD</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        {cadError && (
+                          <div className="bg-slate-900 border border-rose-900/60 rounded-xl px-4 py-3 text-center w-full">
+                            <p className="text-xs font-bold text-rose-300 mb-1">No se pudo cargar el plano en línea.</p>
+                            <p className="text-[11px] text-gray-400 mb-3">{cadError}</p>
+                            <button
+                              onClick={handleDownloadPdf}
+                              className="bg-[#D9CF43] hover:bg-[#c4ba3c] text-[#1E222A] font-black text-xs px-4 py-2 rounded-lg"
+                            >
+                              Descargar y abrir en AutoCAD
+                            </button>
+                          </div>
+                        )}
+
+                        {cadLoading && !cadBuffer && (
+                          <div className="w-full h-[560px] bg-slate-900 rounded-xl overflow-hidden border border-slate-700 flex flex-col items-center justify-center space-y-3">
+                            <div className="w-8 h-8 border-4 border-[#D9CF43]/30 border-t-[#D9CF43] rounded-full animate-spin" />
+                            <p className="text-xs text-gray-400 font-bold">Cargando plano CAD…</p>
+                          </div>
+                        )}
+
+                        {cadBuffer && (
+                          <div className="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-2xl">
+                            <Suspense fallback={
+                              <div className="w-full h-[560px] flex flex-col items-center justify-center space-y-3">
+                                <div className="w-8 h-8 border-4 border-[#D9CF43]/30 border-t-[#D9CF43] rounded-full animate-spin" />
+                                <p className="text-xs text-gray-400 font-bold">Cargando visor CAD…</p>
+                              </div>
+                            }>
+                              <CadViewerLazy buffer={cadBuffer} />
+                            </Suspense>
+                          </div>
+                        )}
+
+                        {!cadLoading && !cadBuffer && !cadError && (
+                          <div className="w-full h-[200px] bg-slate-900 rounded-xl border border-slate-700 flex items-center justify-center">
+                            <p className="text-xs text-gray-400">Cargue el DXF localmente desde su equipo para visualizarlo aquí.</p>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 ) : docItem.fileUrl || docItem.blobUrl ? (
-                  <div className="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-2xl" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}>
+                  <div className="w-full flex-1 h-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-2xl">
                     <iframe
                       src={docItem.fileUrl || docItem.blobUrl}
-                      className="w-full h-[640px] border-0 bg-slate-900"
+                      className="w-full h-full border-0 bg-slate-900"
                       title={docItem.fileName || docItem.docName}
                     />
                   </div>
@@ -260,7 +376,6 @@ startxref
                       <h4 className="text-lg font-bold text-amber-300 mb-1">Archivo no disponible en el servidor</h4>
                       <p className="text-xs text-gray-400 max-w-md mx-auto">
                         El archivo <strong>{docItem.fileName}</strong> no se encuentra almacenado en el servidor actual.
-                        Puede cargar el PDF localmente usando el botón "Cargar PDF Local" para visualizarlo aquí.
                       </p>
                     </div>
                   </div>

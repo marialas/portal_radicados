@@ -116,6 +116,16 @@ export const EvaluacionRadicacion = ({
     }));
   };
 
+  const abrirVisor = (item) => {
+    const tieneArchivo = item.fileName && item.fileName !== 'N/A';
+    let previewItem = { ...item };
+    if (tieneArchivo) {
+      previewItem.fileUrl = `/api/files/view/${filing.id}/${item.docId}`;
+      previewItem.blobUrl = undefined;
+    }
+    setPreviewingDocItem(previewItem);
+  };
+
   const handleBulkSetStatus = (newStatus) => {
     const idsToUpdate = new Set(filteredArchivos.map(a => a.docId));
     setArchivosState(prev => prev.map(item => {
@@ -126,20 +136,70 @@ export const EvaluacionRadicacion = ({
     }));
   };
 
-  const handleSave = async (andGenerateReport = false) => {
+  const handleSaveAvance = async () => {
     setIsSaving(true);
     setSaveSuccessMsg('');
 
-    let autoEstado = estadoGeneral;
-    if (porcentajeCumplimiento === 100) {
-      autoEstado = 'Aprobado';
-    } else if (noCumpleCount > 0 || conObsCount > 0) {
-      autoEstado = 'Con Observaciones';
+    const updatedFiling = {
+      ...filing,
+      estado: 'En Revisión',
+      archivos: archivosState,
+      documentosOk: documentosValidos,
+      porcentajeCumplimiento,
+      observacionesGenerales,
+      metadata: {
+        ...filing.metadata,
+        responsableRevision,
+        firmaInterventoria,
+        firmaContratista
+      },
+      fechaActualizacion: new Date().toISOString()
+    };
+
+    try {
+      const res = await fetch(`/api/radicacion/${filing.id}/metadata`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          estado: 'En Revisión',
+          observacionesGenerales,
+          archivos: archivosState,
+          metadata: updatedFiling.metadata,
+          soloAvance: true
+        })
+      });
+
+      if (res.ok) {
+        setSaveSuccessMsg('Avance guardado como borrador. El expediente sigue "En Revisión" sin notificar ni cargar a SharePoint.');
+      } else {
+        setSaveSuccessMsg('No se pudo guardar el avance en el servidor. Se guardó localmente.');
+      }
+    } catch (err) {
+      console.warn('Backend patch not available, using client state', err);
+      setSaveSuccessMsg('Avance guardado localmente.');
+    } finally {
+      setIsSaving(false);
+      onSaveEvaluation(updatedFiling);
+      if (typeof onBack === 'function') onBack();
     }
+  };
+
+  const handleFinalizar = async (andGenerateReport = true) => {
+    const estadoFinal = estadoGeneral;
+
+    // El dictamen final requiere la firma digital del revisor (INTECOAL).
+    if ((estadoFinal === 'Aprobado' || estadoFinal === 'Con Observaciones') && !firmaInterventoria) {
+      setSaveSuccessMsg('No se puede finalizar el informe: falta la firma digital del revisor (INTECOAL). Estampe la firma antes de guardar.');
+      setIsSaving(false);
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveSuccessMsg('');
 
     const updatedFiling = {
       ...filing,
-      estado: autoEstado,
+      estado: estadoFinal,
       archivos: archivosState,
       documentosOk: documentosValidos,
       porcentajeCumplimiento,
@@ -158,7 +218,7 @@ export const EvaluacionRadicacion = ({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          estado: autoEstado,
+          estado: estadoFinal,
           observaciones: observacionesGenerales,
           archivos: archivosState,
           metadata: updatedFiling.metadata,
@@ -168,26 +228,20 @@ export const EvaluacionRadicacion = ({
       });
 
       if (res.ok) {
-        if (autoEstado === 'Aprobado') {
-          // La carga a SharePoint se ejecuta automáticamente en el backend al aprobar
+        if (estadoFinal === 'Aprobado') {
           updatedFiling.m365Synced = true;
-          setSaveSuccessMsg('¡Radicado APROBADO y cargado automáticamente en SharePoint!');
+          setSaveSuccessMsg('¡Radicado APROBADO, notificado al contratista y cargado en SharePoint!');
         } else {
-          setSaveSuccessMsg('¡Evaluación guardada exitosamente!');
+          setSaveSuccessMsg('¡Evaluación finalizada y notificada. Expediente con observaciones!');
         }
       }
     } catch (err) {
       console.warn('Backend patch not available, using client state', err);
-      setSaveSuccessMsg('Evaluación guardada localmente.');
+      setSaveSuccessMsg('Evaluación finalizada localmente.');
     } finally {
       setIsSaving(false);
       onSaveEvaluation(updatedFiling);
-
-      if (andGenerateReport) {
-        onViewReport(updatedFiling);
-      } else {
-        setTimeout(() => setSaveSuccessMsg(''), 5000);
-      }
+      if (typeof onBack === 'function') onBack();
     }
   };
 
@@ -262,7 +316,7 @@ export const EvaluacionRadicacion = ({
 
             <button
               type="button"
-              onClick={() => handleSave(false)}
+              onClick={() => handleSaveAvance()}
               disabled={isSaving}
               className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 font-extrabold text-xs px-4 py-2.5 rounded-xl shadow-md transition-all flex items-center space-x-2 cursor-pointer disabled:opacity-50"
             >
@@ -272,7 +326,7 @@ export const EvaluacionRadicacion = ({
 
             <button
               type="button"
-              onClick={() => handleSave(true)}
+              onClick={() => handleFinalizar(true)}
               disabled={isSaving}
               className="bg-[#D9CF43] hover:bg-[#c4ba3c] text-[#1E222A] font-black text-xs px-5 py-2.5 rounded-xl shadow-lg transition-all flex items-center space-x-2 cursor-pointer scale-[1.02] hover:scale-[1.04]"
             >
@@ -604,7 +658,7 @@ export const EvaluacionRadicacion = ({
                       {item.fileName ? (
                         <button
                           type="button"
-                          onClick={() => setPreviewingDocItem(item)}
+                          onClick={() => abrirVisor(item)}
                           className="inline-flex items-center space-x-1.5 text-emerald-900 bg-emerald-100 hover:bg-emerald-200 px-2.5 py-1 rounded-lg text-[11px] font-extrabold border border-emerald-400 transition-all cursor-pointer shadow-sm group"
                           title="Haz clic para abrir el Visor e inspeccionar este PDF / Documento"
                         >
@@ -617,7 +671,7 @@ export const EvaluacionRadicacion = ({
                       ) : (
                         <button
                           type="button"
-                          onClick={() => setPreviewingDocItem(item)}
+                          onClick={() => abrirVisor(item)}
                           className="inline-flex items-center space-x-1 text-amber-900 bg-amber-100 hover:bg-amber-200 px-2.5 py-1 rounded-lg text-[11px] font-bold border border-amber-300 transition-all cursor-pointer"
                           title="Ver detalles de este requisito"
                         >
@@ -715,23 +769,23 @@ export const EvaluacionRadicacion = ({
           <div className="flex items-center space-x-2 text-xs text-gray-300 font-medium">
             <Info className="w-4 h-4 text-[#D9CF43]" />
             <span>
-              Recuerde guardar la evaluación para actualizar el expediente y generar el Informe Final.
+              Use "Guardar Avance" para guardar el borrador sin notificar (el expediente sigue "En Revisión"). Use "Generar Informe" para finalizar la evaluación, notificar al contratista y cargar en SharePoint.
             </span>
           </div>
 
           <div className="flex items-center space-x-3 shrink-0">
             <button
               type="button"
-              onClick={() => handleSave(false)}
+              onClick={() => handleSaveAvance()}
               disabled={isSaving}
               className="bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl border border-slate-700 cursor-pointer"
             >
-              Guardar Cambios
+              Guardar Avance
             </button>
 
             <button
               type="button"
-              onClick={() => handleSave(true)}
+              onClick={() => handleFinalizar(true)}
               disabled={isSaving}
               className="bg-[#D9CF43] hover:bg-[#c4ba3c] text-[#1E222A] font-black text-xs px-5 py-2.5 rounded-xl shadow-lg cursor-pointer"
             >

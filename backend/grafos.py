@@ -37,7 +37,7 @@ class GraphService:
             "scope": "https://graph.microsoft.com/.default",
         }
 
-        async with httpx.AsyncClient() as cliente:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=30.0)) as cliente:
             resp = await cliente.post(url, data=data)
             resp.raise_for_status()
             resultado = resp.json()
@@ -243,7 +243,7 @@ class GraphService:
             }
         }
         url = f"https://graph.microsoft.com/v1.0/users/{self.sender_email}/sendMail"
-        async with httpx.AsyncClient() as cliente:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=30.0)) as cliente:
             try:
                 resp = await cliente.post(url, headers=headers, json=mensaje)
                 print(f"[GRAPH] Correo enviado a {destino} | status={resp.status_code}")
@@ -348,25 +348,51 @@ class GraphService:
         await self._enviar_correo(destino, asunto, cuerpo)
 
     async def enviar_correo_reesubido_revisor(self, radicacion):
-        """Notifica al revisor que el contratista corrigió el radicado (salía de observaciones)."""
+        """Notifica al revisor que el contratista reenvió/actualizó el radicado y hay trabajo pendiente por revisar."""
         destino = self._revisor_email()
         if not destino:
             return
         meta = radicacion["metadata"]
-        asunto = f"Radicado Corregido por Revisar — {radicacion['numeroRadicado']}"
+        asunto = f"Radicado para Revisar — {radicacion['numeroRadicado']}"
         cuerpo = f"""
         <html><body style="font-family:Arial,sans-serif;color:#1E222A;">
         <div style="background:#1E222A;color:#D9CF43;padding:16px 24px;border-radius:8px 8px 0 0;">
-            <h2 style="margin:0;font-size:16px;">INTECOAL SAS — Radicado Corregido para Revisión</h2>
+            <h2 style="margin:0;font-size:16px;">INTECOAL SAS — Radicado pendiente de Revisión</h2>
         </div>
         <div style="padding:20px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
-            <p>El contratista <strong>{meta.get('contratista', '')}</strong> corrigió y reenvió el radicado que tenía observaciones. Está listo para una nueva revisión:</p>
+            <p>El contratista <strong>{meta.get('contratista', '')}</strong> envió o actualizó un radicado que requiere su revisión. Tiene uno (1) radicado pendiente por evaluar:</p>
             <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0;">
                 <tr><td style="padding:6px 0;font-weight:bold;width:140px;">Radicado:</td><td>{radicacion['numeroRadicado']}</td></tr>
                 <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{meta.get('nombreProyecto', '')}</td></tr>
                 <tr><td style="padding:6px 0;font-weight:bold;">Estado:</td><td>En Revisión</td></tr>
             </table>
-            <p style="font-size:12px;color:#666;">Acceda al portal para re-evaluar la documentación corregida.</p>
+            <p style="font-size:12px;color:#666;">Acceda al portal para evaluar la documentación del radicado.</p>
+            <p style="font-size:11px;color:#999;margin-top:20px;">INTECOAL SAS — Interventoría Técnica</p>
+        </div>
+        </body></html>
+        """
+        await self._enviar_correo(destino, asunto, cuerpo)
+
+    async def enviar_correo_reenvio_contratista(self, radicacion):
+        """Notifica al contratista que su radicado editado fue subido correctamente y quedó en revisión."""
+        meta = radicacion["metadata"]
+        destino = self._contratista_email(radicacion)
+        if not destino:
+            return
+        asunto = f"Radicado Actualizado — {radicacion['numeroRadicado']}"
+        cuerpo = f"""
+        <html><body style="font-family:Arial,sans-serif;color:#1E222A;">
+        <div style="background:#1E222A;color:#D9CF43;padding:16px 24px;border-radius:8px 8px 0 0;">
+            <h2 style="margin:0;font-size:16px;">INTECOAL SAS — Radicado Actualizado</h2>
+        </div>
+        <div style="padding:20px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
+            <p>Confirmamos que su radicado fue <strong>actualizado y subido correctamente</strong>. Ahora quedó en <strong>revisión por la Interventoría Técnica</strong>.</p>
+            <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0;">
+                <tr><td style="padding:6px 0;font-weight:bold;width:140px;">Radicado:</td><td>{radicacion['numeroRadicado']}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{meta.get('nombreProyecto', '')}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Municipio:</td><td>{meta.get('municipio', '')}</td></tr>
+            </table>
+            <p style="font-size:12px;color:#666;">Le notificaremos el resultado una vez sea evaluado por la Interventoría.</p>
             <p style="font-size:11px;color:#999;margin-top:20px;">INTECOAL SAS — Interventoría Técnica</p>
         </div>
         </body></html>

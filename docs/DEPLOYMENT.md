@@ -1,203 +1,181 @@
 # Guía de Despliegue
 
-## Despliegue en Render.com (Backend)
+El portal se compone de dos piezas desplegadas por separado:
+- **Backend (Render.com):** Python FastAPI + GraphService.
+- **Frontend (Netlify):** React + Vite (build estático → `dist/`).
 
-### 1. Crear Servicio Web
+El repositorio ya incluye los archivos de despliegue:
+- `render.yaml` → backend en Render.
+- `netlify.toml` → frontend en Netlify (build + proxy `/api`).
 
-1. Ir a [render.com](https://render.com) → **New Web Service**
-2. Conectar repositorio GitHub
-3. Configurar:
+---
+
+## Despliegue del Backend en Render.com
+
+### Opción A — Blueprint (`render.yaml`)
+
+El archivo `render.yaml` ya describe el servicio `portal-intecoal-api`:
+
+```yaml
+buildCommand: pip install -r backend/requirements.txt
+startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+Para usarlo: en Render → **New** → **Blueprint** → conectar el repo de GitHub que contiene `render.yaml`.
+
+### Opción B — Servicio web manual
+
+1. **New** → **Web Service** → conectar el repo.
+2. Configurar:
    - **Name:** `portal-intecoal-api`
-   - **Region:** Oregon (o la más cercana)
    - **Runtime:** Python 3
    - **Build Command:**
      ```bash
-     cd backend && pip install -r requirements.txt
+     pip install -r backend/requirements.txt
      ```
    - **Start Command:**
      ```bash
      cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
      ```
 
-### 2. Variables de Entorno
+### Variables de Entorno
 
-Agregar en **Environment** → **Env Variables**:
+Agregar en **Environment**:
 
 ```bash
-SECRET_KEY=generar-con-python-secrets
-FRONTEND_URL=https://tu-sitio.netlify.app
-AZURE_CLIENT_ID=tu-client-id
-AZURE_TENANT_ID=tu-tenant-id
-AZURE_CLIENT_SECRET=tu-client-secret
-SHAREPOINT_SITE_ID=tu-site-id
-SHAREPOINT_LIST_ID=tu-list-id
+SECRET_KEY=<generar-con-python-secrets>
+FRONTEND_URL=https://<tu-sitio>.netlify.app
+ALLOWED_ORIGINS=<origenes separados por coma o *>
+
+AZURE_CLIENT_ID=<client-id>
+AZURE_TENANT_ID=<tenant-id>
+AZURE_CLIENT_SECRET=<client-secret>
+
+SHAREPOINT_SITE_ID=<site-id>
+SHAREPOINT_LIST_ID=<list-id>
 SHAREPOINT_LIBRARY_ID=Documentos_Radicacion
+
 M365_SENDER_EMAIL=interventoriaapalborada@intecoalsas.com
-M365_NOTIFICATION_RECIPIENT=anyeli_cabezas@soy.sena.edu.co
+M365_NOTIFICATION_RECIPIENT=<correo-del-revisor>
+
+POWER_AUTOMATE_WEBHOOK_URL=   # opcional
 ```
 
-### 3. Generar SECRET_KEY
+> `SECRET_KEY` se genera automáticamente si usas el Blueprint (`generateValue: true`).
+
+### Generar SECRET_KEY manualmente
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-### 4. Verificar
+### Correos (Microsoft Graph)
+
+- Remitente fijo: `M365_SENDER_EMAIL` (debe tener permiso `Mail.Send`).
+- Destinatario del revisor: `M365_NOTIFICATION_RECIPIENT`.
+- httpx usa timeouts de `connect=30s` / `total=60s` (evita `ConnectTimeout`). No reducir.
+
+### Verificar
 
 ```bash
-# Health check
-curl https://portal-intecoal-api.onrender.com/api/health
-
-# Response: {"status":"ok","timestamp":"..."}
+curl https://<tu-app>.onrender.com/api/health
+# {"status":"ok","timestamp":"..."}
 ```
 
 ---
 
-## Despliegue en Netlify (Frontend)
+## Despliegue del Frontend en Netlify
 
-### 1. Preparar Archivos
+El `netlify.toml` ya define el build y el proxy de la API. La URL de producción del backend es **`https://radicados-intecoal-sas.onrender.com`** (es el `to` del redirect del `netlify.toml`).
 
-Asegurar que `frontend/` contiene:
-```
-frontend/
-├── index.html
-├── radicaciones.html
-├── nueva-radicacion.html
-├── evaluacion.html
-├── informe.html
-└── js/
-    ├── comun.js
-    ├── firma.js
-    └── zip.js
-```
+### 1. Config (en `netlify.toml`)
 
-### 2. Configurar API_URL
+```toml
+[build]
+  command = "npm run build"
+  publish = "dist"
 
-En `frontend/js/comun.js`, configurar la URL del backend:
+[[redirects]]
+  from = "/api/*"
+  to = "https://radicados-intecoal-sas.onrender.com/api/:splat"
+  status = 200
+  force = true
 
-```javascript
-// Opción 1: Variable global (agregar antes de comun.js en cada HTML)
-window.__API_URL__ = 'https://portal-intecoal-api.onrender.com';
-
-// Opción 2: Meta tag (agregar en <head> de cada HTML)
-// <meta name="api-url" content="https://portal-intecoal-api.onrender.com">
-
-// Opción 3: Detectar automáticamente (ya implementado)
-const API_URL = window.__API_URL__
-    || document.querySelector('meta[name="api-url"]')?.content
-    || (window.location.hostname === 'localhost' ? 'http://localhost:8000' : '');
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
 ```
 
-**Recomendado:** Usar meta tag en cada HTML:
-```html
-<head>
-    <meta name="api-url" content="https://portal-intecoal-api.onrender.com">
-</head>
+### 2. Configuración Netlify
+
+| Parámetro | Valor |
+|-----------|-------|
+| Build command | `npm run build` |
+| Publish directory | `dist` |
+| Environment | `VITE_MSAL_CLIENT_ID`, `VITE_MSAL_TENANT_ID`, `VITE_MSAL_REDIRECT_URI` |
+
+### 3. Variables de entorno del frontend
+
+```bash
+VITE_MSAL_CLIENT_ID=<client-id-de-azure-ad>
+VITE_MSAL_TENANT_ID=common
+VITE_MSAL_REDIRECT_URI=https://<tu-sitio>.netlify.app
 ```
 
-### 3. Crear Sitio en Netlify
+> `VITE_MSAL_REDIRECT_URI` en producción debe coincidir exactamente con la URI de redirección registrada en la app de Azure AD.
 
-1. Ir a [app.netlify.com](https://app.netlify.com) → **Add new site**
-2. **Deploy manually** → Arrastrar carpeta `frontend/`
-3. O **Import from Git** → Conectar repositorio
+### 4. Redirect del SPA
 
-### 4. Configurar Dominio
+Asegurar que exista la regla de SPA (todas las rutas → `index.html`):
 
-1. **Site settings** → **Domain management**
-2. Agregar dominio personalizado: `portal.intecoalsas.com`
-3. Configurar DNS:
+```
+/*  /index.html  200
+```
+
+Se puede añadir en un archivo `public/_redirects` o como redirect en Netlify.
+
+### 5. Custom Domain (opcional)
+
+1. **Site settings** → **Domain management**.
+2. Agregar dominio: `portal.intecoalsas.com`.
+3. DNS:
    ```
-   CNAME  portal  →  tu-sitio.netlify.app
+   CNAME  portal  →  <tu-sitio>.netlify.app
    ```
 
-### 5. Headers de Seguridad
-
-Crear `frontend/_headers`:
-
-```
-/*
-  X-Frame-Options: DENY
-  X-Content-Type-Options: nosniff
-  Referrer-Policy: strict-origin-when-cross-origin
-  Content-Security-Policy: default-src 'self' https://cdn.tailwindcss.com https://alcdn.msauth.net https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://alcdn.msauth.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; img-src 'self' data: blob:; connect-src 'self' https://portal-intecoal-api.onrender.com
-```
-
-### 6. Redirects (SPA-like)
-
-Crear `frontend/_redirects`:
-
-```
-/radicaciones.html  /radicaciones.html  200
-/nueva-radicacion.html  /nueva-radicacion.html  200
-/evaluacion.html  /evaluacion.html  200
-/informe.html  /informe.html  200
-```
-
 ---
 
-## Desarrollo Local
-
-### Backend
-
-```bash
-cd backend
-pip install -r requirements.txt
-cp .env.example .env
-# Editar .env con credenciales de pruebas
-uvicorn main:app --reload --port 8000
-```
-
-### Frontend
-
-```bash
-cd frontend
-# Opción A: VS Code Live Server
-# Opción B: Python
-python -m http.server 5500
-
-# Abrir http://localhost:5500
-```
-
-### Verificar Conexión
-
-```bash
-# Backend
-curl http://localhost:8000/api/health
-
-# Frontend (abrir en navegador)
-# http://localhost:5500 → Login → Radicaciones
-```
-
----
+> Para el desarrollo **local**, ver [INICIO-RAPIDO.md](INICIO-RAPIDO.md). Este documento cubre únicamente el despliegue en **producción**.
 
 ## Troubleshooting
 
+### El correo de notificación no llega
+- Confirma que el backend desplegado tenga el código más reciente (notificaciones de reenvío y confirmación).
+- En logs de Render busca:
+  ```
+  [MAIN] Correo de radicado corregido enviado al revisor para RAD-XXX
+  [MAIN] Correo de confirmación de subida enviado al contratista para RAD-XXX
+  ```
+- Verifica `M365_NOTIFICATION_RECIPIENT` (revisor) y el correo del contratista en la metadata.
+
 ### Error CORS
+**Síntoma:** `Blocked by CORS policy: No 'Access-Control-Allow-Origin' header`.
+**Solución:** Verificar `FRONTEND_URL`/`ALLOWED_ORIGINS` en Render coinciden con la URL de Netlify (incluyendo `https://`).
 
-**Síntoma:** `Blocked by CORS policy: No 'Access-Control-Allow-Origin' header`
+### Error 403 en SharePoint
+**Síntoma:** `403 Forbidden` al crear carpetas o subir archivos.
+**Solución:** Verificar permisos `Sites.ReadWrite.All`, `Files.ReadWrite.All`, `Mail.Send` en la app Azure AD (Application) con consentimiento de administrador.
 
-**Solución:** Verificar que `FRONTEND_URL` en Render coincide exactamente con la URL de Netlify (incluyendo `https://`).
+### Error JWT / sesión
+**Síntoma:** `401 Unauthorized`.
+**Solución:** Verificar `SECRET_KEY` configurado y consistente entre instancias.
 
-### Error 403 SharePoint
+### Archivos no suben
+**Síntoma:** 413/400 al subir.
+**Solución:** Tamaño ≤ 50 MB y MIME permitido (PDF, imágenes, DXF/DWG).
 
-**Síntoma:** `403 Forbidden` al crear carpetas o subir archivos
-
-**Solución:** Verificar permisos `Sites.ReadWrite.All` y `Files.ReadWrite.All` en Azure AD App con admin consent.
-
-### Error JWT
-
-**Síntoma:** `401 Unauthorized` en peticiones autenticadas
-
-**Solución:** Verificar que `SECRET_KEY` está configurado y es el mismo en todas las instancias del backend.
-
-### Archivos No Suben
-
-**Síntoma:** Error 413 o 400 al subir archivos
-
-**Solución:** Verificar tamaño (máx 50 MB) y MIME type (solo PDF, JPEG, PNG, Word, Excel).
-
-### Frontend No Conecta al Backend
-
-**Síntoma:** `Failed to fetch` o errores de red
-
-**Solución:** Verificar `api-url` meta tag o `window.__API_URL__` apunta al backend correcto con `/api/` al final.
+### Login M365 falla
+**Síntoma:** `timed_out` / `block_nested_popups`.
+**Solución:** `VITE_MSAL_REDIRECT_URI` debe coincidir con la URI registrada en Azure AD; MSAL usa `loginRedirect` con timeout de 3 min para MFA.

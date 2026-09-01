@@ -215,6 +215,11 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!filingToEdit && !firmaContratista) {
+      alert('La firma digital del contratista es obligatoria para crear el radicado. Estampe su firma antes de continuar.');
+      return;
+    }
+
     if (missingMandatory.length > 0) {
       if (!confirm(`Atención: Hay ${missingMandatory.length} documentos obligatorios pendientes de carga. ¿Desea continuar radicando con observaciones de interventoría?`)) {
         return;
@@ -829,9 +834,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                             onChange={handleMetaChange}
                             className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-xl text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#D9CF43]"
                           >
-                            <option value="Inicial">Inicial</option>
-                            <option value="Parcial">Parcial</option>
-                            <option value="Final">Final</option>
+                            <option value="Inicio">Inicio</option>
                             <option value="Subsanación">Subsanación</option>
                           </select>
                         </div>

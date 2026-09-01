@@ -19,24 +19,44 @@ import { EvaluacionRadicacion } from './components/EvaluacionRadicacion';
 import { LoginForm } from './components/LoginForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
-import { logoutM365User, ensureMsalInit, extractCompanyFromEmail, formatNameFromEmail, msalInstance } from './lib/msalConfig';
+import { logoutM365User, ensureMsalInit, extractCompanyFromEmail, formatNameFromEmail, msalInstance, isRevisorAllowedEmail, REVISOR_DOMAIN_HINT } from './lib/msalConfig';
 
 export default function App() {
   // Pestaña activa del sistema: lista, nueva, informe o evaluacion
-  const [activeTab, setActiveTab] = useState('lista');
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === 'undefined') return 'lista';
+    return sessionStorage.getItem('active_tab') || 'lista';
+  });
   
   // Lista de radicaciones cargadas en memoria o backend
   const [filings, setFilings] = useState([]);
   const [selectedFiling, setSelectedFiling] = useState(null);
   const [editingFiling, setEditingFiling] = useState(null);
 
-  // Estado de sesión del usuario SENA / INTECOAL (restaurado de sessionStorage o localStorage si existe)
-  const [user, setUser] = useState({
-    isAuthenticated: false,
-    name: '',
-    email: '',
-    role: 'interventor',
-    company: ''
+  // Estado de sesión del usuario SENA / INTECOAL.
+  // Se restaura desde sessionStorage/localStorage para que al recargar o volver
+  // del redirect de Microsoft 365 el usuario NO sea sacado de su sesión.
+  const [user, setUser] = useState(() => {
+    const emptyUser = { isAuthenticated: false, name: '', email: '', role: 'interventor', company: '' };
+    if (typeof window === 'undefined') return emptyUser;
+
+    // Si hay hash de redirect de MSAL activo, NO restaurar sesión previa:
+    // deja que el proceso de redirect decida el usuario real.
+    if (window.location.hash && (window.location.hash.includes('code=') || window.location.hash.includes('id_token=') || window.location.hash.includes('error='))) {
+      return emptyUser;
+    }
+
+    try {
+      const raw = sessionStorage.getItem('m365_user_session') || localStorage.getItem('m365_user_session');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.isAuthenticated && parsed.email) {
+          return parsed;
+        }
+      }
+    } catch (e) { /* ignora */ }
+
+    return emptyUser;
   });
 
   // Estado para mensajes de error de autenticación MSAL/Azure AD
@@ -62,6 +82,12 @@ export default function App() {
     senderEmail: '',
     isConnected: false
   });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && activeTab) {
+      sessionStorage.setItem('active_tab', activeTab);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     fetch('/api/m365/status')
@@ -138,20 +164,18 @@ export default function App() {
       const redirectResponse = res?.redirectResponse;
       const msalError = res?.error;
 
-      // Read active MSAL attempt flags BEFORE cleaning
+      // Read active MSAL attempt flags BEFORE cleaning. Solo desde sessionStorage
+      // (el localStorage fue eliminado para evitar que el rol quede "pegado" como caché).
       const wasAttemptingMsal = typeof window !== 'undefined' && (
-        sessionStorage.getItem('is_msal_login_attempt') === 'true' || 
-        localStorage.getItem('is_msal_login_attempt') === 'true'
+        sessionStorage.getItem('is_msal_login_attempt') === 'true'
       );
 
       const savedRole = typeof window !== 'undefined' ? (
-        sessionStorage.getItem('pending_msal_role') || 
-        localStorage.getItem('pending_msal_role')
+        sessionStorage.getItem('pending_msal_role')
       ) : null;
 
       const pendingEmail = typeof window !== 'undefined' ? (
-        sessionStorage.getItem('pending_msal_email') || 
-        localStorage.getItem('pending_msal_email')
+        sessionStorage.getItem('pending_msal_email')
       ) : null;
 
       const cleanPendingMsalStorage = () => {
@@ -186,12 +210,20 @@ export default function App() {
           }
         }
 
-        const roleToAssign = savedRole || 'contratista';
-
         if (account) {
           const email = (account?.username || '').toLowerCase();
           const nameFormatted = formatNameFromEmail(email, account?.name);
           const company = extractCompanyFromEmail(email);
+
+          // Rol final: respeta el elegido en la UI (savedRole) si llegó; si no,
+          // lo deriva del dominio de la cuenta autenticada (intecoal => revisor).
+          const roleToAssign = savedRole || (isRevisorAllowedEmail(email) ? 'interventor' : 'contratista');
+
+          if (roleToAssign === 'interventor' && !isRevisorAllowedEmail(email)) {
+            cleanPendingMsalStorage();
+            setMsalAuthError(`El Responsable de Revisión solo puede entrar con correo de INTECOAL (${REVISOR_DOMAIN_HINT}). El correo "${email}" no está autorizado para este rol.`);
+            return;
+          }
 
           const newUser = {
             isAuthenticated: true,
@@ -212,6 +244,14 @@ export default function App() {
           const userEmailToUse = pendingEmail.toLowerCase();
           const company = extractCompanyFromEmail(userEmailToUse);
           const nameFormatted = formatNameFromEmail(userEmailToUse);
+
+          const roleToAssign = savedRole || (isRevisorAllowedEmail(userEmailToUse) ? 'interventor' : 'contratista');
+
+          if (roleToAssign === 'interventor' && !isRevisorAllowedEmail(userEmailToUse)) {
+            cleanPendingMsalStorage();
+            setMsalAuthError(`El Responsable de Revisión solo puede entrar con correo de INTECOAL (${REVISOR_DOMAIN_HINT}). El correo "${userEmailToUse}" no está autorizado para este rol.`);
+            return;
+          }
 
           const newUser = {
             isAuthenticated: true,
@@ -296,6 +336,10 @@ export default function App() {
     if (typeof sessionStorage !== 'undefined') {
       sessionStorage.removeItem('m365_user_session');
       sessionStorage.removeItem('pending_msal_role');
+      sessionStorage.removeItem('active_tab');
+    }
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('m365_user_session');
     }
     setUser({
       isAuthenticated: false,
@@ -316,29 +360,6 @@ export default function App() {
       setFilings([newRecord, ...filings]);
       setSelectedFiling(newRecord);
       setActiveTab('informe');
-    }
-  };
-
-  const handleUpdateStatus = async (id, newStatus) => {
-    try {
-      const res = await fetch(`/api/radicacion/${id}/estado`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          estado: newStatus,
-          usuarioEmail: user?.email || '',
-          usuarioNombre: user?.name || ''
-        })
-      });
-      if (res.ok) {
-        const json = await res.json();
-        setFilings(filings.map(f => f.id === id ? json.data : f));
-        if (selectedFiling && selectedFiling.id === id) {
-          setSelectedFiling(json.data);
-        }
-      }
-    } catch (err) {
-      console.error('Error actualizando estado:', err);
     }
   };
 
@@ -426,9 +447,7 @@ export default function App() {
                     setEditingFiling(null);
                     setActiveTab('nueva');
                   }}
-                  onUpdateStatus={handleUpdateStatus}
-                  onEditFiling={(record) => {
-                    setEditingFiling(record);
+                  onEditFiling={(record) => {                    setEditingFiling(record);
                     setActiveTab('nueva');
                   }}
                   userRole={user.role}

@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { DOCUMENT_CATALOG } from '../data/documentsCatalog';
 import { 
-  Printer, 
   ArrowLeft, 
   CheckCircle2, 
   Clock, 
@@ -22,7 +21,6 @@ import {
   Cpu,
   FileText,
   Award,
-  BookOpen,
   CheckCheck,
   Hash
 } from 'lucide-react';
@@ -57,10 +55,6 @@ export const InformeRecibidoConformidad = ({
   }));
 
   const [isEditingTech, setIsEditingTech] = useState(false);
-
-  const handlePrint = () => {
-    window.print();
-  };
 
   const handleSaveSignature = (role, signature) => {
     const updatedMetadata = { ...filing.metadata };
@@ -278,7 +272,7 @@ export const InformeRecibidoConformidad = ({
             </span>
           </button>
 
-          {isRol1Revisor && onEditEvaluation && (
+          {isRol1Revisor && onEditEvaluation && filing.estado !== 'Aprobado' && (
             <button
               onClick={() => onEditEvaluation(filing)}
               className="flex items-center space-x-1.5 bg-amber-100 hover:bg-amber-200 text-amber-950 font-extrabold text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl border border-amber-300 transition-all cursor-pointer"
@@ -288,21 +282,7 @@ export const InformeRecibidoConformidad = ({
               <span>Modificar Evaluación</span>
             </button>
           )}
-
-          <button
-            onClick={handlePrint}
-            className="flex items-center space-x-2 bg-[#1E222A] hover:bg-slate-800 text-[#D9CF43] font-black text-xs uppercase tracking-wider px-5 py-2.5 rounded-xl shadow-md transition-all cursor-pointer active:scale-95"
-          >
-            <Printer className="w-4 h-4 text-[#D9CF43]" />
-            <span>Imprimir / PDF</span>
-          </button>
         </div>
-      </div>
-
-      {/* Helper notice for PDF printing */}
-      <div className="mb-6 bg-slate-100 border border-slate-300 text-slate-700 p-3 rounded-xl text-xs flex items-center space-x-2 print:hidden shadow-sm">
-        <span className="font-extrabold text-slate-900 text-sm">Tip de Impresión PDF:</span>
-        <span>El informe se imprime con formato carta y sin las marcas del navegador (URL, fecha, páginas). En la ventana de impresión, selecciona <strong>"Guardar como PDF"</strong> y elige <strong>Letter</strong> como tamaño si no viene preseleccionado.</span>
       </div>
 
       {/* Main Corporate Report Canvas (Official Letterhead Format) */}
@@ -377,8 +357,7 @@ export const InformeRecibidoConformidad = ({
           <div className="flex items-center space-x-2 border-b-2 border-slate-900 pb-1.5">
             <Building2 className="w-4 h-4 text-slate-900" />
             <h2 className="text-xs font-black uppercase tracking-wider text-slate-900">
-              1. DATOS GENERALES Y CONTRACTUALES DEL EXPEDIENTE
-            </h2>
+              DATOS GENERALES Y CONTRACTUALES DEL EXPEDIENTE            </h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
@@ -433,33 +412,12 @@ export const InformeRecibidoConformidad = ({
           </div>
         </div>
 
-        {/* SECTION 2: MARCO LEGAL Y FUNDAMENTO NORMATIVO */}
-        <div className="space-y-2 page-break-avoid">
-          <div className="flex items-center space-x-2 border-b-2 border-slate-900 pb-1.5">
-            <BookOpen className="w-4 h-4 text-slate-900" />
-            <h2 className="text-xs font-black uppercase tracking-wider text-slate-900">
-              2. MARCO LEGAL Y FUNDAMENTO REGULATORIO APLICABLE
-            </h2>
-          </div>
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-[11px] text-slate-700 leading-relaxed space-y-1.5 print-border-clean print-justify">
-            <p>
-              El presente informe técnico de interventoría se emite bajo el riguroso cumplimiento del marco legal colombiano vigente para infraestructura de iluminación pública:
-            </p>
-            <ul className="list-disc pl-5 space-y-0.5 text-slate-800">
-              <li><strong>Resolución 40150 de 2024 (MINMINAS):</strong> Reglamento Técnico de Iluminación y Alumbrado Público (RETILAP), especificando eficiencia fotométrica, grado de protección y diseño.</li>
-              <li><strong>Resolución 90708 / 40117 (RETIE):</strong> Reglamento Técnico de Instalaciones Eléctricas en redes de baja y media tensión.</li>
-              <li><strong>Código Eléctrico Nacional NTC 2050:</strong> Especificaciones de canalización, protecciones y puesta a tierra.</li>
-              <li><strong>Manuales y Guías Técnicas ALBORADA E.I.C.E.:</strong> Estándares de recepción y mantenimiento de activos de alumbrado público.</li>
-            </ul>
-          </div>
-        </div>
-
         {/* SECTION 3: RESUMEN DE EVALUACIÓN Y SCORE */}
         <div className="space-y-3 page-break-avoid">
           <div className="flex items-center space-x-2 border-b-2 border-slate-900 pb-1.5">
             <ShieldCheck className="w-4 h-4 text-slate-900" />
             <h2 className="text-xs font-black uppercase tracking-wider text-slate-900">
-              3. MATRIZ RESUMEN DE EVALUACIÓN Y CONFORMIDAD RETILAP
+              MATRIZ RESUMEN DE EVALUACIÓN Y CONFORMIDAD RETILAP
             </h2>
           </div>
 
@@ -529,7 +487,7 @@ export const InformeRecibidoConformidad = ({
           <div className="flex items-center space-x-2 border-b-2 border-slate-900 pb-1.5">
             <FileCheck2 className="w-4 h-4 text-slate-900" />
             <h2 className="text-xs font-black uppercase tracking-wider text-slate-900">
-              4. AUDITORÍA DOCUMENTAL Y CHECKLIST EXHAUSTIVO (21 REQUISITOS NORMATIVOS)
+              AUDITORÍA DOCUMENTAL Y CHECKLIST EXHAUSTIVO (21 REQUISITOS NORMATIVOS)
             </h2>
           </div>
 
@@ -631,7 +589,7 @@ export const InformeRecibidoConformidad = ({
             <div className="flex items-center space-x-2 border-b-2 border-slate-900 pb-1.5">
               <Layers className="w-4 h-4 text-slate-900" />
               <h2 className="text-xs font-black uppercase tracking-wider text-slate-900">
-                5. INVENTARIO FÍSICO DE MATERIALES Y EQUIPOS ENTREGADOS EN CAMPO
+                INVENTARIO FÍSICO DE MATERIALES Y EQUIPOS ENTREGADOS EN CAMPO
               </h2>
             </div>
 
@@ -667,7 +625,7 @@ export const InformeRecibidoConformidad = ({
           <div className="flex items-center space-x-2 border-b-2 border-slate-900 pb-1.5">
             <Award className="w-4 h-4 text-slate-900" />
             <h2 className="text-xs font-black uppercase tracking-wider text-slate-900">
-              6. CONCEPTO TÉCNICO DE INTERVENTORÍA Y DICTAMEN DE CONFORMIDAD
+              CONCEPTO TÉCNICO DE INTERVENTORÍA Y DICTAMEN DE CONFORMIDAD
             </h2>
           </div>
 

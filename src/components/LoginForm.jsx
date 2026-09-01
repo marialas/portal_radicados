@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { IntecoalLogo } from './IntecoalLogo';
-import { loginM365User, extractCompanyFromEmail, formatNameFromEmail } from '../lib/msalConfig';
+import { loginM365User } from '../lib/msalConfig';
 import { 
   ShieldCheck, 
   PenTool, 
@@ -8,28 +8,25 @@ import {
   CheckCircle2, 
   HelpCircle,
   Cloud,
-  Lock,
-  Mail,
-  ArrowRight,
-  UserCheck
+  ArrowRight
 } from 'lucide-react';
 
 export const LoginForm = ({ onLoginSuccess, externalError }) => {
   const [activeRole, setActiveRole] = useState('creador');
   const [errorMsg, setErrorMsg] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [userEmail, setUserEmail] = useState('anyeli_cabezas@soy.sena.edu.co');
-  const [userPassword, setUserPassword] = useState('sena2026');
 
   const displayError = errorMsg || externalError;
 
   const handleM365Login = async () => {
     setErrorMsg(null);
+
+    const roleToUse = activeRole === 'revisor' ? 'interventor' : 'contratista';
+
     setIsLoading(true);
 
     try {
-      const roleToUse = activeRole === 'revisor' ? 'interventor' : 'contratista';
-      const userSession = await loginM365User(roleToUse, userEmail, null, null, 'select_account');
+      const userSession = await loginM365User(roleToUse, null, null, null, 'select_account');
       if (userSession?.isRedirecting) {
         return;
       }
@@ -37,36 +34,8 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
       onLoginSuccess(userSession, 'lista');
     } catch (err) {
       setIsLoading(false);
-      setErrorMsg('Error de autenticación con Microsoft 365 MSAL: ' + (err.message || 'Verifique las políticas de su Tenant Azure AD o use el ingreso directo por correo.'));
+      setErrorMsg('Error de autenticación con Microsoft 365 MSAL: ' + (err.message || 'Verifique las políticas de su Tenant Azure AD o intente nuevamente.'));
     }
-  };
-
-  const handleDirectEmailLogin = (e) => {
-    if (e) e.preventDefault();
-    setErrorMsg(null);
-
-    if (!userEmail || !userEmail.includes('@')) {
-      setErrorMsg('Por favor ingrese un correo electrónico válido (ej. anyeli_cabezas@soy.sena.edu.co).');
-      return;
-    }
-
-    setIsLoading(true);
-
-    setTimeout(() => {
-      setIsLoading(false);
-      const companyDerived = extractCompanyFromEmail(userEmail);
-      const nameFormatted = formatNameFromEmail(userEmail);
-
-      const roleToUse = activeRole === 'revisor' ? 'interventor' : 'contratista';
-      const userSession = {
-        isAuthenticated: true,
-        name: nameFormatted,
-        email: userEmail.toLowerCase(),
-        role: roleToUse,
-        company: companyDerived
-      };
-      onLoginSuccess(userSession, 'lista');
-    }, 300);
   };
 
   return (
@@ -217,44 +186,6 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
             </div>
           </div>
 
-          {/* Opción B: Ingreso directo por correo */}
-          <div className="bg-gradient-to-r from-gray-50 via-gray-100 to-gray-50 border-2 border-gray-200 rounded-2xl p-5 space-y-3">
-            <div className="flex items-center space-x-3.5">
-              <div className="w-10 h-10 bg-[#1E222A] rounded-xl flex items-center justify-center shrink-0">
-                <Mail className="w-5 h-5 text-[#D9CF43]" />
-              </div>
-              <div>
-                <span className="font-extrabold text-sm text-gray-900">
-                  Ingreso Directo por Correo
-                </span>
-                <p className="text-xs text-gray-600 mt-0.5">
-                  Para cuentas personales (Gmail, Outlook, etc.) que no tengan Microsoft 365.
-                </p>
-              </div>
-            </div>
-
-            <form onSubmit={handleDirectEmailLogin} className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Mail className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
-                <input
-                  type="email"
-                  value={userEmail}
-                  onChange={(e) => setUserEmail(e.target.value)}
-                  placeholder="correo@ejemplo.com"
-                  className="w-full pl-9 pr-4 py-3 border border-gray-300 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#D9CF43] focus:border-[#D9CF43] transition-all"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="px-5 py-3 bg-[#1E222A] hover:bg-slate-800 text-[#D9CF43] font-black text-xs rounded-xl transition-all flex items-center justify-center space-x-2 shrink-0 cursor-pointer active:scale-[0.98]"
-              >
-                <ArrowRight className="w-4 h-4" />
-                <span>ENTRAR</span>
-              </button>
-            </form>
-          </div>
-
           {displayError && (
             <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl text-xs text-red-700 space-y-2 animate-fadeIn">
               <div className="flex items-start space-x-2.5">
@@ -270,7 +201,7 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
           <div className="border-t border-gray-200 pt-4 flex flex-col sm:flex-row items-center justify-between text-[11px] text-gray-500 gap-2">
             <div className="flex items-center space-x-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Conexión habilitada para Microsoft 365 y Correos Externos SENA/Contratistas</span>
+              <span>Conexión habilitada para Microsoft 365 (cuentas personales y profesionales)</span>
             </div>
             <div className="flex items-center space-x-1">
               <HelpCircle className="w-3.5 h-3.5 text-gray-400" />

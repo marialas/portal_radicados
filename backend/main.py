@@ -163,6 +163,7 @@ class ActualizacionMetadata(BaseModel):
     estado: Optional[str] = None
     observacionesGenerales: Optional[str] = None
     elementosEntregados: Optional[List[dict]] = None
+    soloAvance: Optional[bool] = False
 
 
 @app.get("/api/health")
@@ -554,13 +555,20 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado):
             except Exception as e:
                 print(f"[MAIN] Error correo cambio de estado: {e}")
 
-        # Notificar al revisor cuando el contratista corrige un radicado con observaciones (reesubido)
-        if estado_anterior == "Con Observaciones" and body.estado == "En Revisión":
+        # Notificar al revisor cuando el contratista reenvía/edita un radicado para revisión
+        # (transición hacia "En Revisión", sea desde Observaciones, Aprobado u otro estado)
+        if body.estado == "En Revisión" and estado_anterior != "En Revisión":
             try:
                 await graph_service.enviar_correo_reesubido_revisor(radicacion)
                 print(f"[MAIN] Correo de radicado corregido enviado al revisor para {radicacion['numeroRadicado']}")
             except Exception as e:
                 print(f"[MAIN] Error correo radicado corregido: {e}")
+
+            try:
+                await graph_service.enviar_correo_reenvio_contratista(radicacion)
+                print(f"[MAIN] Correo de confirmación de subida enviado al contratista para {radicacion['numeroRadicado']}")
+            except Exception as e:
+                print(f"[MAIN] Error correo confirmación subida contratista: {e}")
 
     guardar_db()
 
@@ -611,6 +619,11 @@ async def actualizar_metadata(identificador: str, body: ActualizacionMetadata):
 
     radicacion["fechaActualizacion"] = datetime.now(timezone.utc).isoformat()
     guardar_db()
+
+    # En modo "solo avance" (borrador del revisor) NO se sincroniza a SharePoint,
+    # NO se registra historial y NO se envían notificaciones: el estado aún no cambia.
+    if body.soloAvance:
+        return {"ok": True, "data": radicacion, "soloAvance": True}
 
     if graph_service:
         for attempt in range(3):
@@ -757,6 +770,7 @@ async def ver_archivo(radicacion_id: str, doc_id: int):
                             path=str(file_path),
                             media_type=a.get("fileType", "application/pdf"),
                             filename=a.get("fileName", "documento.pdf"),
+                            content_disposition_type="inline",
                         )
                     raise HTTPException(status_code=404, detail="Archivo no encontrado en disco")
                 if a["docId"] == doc_id and a.get("fileName"):

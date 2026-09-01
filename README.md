@@ -1,84 +1,43 @@
 # Portal de Radicación INTECOAL S.A.S.
 
-Sistema de gestión de radicación de expedientes técnicos para verificación RETILAP (Alumbrado Público).
+Sistema de gestión de radicación de expedientes técnicos para la **verificación RETILAP** (Alumbrado Público) bajo la Resolución 40150 de 2024 y RETIE.
 
-## Funcionalidades
+El portal permite al **contratista** radicar los 21 requisitos RETILAP, y al **revisor (interventoría)** evaluarlos, emitir dictamen y generar el **Informe de Recibido a Conformidad**, con firma electrónica, notificaciones por correo y persistencia en **SharePoint** de Microsoft 365.
 
-- **Radicación de expedientes**: Carga de 21 documentos RETILAP obligatorios y adicionales
-- **Autenticación Microsoft 365**: Login institucional con MSAL (SENA, INTECOAL, Contratistas)
-- **Integración SharePoint**: Sincronización automática de lista y documentos al aprobar radicado
-- **Notificaciones por correo**: Confirmación de radicado y cambio de estado vía Microsoft Graph
-- **Firma digital**: Declaración de conformidad del contratista e interventoría
-- **Informes**: Generación de Informe Recibido a Conformidad
-- **Numeración consecutiva**: Radicados automáticos (RAD-2026-001, RAD-2026-002, ...)
+## Stack
 
-## Estados del Radicado
+- **Frontend:** React 19 + Vite + Tailwind CSS 4 + MSAL + `@cadview/react` (visor CAD).
+- **Backend:** Python FastAPI + httpx + python-jose + python-dotenv.
+- **Servicios:** Microsoft Graph API (SharePoint Online + correo Outlook).
 
-| Estado | Descripción |
-|--------|-------------|
-| **Radicado** | Pendiente de revisión por interventoría |
-| **Con Observaciones** | Revisado con observaciones - notificación al contratista |
-| **Aprobado** | Aprobado - sincroniza a SharePoint + notificación |
+## 📚 Documentación
 
-## Estructura
+Todo el detalle está organizado por tema en la carpeta [`docs/`](docs/README.md):
 
-```
-portal_intecoal/
-├── backend/
-│   ├── main.py          # API FastAPI
-│   ├── grafos.py        # Integración Microsoft Graph / SharePoint
-│   ├── modelos.py       # Catálogo de documentos y utilidades
-│   └── requirements.txt
-├── src/
-│   ├── components/      # Componentes React
-│   ├── lib/             # Configuración MSAL, exportadores
-│   ├── data/            # Catálogo de documentos
-│   └── App.jsx          # Componente principal
-├── .env                 # Variables de entorno
-└── package.json
-```
+| Documento | Contenido |
+|-----------|-----------|
+| [docs/README.md](docs/README.md) | Índice central de la documentación |
+| [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | Arquitectura, estructura y stack técnico |
+| [docs/INICIO-RAPIDO.md](docs/INICIO-RAPIDO.md) | Requisitos y puesta en marcha local |
+| [docs/FLUJO.md](docs/FLUJO.md) | Roles, flujo de trabajo, estados y notificaciones |
+| [docs/API.md](docs/API.md) | Referencia de endpoints REST |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Despliegue en Netlify y Render.com |
+| [docs/SECURITY.md](docs/SECURITY.md) | Seguridad y autenticación |
 
-## Requisitos
-
-- Python 3.10+
-- Node.js 18+
-- Cuenta Microsoft 365 con permisos en el tenant de INTECOAL
-
-## Instalación
-
-### Backend
+## Instalación rápida
 
 ```bash
-cd backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
+# 1. Backend (lee el .env desde la raíz del proyecto)
+copy .env.example .env          # Windows (Linux/Mac: cp .env.example .env)
+pip install -r backend/requirements.txt
+uvicorn backend.main:app --reload --port 8000
 
-### Frontend
-
-```bash
+# 2. Frontend
 npm install
-npm run dev
+npm run dev                     # http://localhost:5173
 ```
 
-## Variables de Entorno (.env)
+Para el detalle completo, ver [docs/INICIO-RAPIDO.md](docs/INICIO-RAPIDO.md).
 
-| Variable | Descripción |
-|----------|-------------|
-| `VITE_MSAL_CLIENT_ID` | Client ID de la aplicación Azure AD |
-| `AZURE_CLIENT_ID` | Client ID para Graph API (backend) |
-| `AZURE_CLIENT_SECRET` | Secreto de la aplicación Azure AD |
-| `AZURE_TENANT_ID` | ID del tenant de Microsoft |
-| `SHAREPOINT_SITE_ID` | ID del sitio de SharePoint |
-| `SHAREPOINT_LIST_ID` | ID de la lista de radicaciones |
-| `SHAREPOINT_LIBRARY_ID` | Nombre de la biblioteca de documentos |
-| `SECRET_KEY` | Llave JWT para endpoints internos |
-| `M365_SENDER_EMAIL` | Correo remitente de notificaciones |
-
-## Permisos Azure AD Requeridos
-
-- `Sites.ReadWrite.All` - Lectura/escritura en SharePoint
-- `Mail.Send` - Envío de correos
-- `User.Read` - Lectura de perfil de usuario
+---
+Proyecto privado — INTECOAL S.A.S. / SENA

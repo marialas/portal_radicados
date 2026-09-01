@@ -1,321 +1,323 @@
 # Referencia API REST
 
-Base URL: `http://localhost:8000` (desarrollo) / `https://tu-app.onrender.com` (producción)
+- **Base URL (desarrollo):** `http://localhost:8000` (el frontend de Vite proxifica `/api/*` a esta URL).
+- **Base URL (producción):** `https://radicados-intecoal-sas.onrender.com`
+
+Todos los endpoints de negocio viven bajo el prefijo `/api`.
+
+---
 
 ## Autenticación
 
+La autenticación es mediante **cuenta de Microsoft 365 (MSAL)**. El frontend obtiene el identificador de la cuenta M365 y lo verifica en el backend para generar un JWT de sesión.
+
 Todas las peticiones autenticadas llevan el header:
+
 ```
 Authorization: Bearer <jwt_token>
 ```
 
 ### POST /api/auth/token
 
-Generar token JWT con credenciales manuales.
+Genera un token JWT a partir de identidad de sesión (flujo no-M365 / verificación de sesión).
 
-```json
+```jsonc
 // Request
 {
-    "email": "anyeli_cabezas@soy.sena.edu.co",
-    "company": "SENA",
-    "role": "contratista"
+  "email": "anyeli_cabezas@soy.sena.edu.co",
+  "company": "SENA",
+  "role": "contratista"
 }
 
 // Response 200
 {
-    "token": "eyJhbGciOiJIUzI1NiJ9...",
-    "user": {
-        "email": "anyeli_cabezas@soy.sena.edu.co",
-        "company": "SENA",
-        "role": "contratista"
-    }
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "user": { "email": "...", "company": "SENA", "role": "contratista" }
 }
 ```
 
 ### POST /api/auth/msal-verify
 
-Verificar cuenta Azure AD y generar JWT.
+Verifica la sesión/cuenta de Microsoft 365 y devuelve el usuario autenticado con su rol.
 
-```json
+```jsonc
 // Request
 {
-    "account": {
-        "username": "anyeli_cabezas@soy.sena.edu.co",
-        "localAccountId": "abc123"
-    }
+  "email": "anyeli_cabezas@soy.sena.edu.co",
+  "name": "Anyeli Cabezas",
+  "role": "contratista"
 }
 
 // Response 200
 {
-    "token": "eyJhbGciOiJIUzI1NiJ9...",
-    "user": {
-        "isAuthenticated": true,
-        "name": "Anyeli Cabezas",
-        "email": "anyeli_cabezas@soy.sena.edu.co",
-        "role": "contratista",
-        "company": "SENA"
-    }
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "user": { "isAuthenticated": true, "name": "...", "email": "...", "role": "contratista" }
 }
 ```
 
-## Catálogo
+> **Roles por dominio (validados en el backend y en `src/lib/msalConfig.js`):**
+> - Revisor/Interventor: `@intecoalsas.com`, `@intecoal.com.co`
+> - Contratista/Creador: cualquier correo M365
+
+---
+
+## Salud y Catálogo
+
+### GET /api/health
+
+```jsonc
+// 200
+{ "status": "ok", "timestamp": "2026-01-15T10:30:00Z" }
+```
 
 ### GET /api/documentos/catalogo
 
-Obtener los 21 documentos RETILAP.
+Devuelve el catálogo de los 21 documentos RETILAP.
 
-```json
-// Response 200
+```jsonc
+// 200
 {
-    "data": [
-        {
-            "id": 1,
-            "code": "A.1",
-            "name": "Planos de Luminotecnia",
-            "description": "Planos a escala con distribución de luminarias",
-            "category": "diseno",
-            "folderGroup": "Diseno"
-        }
-    ],
-    "total": 21
+  "data": [
+    {
+      "id": 1,
+      "code": "A.1",
+      "name": "Planos de Luminotecnia",
+      "description": "...",
+      "category": "diseno",
+      "folderGroup": "Diseno"
+    }
+  ],
+  "total": 21
 }
 ```
+
+---
 
 ## Radicaciones
 
 ### GET /api/radicacion/lista
 
-Listar radicaciones con filtros opcionales. Contratistas solo ven sus propias radicaciones; interventores ven todas.
+Lista radicaciones con filtros. El **contratista** solo ve sus propias radicaciones; el **revisor** ve todas.
 
 | Parámetro | Tipo | Descripción |
 |-----------|------|-------------|
-| `email` | string | Filtrar por correo del creador (contratista: solo sus radicaciones) |
+| `email` | string | Filtrar por correo del creador |
 | `rol` | string | Rol del usuario (`interventor` o `contratista`) |
 | `search` | string | Búsqueda por radicado, código, nombre, contratista, municipio |
 | `municipio` | string | Filtrar por municipio |
-| `estado` | string | Filtrar por estado (Radicado, Aprobado, Con Observaciones) |
-| `tipo` | string | Filtrar por tipo entrega (Inicial, Parcial, Final) |
+| `estado` | string | Filtrar por estado (`Radicado`, `En Revisión`, `Con Observaciones`, `Aprobado`) |
+| `tipo` | string | Filtrar por tipo de entrega (`Inicio`, `Subsanación`) |
 
-```json
-// Response 200
+```jsonc
+// 200
 {
-    "data": [
-        {
-            "id": "abc-123",
-            "numeroRadicado": "INT-AP-2026-0001",
-            "estado": "Radicado",
-            "documentosOk": 5,
-            "porcentajeCumplimiento": 23,
-            "metadata": { "..." },
-            "archivos": [ "..." ]
-        }
-    ],
-    "total": 3
+  "data": [
+    {
+      "id": "abc-123",
+      "numeroRadicado": "RAD-2026-0001",
+      "estado": "Radicado",
+      "documentosOk": 5,
+      "porcentajeCumplimiento": 23,
+      "metadata": { "..." },
+      "archivos": [ "..." ],
+      "historial": [ { "estado": "Radicado", "fecha": "...", "usuario": "..." } ]
+    }
+  ],
+  "total": 3
 }
 ```
 
 ### GET /api/radicacion/{identificador}
 
-Obtener una radicación por ID o número de radicado.
+Obtiene una radicación por **ID** o por **número de radicado**.
 
-```json
-// Response 200
+```jsonc
+// 200
 {
-    "data": {
-        "id": "abc-123",
-        "numeroRadicado": "INT-AP-2026-0001",
-        "metadata": { "..." },
-        "archivos": [ "..." ],
-        "elementosEntregados": [ "..." ]
-    }
-}
-```
-
-**Validaciones:**
-- MIME: solo PDF (`application/pdf`)
-- Tamaño máximo: 50 MB
-
-```json
-// Response 200
-{
-    "data": {
-        "id": "nuevo-id",
-        "numeroRadicado": "INT-AP-2026-0001",
-        "estado": "Radicado",
-        "archivos": [ "..." ]
-    },
-    "ok": true
-}
-```
-
-### POST /api/radicacion/{identificador}/archivo
-
-Subir un archivo para un documento específico.
-
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `docId` | int | Sí | ID del documento (1-21+ para manuales) |
-| `archivo` | File | Sí | Archivo a subir (solo PDF) |
-
-```json
-// Response 200
-{
-    "ok": true,
-    "data": { "..." }
-}
-```
-
-### PATCH /api/radicacion/{identificador}/estado
-
-Actualizar estado de una radicación.
-
-```json
-// Request
-{
-    "estado": "Aprobado",
-    "observaciones": "Todos los documentos verificados",
+  "data": {
+    "id": "abc-123",
+    "numeroRadicado": "RAD-2026-0001",
+    "metadata": { "..." },
     "archivos": [ "..." ],
-    "metadata": { "firmaInterventoria": { "..." } }
+    "elementosEntregados": [ "..." ],
+    "historial": [ "..." ]
+  }
 }
 ```
 
-```json
-// Response 200
+### GET /api/radicacion/{identificador}/historial
+
+Devuelve el historial de cambios de estado de una radicación.
+
+```jsonc
+// 200
 {
-    "ok": true,
-    "data": { "..." }
+  "data": [
+    { "estado": "Radicado", "fecha": "...", "usuario": "...", "usuarioNombre": "...", "observaciones": "" },
+    { "estado": "Con Observaciones", "fecha": "...", "usuario": "...", "usuarioNombre": "...", "observaciones": "..." }
+  ]
 }
 ```
-
-**Efectos secundarios:**
-- Si `estado = "Aprobado"` → sincronización automática a SharePoint
-- Si el estado cambia → envío de correo de notificación
-
-### PATCH /api/radicacion/{identificador}/metadata
-
-Actualizar metadatos, archivos u observaciones de una radicación.
-
-```json
-// Request
-{
-    "metadata": { "responsableRevision": "Nuevo Revisor" },
-    "archivos": [ "..." ],
-    "estado": "Aprobado",
-    "observacionesGenerales": "..."
-}
-```
-
-### DELETE /api/radicacion/{identificador}
-
-Eliminar una radicación. Solo permite eliminar la más reciente (la primera de la lista).
-
-```json
-// Response 200
-{
-    "ok": true,
-    "message": "Radicación eliminada correctamente"
-}
-```
-
-**Validaciones:**
-- Solo se puede eliminar la radicación más reciente (primera de la lista)
-- Si no es la más reciente, retorna 400 con mensaje de error
 
 ### POST /api/radicacion/nueva
 
-Crear nueva radicación (multipart/form-data). Soporta documentos adicionales manuales.
+Crea una nueva radicación (**multipart/form-data**).
 
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
-| `metadatos` | string (JSON) | Sí | Objeto con metadata del proyecto (incluye `creadorEmail`, `creadorName`) |
-| `elementos` | string (JSON) | No | Array de elementos entregados |
-| `naDocs` | string (JSON) | No | Array de IDs de docs marcados N/A |
-| `docsAdicionales` | string (JSON) | No | Array de objetos `{nombre, categoria}` para documentos manuales |
-| `archivos` | File[] | No | Archivos adjuntos (solo PDF) |
+| `metadatos` | string (JSON) | Sí | Metadata del proyecto (incluye `creadorEmail`, `creadorName`, `firmaContratista`). |
+| `elementos` | string (JSON) | No | Array de elementos entregados. |
+| `naDocs` | string (JSON) | No | Array de IDs de docs marcados N/A. |
+| `docsAdicionales` | string (JSON) | No | Array de objetos para documentos manuales. |
+| `archivo_*` | File[] | No | Archivos por código de documento (`archivo_A.1`, `archivo_B.2`, etc.). |
 
-## Microsoft 365
+La radicación se crea con estado `Radicado` y notifica al revisor (`enviar_correo_nuevo_radicado_revisor`) y al contratista (`enviar_correo_nuevo_radicado_contratista`).
 
-### GET /api/m365/status
+### POST /api/radicacion/{identificador}/archivo
 
-Estado de la conexión con M365.
+Sube/reemplaza el archivo de un documento de una radicación existente.
 
-```json
-// Response 200
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `docId` | int | Sí | ID del documento (1–21 para estándar, mayor para manuales). |
+| `archivo` | File | Sí | Archivo (PDF, imagen o DXF/DWG). |
+
+### PATCH /api/radicacion/{identificador}/estado
+
+Actualiza el estado y (opcionalmente) metadata/archivos de una radicación.
+
+```jsonc
+// Request
 {
-    "azureClientId": "...",
-    "azureTenantId": "...",
-    "sharepointSiteId": "...",
-    "sharepointListId": "...",
-    "isConnected": true
+  "estado": "Aprobado",
+  "observaciones": "Todos los documentos verificados",
+  "archivos": [ "..." ],
+  "metadata": { "firmaInterventoria": { "..." } },
+  "usuarioEmail": "revisor@intecoalsas.com",
+  "usuarioNombre": "Revisor de Obra"
 }
 ```
 
+**Efectos secundarios (automatizados por el backend):**
+- Se registra la entrada en el **historial** de la radicación.
+- Si `estado = "Aprobado"` → sincronización automática a SharePoint.
+- Si `estado` cambia a `Aprobado`/`Con Observaciones` → correo de resultado al **contratista** (`enviar_correo_estado`).
+- Si `estado` cambia **a `En Revisión`** (desde otro estado) → correo al **revisor** (`enviar_correo_reesubido_revisor`) y correo de confirmación de subida al **contratista** (`enviar_correo_reenvio_contratista`).
+
+### PATCH /api/radicacion/{identificador}/metadata
+
+Actualiza metadatos, archivos u observaciones de una radicación sin cambiar necesariamente el estado.
+
+```jsonc
+// Request
+{
+  "metadata": { "responsableRevision": "Nuevo Revisor" },
+  "archivos": [ "..." ],
+  "elementosEntregados": [ "..." ],
+  "observacionesGenerales": "...",
+  "soloAvance": false   // true → borrador del revisor (sin sync/historial/notificaciones)
+}
+```
+
+> **`soloAvance: true`**: modo "Guardar Avance" del revisor. Se persisten los cambios **sin** sincronizar a SharePoint, **sin** registrar historial y **sin** enviar notificaciones.
+
+### DELETE /api/radicacion/{identificador}
+
+Elimina una radicación. Solo permite eliminar la **más reciente** (primera de la lista).
+
+```jsonc
+// 200
+{ "ok": true, "message": "Radicación eliminada correctamente" }
+
+// 400 si no es la más reciente
+```
+
+---
+
+## Archivos (visor)
+
+### GET /api/files/view/{radicacion_id}/{doc_id}
+
+Devuelve el archivo de un documento para visualizarlo.
+
+- **PDF e imágenes:** se sirven con `Content-Disposition: inline` para verse en el navegador.
+- **DXF:** el frontend lo muestra con el visor CAD (`@cadview/react`).
+- **DWG/DWF/DWT:** no visualizables en línea; el frontend ofrece descargar.
+
+---
+
+## Microsoft 365 / SharePoint
+
+### GET /api/m365/status
+
+Estado de la conexión con Microsoft 365 (llenado de `AZURE_*` / `SHAREPOINT_*`).
+
+```jsonc
+// 200
+{
+  "azureClientId": "...",
+  "azureTenantId": "...",
+  "sharepointSiteId": "...",
+  "sharepointListId": "...",
+  "isConnected": true
+}
+```
+
+### GET /api/m365/list-columns
+
+Columnas de la lista de SharePoint configurada.
+
 ### POST /api/m365/test-connection
 
-Probar conexión con Microsoft Graph.
+Prueba la conexión con Microsoft Graph.
 
-```json
-// Response 200
-{
-    "ok": true,
-    "conexion": "Exitosa",
-    "usuario": "interventoriaapalborada@intecoalsas.com"
-}
+```jsonc
+// 200
+{ "ok": true, "conexion": "Exitosa", "usuario": "interventoriaapalborada@intecoalsas.com" }
 ```
 
 ### GET /api/m365/webhook-config
 
-Obtener configuración de webhook.
+Obtiene la configuración del webhook (Power Automate).
 
 ### POST /api/m365/webhook-config
 
-Actualizar URL de webhook.
+Actualiza la URL del webhook.
 
-```json
+```jsonc
 // Request
-{
-    "webhookUrl": "https://prod-XX.logic.azure.com/..."
-}
+{ "webhookUrl": "https://prod-XX.logic.azure.com/..." }
 ```
 
-## Archivos
+### GET /api/sharepoint/schema
 
-### GET /api/files/view/{radicacion_id}/{doc_id}
+Devuelve el esquema/catálogo documental usado para SharePoint.
 
-Obtener información de un archivo subido.
+---
 
-```json
-// Response 200
-{
-    "fileName": "planos.pdf",
-    "fileType": "application/pdf",
-    "fileSize": 1048576,
-    "folderPath": "/Documentos_Radicacion/RETILAP-001/Diseno/",
-    "status": "CUMPLE"
-}
-```
+## Estados y Códigos de Respuesta
 
-## Salud
+### Estados de radicación
+| Estado | Significado |
+|--------|-------------|
+| `Radicado` | Creado por el contratista. |
+| `En Revisión` | Reenviado / en evaluación. |
+| `Con Observaciones` | Devuelto con correcciones. |
+| `Aprobado` | Conforme y sincronizado a SharePoint. |
 
-### GET /api/health
-
-Health check del servidor.
-
-```json
-// Response 200
-{
-    "status": "ok",
-    "timestamp": "2026-01-15T10:30:00Z"
-}
-```
-
-## Códigos de Respuesta
-
+### Códigos HTTP
 | Código | Significado |
 |--------|-------------|
 | 200 | Éxito |
 | 400 | Solicitud inválida (datos faltantes, MIME no permitido) |
 | 404 | Recurso no encontrado |
-| 413 | Archivo supera límite de 50 MB |
+| 413 | Archivo supera el límite de 50 MB |
 | 500 | Error interno del servidor |
 | 503 | Servicio no disponible (GraphService offline) |
+
+---
+
+## Validación de Archivos (Backend)
+
+- **MIME permitidos:** PDF, imágenes (JPEG, PNG, TIFF, BMP, GIF) y planos (DWG, DXF, ACAD). (`MIME_PERMITIDOS` en `backend/main.py`)
+- **Límite:** 50 MB por archivo (`MAX_TAMANIO_BYTES`).

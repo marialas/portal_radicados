@@ -63,6 +63,24 @@ export async function ensureMsalInit(instance = msalInstance) {
   return msalInitPromises.get(instance);
 }
 
+// Dominios permitidos por rol. El Responsable de Revisión solo con correo de INTECOAL.
+const ALLOWED_REVISOR_DOMAINS = ['intecoalsas.com', 'intecoal.com.co'];
+export const REVISOR_DOMAIN_HINT = 'Correo institucional de INTECOAL (@intecoalsas.com)';
+
+export function isRevisorAllowedEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  const domain = email.split('@')[1]?.toLowerCase().trim() || '';
+  return ALLOWED_REVISOR_DOMAINS.includes(domain);
+}
+
+export function validateRoleEmail(role, email) {
+  if (role === 'interventor') {
+    return isRevisorAllowedEmail(email);
+  }
+  // Contratista (y cualquier otro rol) acepta cualquier correo
+  return true;
+}
+
 export function formatNameFromEmail(email, m365DisplayName = null) {
   if (m365DisplayName && typeof m365DisplayName === 'string' && m365DisplayName.trim() && !m365DisplayName.includes('@')) {
     const cleaned = m365DisplayName.replace(/\s*\(M365.*?\)\s*/gi, '').trim();
@@ -138,16 +156,21 @@ export async function loginM365User(
     window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
   }
 
-  // Persistir el rol seleccionado (Revisor/Interventor o Creador/Contratista) y los indicadores de intento
+  // Persistir el rol seleccionado (Revisor/Interventor o Creador/Contratista) y los indicadores de intento.
+  // IMPORTANTE: solo en sessionStorage que se limpia al cerrar la pestaña. NUNCA en localStorage,
+  // porque localStorage persiste entre sesiones y provocaba que el rol quedara "pegado" (caché) en "contratista".
   if (typeof window !== 'undefined') {
     sessionStorage.setItem('pending_msal_role', customRole);
-    localStorage.setItem('pending_msal_role', customRole);
     sessionStorage.setItem('is_msal_login_attempt', 'true');
-    localStorage.setItem('is_msal_login_attempt', 'true');
     if (customEmail) {
       sessionStorage.setItem('pending_msal_email', customEmail);
-      localStorage.setItem('pending_msal_email', customEmail);
     }
+    // Limpiar residuos viejos que se hayan guardado en localStorage de versiones anteriores
+    try {
+      localStorage.removeItem('pending_msal_role');
+      localStorage.removeItem('pending_msal_email');
+      localStorage.removeItem('is_msal_login_attempt');
+    } catch (e) { /* ignora */ }
   }
 
   try {
