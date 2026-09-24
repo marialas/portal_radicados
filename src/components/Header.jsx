@@ -36,7 +36,7 @@ export const Header = ({
             <div className="hidden md:flex items-center space-x-2 bg-slate-800/90 border border-slate-700/90 px-3 py-1.5 rounded-xl text-xs">
               <span className={`w-2 h-2 rounded-full ${user.role === 'interventor' ? 'bg-[#D9CF43]' : 'bg-amber-400'}`} />
               <div className="flex flex-col">
-                <span className="text-[10px] text-gray-400 font-bold leading-none">
+                <span className="text-[10px] text-gray-300 font-bold leading-none">
                   {user.role === 'interventor' ? 'Responsable de Revisión' : 'Contratista'}
                 </span>
                 {user.role === 'interventor' && (
@@ -91,7 +91,7 @@ export const Header = ({
                       <h2 className="text-base font-black text-white tracking-wide">
                         Opciones de Cuenta
                       </h2>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-300">
                         Sesión y perfil del usuario
                       </p>
                     </div>
@@ -100,7 +100,7 @@ export const Header = ({
                   <button
                     type="button"
                     onClick={() => setIsM365DrawerOpen(false)}
-                    className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-slate-800 transition-colors"
+                    className="p-2 rounded-xl text-gray-300 hover:text-white hover:bg-slate-800 transition-colors"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -108,7 +108,7 @@ export const Header = ({
 
                 <div className="space-y-6">
                   <div className="bg-slate-800/90 border border-slate-700 rounded-2xl p-4 space-y-3">
-                    <span className="text-xs font-black uppercase tracking-wider text-gray-400 block border-b border-slate-700 pb-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-gray-300 block border-b border-slate-700 pb-2">
                       Usuario Activo en el Portal
                     </span>
 
@@ -151,15 +151,15 @@ export const Header = ({
                       <ShieldCheck className="w-4 h-4" />
                       <span>Cumplimiento RETILAP & RETIE</span>
                     </div>
-                    <p className="text-gray-400 leading-relaxed">
-                      Los 21 documentos del expediente se clasifican e indexan automáticamente en el repositorio documental cuando el Responsable de Revisión aprueba el radicado.
+                    <p className="text-gray-300 leading-relaxed">
+                      Los 25 documentos del expediente se clasifican e indexan automáticamente en el repositorio documental cuando el Responsable de Revisión aprueba el radicado.
                     </p>
                   </div>
                 </div>
               </div>
 
               <div className="border-t border-slate-700 pt-4 text-center">
-                <p className="text-[11px] text-gray-400">
+                <p className="text-[11px] text-gray-300">
                   INTECOAL SAS · Versión 2.5
                 </p>
               </div>

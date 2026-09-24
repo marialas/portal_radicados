@@ -31,6 +31,7 @@ export const InformeRecibidoConformidad = ({
   filing, 
   onBack, 
   onEditEvaluation,
+  onFormatoC,
   onUpdateFiling,
   currentUser,
   userRole
@@ -114,9 +115,9 @@ export const InformeRecibidoConformidad = ({
   const pendienteCount = filing.archivos.filter(a => a.status === 'PENDIENTE').length;
   const noCumpleCount = filing.archivos.filter(a => a.status === 'NO CUMPLE').length;
   const naCount = filing.archivos.filter(a => a.status === 'N/A').length;
-  const aplicablesCount = 21 - naCount;
+  const aplicablesCount = DOCUMENT_CATALOG.length - naCount;
 
-  const isApproved = (cumpleCount + naCount) === 21 && noCumpleCount === 0;
+  const isApproved = (cumpleCount + naCount) === DOCUMENT_CATALOG.length && noCumpleCount === 0;
 
   const categories = [
     {
@@ -150,6 +151,14 @@ export const InformeRecibidoConformidad = ({
       subtitle: 'Dictamen de inspección de tercera parte, mediciones luxométricas y permisos',
       retilapRef: 'Capítulo 6 - Sección 600 (Inspección, Pruebas y Certificación Final)',
       docs: DOCUMENT_CATALOG.filter(d => d.category === 'dictamenes')
+    },
+    {
+      id: 'otros',
+      code: 'E',
+      title: 'E. OTROS DOCUMENTOS',
+      subtitle: 'CAUE, cantidades, certificado de vía pública y circuitos exclusivos de AP',
+      retilapRef: 'Documentos complementarios del proyecto',
+      docs: DOCUMENT_CATALOG.filter(d => d.category === 'otros')
     }
   ];
 
@@ -282,6 +291,17 @@ export const InformeRecibidoConformidad = ({
               <span>Modificar Evaluación</span>
             </button>
           )}
+
+          {isRol1Revisor && onFormatoC && filing.estado === 'Aprobado' && (
+            <button
+              onClick={() => onFormatoC(filing)}
+              className="flex items-center space-x-1.5 bg-purple-100 hover:bg-purple-200 text-purple-950 font-extrabold text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl border border-purple-300 transition-all cursor-pointer"
+              title="Ver Formato 4.3.7.C del Radicado"
+            >
+              <FileText className="w-4 h-4 text-purple-800" />
+              <span>Formato C</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -352,66 +372,6 @@ export const InformeRecibidoConformidad = ({
           </div>
         </div>
 
-        {/* SECTION 1: DATOS GENERALES Y CONTRACTUALES */}
-        <div className="space-y-3 page-break-avoid">
-          <div className="flex items-center space-x-2 border-b-2 border-slate-900 pb-1.5">
-            <Building2 className="w-4 h-4 text-slate-900" />
-            <h2 className="text-xs font-black uppercase tracking-wider text-slate-900">
-              DATOS GENERALES Y CONTRACTUALES DEL EXPEDIENTE            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-            <div className="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5 print-border-clean">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
-                Denominación Oficial del Proyecto de Alumbrado Público
-              </span>
-              <div className="text-sm font-black text-slate-900 leading-snug">
-                {filing.metadata.nombreProyecto}
-              </div>
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <span className="bg-slate-100 text-slate-900 text-[10px] font-bold px-2.5 py-0.5 rounded border border-slate-300">
-                  Ubicación: {filing.metadata.municipio} (Meta)
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1 print-border-clean">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
-                Empresa Contratista Ejecutora
-              </span>
-              <div className="text-xs font-black text-slate-900">{filing.metadata.contratista}</div>
-              {filing.metadata.nitContratista && (
-                <div className="text-[11px] font-bold text-slate-700">NIT: {filing.metadata.nitContratista}</div>
-              )}
-              <div className="text-[11px] text-slate-600">Director de Obra: <strong className="text-slate-900">{filing.metadata.responsable}</strong></div>
-            </div>
-
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1 print-border-clean">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
-                Entidad Interventora Especializada
-              </span>
-              <div className="text-xs font-black text-slate-900">INTECOAL S.A.S.</div>
-              <div className="text-[11px] text-slate-600">Responsable de Revisión: <strong className="text-slate-900">{filing.metadata.responsableRevision || 'Responsable de Revisión'}</strong></div>
-            </div>
-
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1 print-border-clean">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
-                Trazabilidad Documental
-              </span>
-              <div className="text-xs font-black text-slate-900">Repositorio Documental (SharePoint)</div>
-              <div className="text-[11px] text-slate-600 truncate">Ruta: <span className="font-mono text-[10px]">/Documentos_Radicacion/{filing.numeroRadicado}/</span></div>
-            </div>
-
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1 print-border-clean">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
-                Fechas del Trámite
-              </span>
-              <div className="text-[11px] text-slate-600">Radicación: <strong className="text-slate-900">{formattedDate}</strong></div>
-              <div className="text-[11px] text-slate-600">Dictamen: <strong className="text-slate-900">{new Date().toLocaleDateString('es-CO')}</strong></div>
-            </div>
-          </div>
-        </div>
-
         {/* SECTION 3: RESUMEN DE EVALUACIÓN Y SCORE */}
         <div className="space-y-3 page-break-avoid">
           <div className="flex items-center space-x-2 border-b-2 border-slate-900 pb-1.5">
@@ -454,7 +414,7 @@ export const InformeRecibidoConformidad = ({
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-center">
               <div className="bg-white border border-slate-200 rounded-lg p-2">
-                <span className="text-lg font-black block text-slate-900">21</span>
+                <span className="text-lg font-black block text-slate-900">{DOCUMENT_CATALOG.length}</span>
                 <span className="text-[9px] font-bold text-slate-500 uppercase">REQUISITOS TOTALES</span>
               </div>
 
@@ -482,12 +442,12 @@ export const InformeRecibidoConformidad = ({
           </div>
         </div>
 
-        {/* SECTION 4: AUDITORÍA DOCUMENTAL Y CHECKLIST EXHAUSTIVO (21 REQUISITOS NORMATIVOS) */}
+        {/* SECTION 4: AUDITORÍA DOCUMENTAL Y CHECKLIST EXHAUSTIVO (22 REQUISITOS NORMATIVOS) */}
         <div className="space-y-4">
           <div className="flex items-center space-x-2 border-b-2 border-slate-900 pb-1.5">
             <FileCheck2 className="w-4 h-4 text-slate-900" />
             <h2 className="text-xs font-black uppercase tracking-wider text-slate-900">
-              AUDITORÍA DOCUMENTAL Y CHECKLIST EXHAUSTIVO (21 REQUISITOS NORMATIVOS)
+              AUDITORÍA DOCUMENTAL Y CHECKLIST EXHAUSTIVO ({DOCUMENT_CATALOG.length} REQUISITOS NORMATIVOS)
             </h2>
           </div>
 
@@ -634,7 +594,7 @@ export const InformeRecibidoConformidad = ({
               {filing.observacionesGenerales || 'En calidad de Interventoría Técnica Especializada INTECOAL S.A.S., previa revisión minuciosa del expediente digital radicado, se emite el presente dictamen técnico de conformidad.'}
             </p>
             <p className="text-[11px] text-slate-600">
-              El contratista emisor declara bajo la gravedad del juramento que la información técnica y los planos as-built aportados corresponden a la obra físicamente instalada. Toda modificación futura o ampliación deberá contar con la previa autorización de la Interventoría y ALBORADA E.I.C.E.
+              El contratista emisor declara bajo la gravedad del juramento que la información técnica y los planos as-built aportados corresponden a la obra físicamente instalada. Toda modificación futura o ampliación deberá contar con la previa autorización de la Interventoría.
             </p>
           </div>
         </div>

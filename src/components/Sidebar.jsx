@@ -1,10 +1,13 @@
 import React from 'react';
-import { 
-  PlusCircle, 
-  ListFilter, 
-  Settings, 
-  ShieldCheck, 
-  ChevronRight
+import {
+  PlusCircle,
+  ListFilter,
+  Settings,
+  ShieldCheck,
+  ChevronRight,
+  FileText,
+  ReceiptText,
+  CalendarDays
 } from 'lucide-react';
 
 export const Sidebar = ({
@@ -29,6 +32,30 @@ export const Sidebar = ({
       icon: ListFilter,
       badge: filingCount,
       roles: ['interventor', 'contratista']
+    },
+    {
+      id: 'formato437c',
+      label: 'Formato 4.3.7.C',
+      subtitle: 'Decl. Operación y Mantenimiento',
+      icon: FileText,
+      badge: null,
+      roles: ['interventor']
+    },
+    {
+      id: 'recibo',
+      label: 'Recibo Técnico',
+      subtitle: 'Recibo Técnico de Obra',
+      icon: ReceiptText,
+      badge: null,
+      roles: ['interventor']
+    },
+    {
+      id: 'calendario',
+      label: 'Calendario',
+      subtitle: 'Plazos de Revisión',
+      icon: CalendarDays,
+      badge: null,
+      roles: ['interventor']
     }
   ];
 
@@ -38,7 +65,7 @@ export const Sidebar = ({
     <aside className="w-full md:w-64 lg:w-72 bg-[#1E222A] text-white border-r border-slate-700/80 flex flex-col justify-between shrink-0 md:h-full md:overflow-y-auto print:hidden">
       <div className="p-4 sm:p-5 space-y-6">
         <div className="px-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">
+          <span className="text-[10px] font-black uppercase tracking-widest text-gray-300 block">
             MENÚ DE NAVEGACIÓN
           </span>
           <span className="text-xs font-bold text-[#D9CF43] block mt-0.5">
@@ -76,7 +103,7 @@ export const Sidebar = ({
                       {item.label}
                     </span>
                     <span className={`block text-[10px] truncate mt-0.5 ${
-                      isActive ? 'text-[#1E222A]/80 font-bold' : 'text-gray-400'
+                      isActive ? 'text-[#1E222A]/80 font-bold' : 'text-gray-300'
                     }`}>
                       {item.subtitle}
                     </span>
@@ -94,7 +121,7 @@ export const Sidebar = ({
                     </span>
                   )}
                   <ChevronRight className={`w-4 h-4 transition-transform ${
-                    isActive ? 'text-[#1E222A] translate-x-0.5' : 'text-gray-400 group-hover:text-gray-200'
+                    isActive ? 'text-[#1E222A] translate-x-0.5' : 'text-gray-300 group-hover:text-gray-200'
                   }`} />
                 </div>
               </button>
@@ -114,7 +141,7 @@ export const Sidebar = ({
           </p>
         </div>
 
-        <div className="text-[10px] text-gray-400 text-center font-semibold">
+        <div className="text-[10px] text-gray-300 text-center font-semibold">
           INTECOAL SAS © 2026
         </div>
       </div>

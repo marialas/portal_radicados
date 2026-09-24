@@ -82,62 +82,102 @@ class GraphService:
         drive_id = await self._obtener_drive_id()
         return f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/drives/{drive_id}"
 
-    async def sincronizar_a_sharepoint(self, radicacion):
-        token = await self._obtener_token()
-        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    RAIZ = "Documentos_Radicacion"
 
-        meta = radicacion["metadata"]
-        numero = radicacion["numeroRadicado"]
-        estado = radicacion.get("estado", "Radicado")
+    SUBCARPETAS = [
+        "A_Tecnicos", "B_Certificaciones", "C_Contractuales",
+        "D_Inventario", "E_Otros", "F_Documentos_Adicionales",
+    ]
 
-        estado_map = {
-            "Aprobado": "Aprobado",
-            "Con Observaciones": "Revision",
-            "Radicado": "Pendiente_Firma",
-            "En Revisión": "En_Revision",
-        }
-        estado_sp = estado_map.get(estado, "Pendiente_Firma")
+    # Subcarpeta dentro de E_Otros para el documento #25 CEAP.
+    CEAP_SUBCARPETA = "Documentos para circuitos exclusivos de AP"
 
-        from datetime import datetime, timezone
-        contador = int(datetime.now(timezone.utc).timestamp())
+    # Documentos "otros" (CAUE/CANT/CVP) que viven directamente en E_Otros.
+    OTROS_IDS = {22, 23, 24}
+    OTROS_CODES = {"CAUE", "CANT", "CVP"}
 
-        campos_todos = {
-            "Title": f"{numero} - {estado} - {contador}",
-            "NumeroRadicado": numero,
-            "Municipio": meta.get("municipio", ""),
-            "Operador": meta.get("contratista", ""),
-            "NIT": meta.get("nitContratista", ""),
-            "Responsable": meta.get("responsable", ""),
-            "CorreoResponsable": meta.get("correoResponsable", ""),
-            "TipoEntrega": meta.get("tipoEntrega", ""),
-            "Estado": estado_sp,
-            "DocumentosOk": f"{radicacion.get('documentosOk', 0)}/{radicacion.get('totalDocumentos', 21)}",
-            "PorcentajeConformidad": radicacion.get("porcentajeCumplimiento", 0),
-            "FechaRadicacion": radicacion.get("fechaRadicacion", "")[:10],
-            "RutaOneDrive": f"/Documentos_Radicacion/{numero}/",
-        }
+    def _sanitizar_nombre(self, nombre):
+        if not nombre:
+            return "documento"
+        limpio = "".join(c if c not in '/\\?%*:|" <>' else "_" for c in str(nombre)).strip()
+        while "__" in limpio:
+            limpio = limpio.replace("__", "_")
+        return limpio.strip("_") or "documento"
 
+    def _nombre_ordenado(self, archivo):
+        """Nombre con orden y código: 01_A1_diseno-original.pdf
+
+        Preserva el nombre original aportado por el contratista y le
+        antepone el orden (docId) + código para que en SharePoint quede
+        ordenado y trazable.
+        """
+        original = archivo.get("fileName") or archivo.get("docName") or "documento.pdf"
+        # Si fileName viene sin extensión, conservar el tipo conocido
+        code = archivo.get("docCode") or str(archivo.get("docId", "X"))
         try:
-            cols_existentes = await self._columnas_lista()
-            campos = {k: v for k, v in campos_todos.items() if k in cols_existentes}
-            col_faltantes = [k for k in campos_todos if k not in cols_existentes]
-            if col_faltantes:
-                print(f"[GRAPH] Columnas no encontradas en la lista (se omiten): {col_faltantes}")
-        except Exception as e:
-            print(f"[GRAPH] No se pudieron consultar columnas, se envían todos: {e}")
-            campos = campos_todos
+            orden = int(archivo.get("docId", 0))
+        except Exception:
+            orden = 0
+        base = self._sanitizar_nombre(original)
+        # Evitar duplicar el código si el original ya lo trae al inicio
+        if not base.upper().startswith(str(code).upper()):
+            base = f"{code}_{base}"
+        return f"{orden:02d}_{base}"
 
-        url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items"
-        async with httpx.AsyncClient() as cliente:
-            resp = await cliente.post(url, headers=headers, json={"fields": campos})
-            print(f"[GRAPH] POST item nuevo ({numero} / {estado}): status={resp.status_code} body={resp.text[:300]}")
-            resp.raise_for_status()
-            print(f"[GRAPH] SharePoint item nuevo creado OK")
+    def _es_ceap(self, archivo):
+        try:
+            doc_id = int(archivo.get("docId", 0))
+        except (TypeError, ValueError):
+            doc_id = 0
+        code = str(archivo.get("docCode", "")).upper()
+        return doc_id == 25 or code == "CEAP"
 
-        await self._crear_carpeta_proyecto(numero)
-        await self._subir_archivos(radicacion, numero)
+    def _carpeta_destino(self, archivo):
+        # Mapeo por documento (no por folderPath guardado): así los
+        # radicados viejos —con E_SST_Ambiental, Documentos_Adicionales o
+        # CAUE/CANT/CEAP en A_Tecnicos— suben a la estructura nueva.
+        try:
+            doc_id = int(archivo.get("docId", 0))
+        except (TypeError, ValueError):
+            doc_id = 0
+        code = str(archivo.get("docCode", "")).upper()
+        if self._es_ceap(archivo) or doc_id in self.OTROS_IDS or code in self.OTROS_CODES:
+            return "E_Otros"
+        if doc_id == 21 or code == "D21":
+            # Recibo de vías: categoría D (dictámenes), junto a D19/D20
+            return "D_Inventario"
+        if archivo.get("esManual"):
+            return "F_Documentos_Adicionales"
+        folder_path = archivo.get("folderPath") or ""
+        if "Documentos_Adicionales" in folder_path:
+            # Cubre la ruta vieja y la nueva F_Documentos_Adicionales
+            return "F_Documentos_Adicionales"
+        partes = [p for p in folder_path.split("/") if p]
+        if partes:
+            candidato = partes[-1]
+            if candidato in self.SUBCARPETAS:
+                return candidato
+            if candidato == "E_SST_Ambiental":
+                return "E_Otros"
+        # Fallback por código: A*->A_Tecnicos ... (la mayoría ya viene
+        # bien en folderPath, esto solo evita que algo caiga a la raíz)
+        if code.startswith("A"):
+            return "A_Tecnicos"
+        if code.startswith("B"):
+            return "B_Certificaciones"
+        if code.startswith("C"):
+            return "C_Contractuales"
+        if code.startswith("D"):
+            return "D_Inventario"
+        if code.startswith("E"):
+            return "E_Otros"
+        return "F_Documentos_Adicionales"
 
-        return {"ok": True}
+    async def sincronizar_a_sharepoint(self, radicacion):
+        # Compatibilidad: antes existían dos métodos que creaban filas
+        # duplicadas (uno subía archivos y otro no). Ahora hay un único
+        # flujo que crea la fila + carpetas + archivos.
+        return await self.guardar_radicacion_en_sharepoint(radicacion)
 
     async def _buscar_por_titulo(self, titulo):
         token = await self._obtener_token()
@@ -159,75 +199,218 @@ class GraphService:
                     return items[0]
         return None
 
+    async def _asegurar_carpeta(self, cliente, headers, base, parent_rel, nombre):
+        """Crea parent_rel/nombre si no existe. parent_rel='' = raíz."""
+        rel = f"{parent_rel}/{nombre}" if parent_rel else nombre
+        url_get = f"{base}/root:/{rel}"
+        try:
+            resp = await cliente.get(url_get, headers=headers)
+            if resp.status_code == 200:
+                return True
+        except Exception:
+            pass
+        if parent_rel:
+            url_create = f"{base}/root:/{parent_rel}:/children"
+        else:
+            url_create = f"{base}/root/children"
+        try:
+            resp = await cliente.post(
+                url_create,
+                headers=headers,
+                json={"name": nombre, "folder": {}, "@microsoft.graph.conflictBehavior": "fail"},
+            )
+            if resp.status_code in (200, 201):
+                print(f"[GRAPH] Carpeta creada: {rel}")
+                return True
+            if resp.status_code == 409:
+                return True
+            print(f"[GRAPH] Error creando carpeta {rel}: {resp.status_code} {resp.text[:200]}")
+        except Exception as e:
+            print(f"[GRAPH] Excepcion creando carpeta {rel}: {e}")
+        return False
+
     async def _crear_carpeta_proyecto(self, codigo):
         token = await self._obtener_token()
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         base = await self._drive_url()
 
-        subcarpetas = [
-            "A_Tecnicos", "B_Certificaciones", "C_Contractuales",
-            "D_Inventario", "E_SST_Ambiental", "Documentos_Adicionales",
-        ]
-
         async with httpx.AsyncClient(timeout=30.0) as cliente:
-            for sub in subcarpetas:
-                folder_path = f"{codigo}/{sub}"
-                url = f"{base}/root:/{folder_path}"
-                try:
-                    resp = await cliente.get(url, headers=headers)
-                    if resp.status_code == 200:
-                        print(f"[GRAPH] Carpeta ya existe: {folder_path}")
-                        continue
-                except Exception:
-                    pass
+            # Cadena completa: Documentos_Radicacion / {codigo} / {sub}
+            # Antes solo se intentaba crear {codigo}/{sub} sin crear el
+            # padre, por lo que Graph respondía 404 y nunca quedaba la
+            # estructura de categorías.
+            await self._asegurar_carpeta(cliente, headers, base, "", self.RAIZ)
+            await self._asegurar_carpeta(cliente, headers, base, self.RAIZ, codigo)
+            padre = f"{self.RAIZ}/{codigo}"
+            for sub in self.SUBCARPETAS:
+                await self._asegurar_carpeta(cliente, headers, base, padre, sub)
+            # Subcarpeta anidada del #25 CEAP dentro de E_Otros
+            await self._asegurar_carpeta(
+                cliente, headers, base,
+                f"{padre}/E_Otros", self.CEAP_SUBCARPETA,
+            )
 
-                url_create = f"{base}/root:/{codigo}:/children"
-                try:
-                    resp = await cliente.post(
-                        url_create,
-                        headers=headers,
-                        json={
-                            "name": sub,
-                            "folder": {},
-                            "@microsoft.graph.conflictBehavior": "rename",
-                        },
+    async def _subir_contenido(self, cliente, headers_auth, base, rel_path, contenido):
+        """Subida simple (<4MB) o por sesión (>4MB, archivos de hasta 50MB)."""
+        LIMITE_SIMPLE = 4 * 1024 * 1024
+        if len(contenido) <= LIMITE_SIMPLE:
+            url = f"{base}/root:/{rel_path}:/content"
+            resp = await cliente.put(url, headers=headers_auth, content=contenido)
+            if resp.status_code in (200, 201):
+                print(f"[GRAPH] Archivo subido a SharePoint: {rel_path}")
+                return True
+            print(f"[GRAPH] Error subiendo {rel_path}: {resp.status_code} {resp.text[:200]}")
+            return False
+        # Sesión de subida por fragmentos de 5MB
+        url_sesion = f"{base}/root:/{rel_path}:/createUploadSession"
+        resp = await cliente.post(url_sesion, headers={**headers_auth, "Content-Type": "application/json"}, json={})
+        if resp.status_code != 200:
+            print(f"[GRAPH] Error creando sesión de subida {rel_path}: {resp.status_code} {resp.text[:200]}")
+            return False
+        upload_url = resp.json().get("uploadUrl", "")
+        if not upload_url:
+            print(f"[GRAPH] Sesión sin uploadUrl para {rel_path}")
+            return False
+        total = len(contenido)
+        parte = 5 * 1024 * 1024
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as up:
+                for inicio in range(0, total, parte):
+                    fin = min(inicio + parte, total) - 1
+                    trozo = contenido[inicio:fin + 1]
+                    r = await up.put(
+                        upload_url,
+                        headers={"Content-Length": str(len(trozo)), "Content-Range": f"bytes {inicio}-{fin}/{total}"},
+                        content=trozo,
                     )
-                    if resp.status_code in (200, 201):
-                        print(f"[GRAPH] Carpeta creada: {folder_path}")
-                    else:
-                        print(f"[GRAPH] Error creando carpeta {sub}: {resp.status_code} {resp.text[:200]}")
-                except Exception as e:
-                    print(f"[GRAPH] Excepcion creando carpeta {sub}: {e}")
+                    if r.status_code not in (200, 201, 202):
+                        print(f"[GRAPH] Error fragmento {inicio}-{fin} {rel_path}: {r.status_code} {r.text[:200]}")
+                        return False
+            print(f"[GRAPH] Archivo grande subido a SharePoint: {rel_path} ({total} bytes)")
+            return True
+        except Exception as e:
+            print(f"[GRAPH] Excepcion subiendo archivo grande {rel_path}: {e}")
+            return False
 
     async def _subir_archivos(self, radicacion, codigo):
         token = await self._obtener_token()
         headers_auth = {"Authorization": f"Bearer {token}"}
         base = await self._drive_url()
 
-        archivos = radicacion.get("archivos", [])
+        subidos = 0
+        omitidos = 0
         async with httpx.AsyncClient(timeout=120.0) as cliente:
-            for a in archivos:
-                if a.get("fileName") and a.get("status") == "CUMPLE":
-                    local_path = a.get("localPath", "")
-                    if not local_path:
-                        continue
-                    file_path = Path(local_path)
-                    if not file_path.exists():
-                        print(f"[GRAPH] Archivo local no encontrado: {local_path}")
-                        continue
-
+            # 1) Documentos del expediente (con nombre ordenado + carpeta
+            # de su categoría). Se sube todo lo que tenga archivo local,
+            # sin importar si el revisor lo marcó CUMPLE o no: lo que
+            # importa es custodiar lo radicado.
+            for a in radicacion.get("archivos", []):
+                local_path = (a.get("localPath") or "").strip()
+                file_name = (a.get("fileName") or "").strip()
+                if a.get("status") == "N/A":
+                    continue
+                if not local_path and not file_name:
+                    omitidos += 1
+                    continue
+                if not local_path:
+                    print(f"[GRAPH] Sin localPath (solo metadato), se omite: {a.get('docCode')}")
+                    omitidos += 1
+                    continue
+                file_path = Path(local_path)
+                if not file_path.exists():
+                    print(f"[GRAPH] Archivo local no encontrado: {local_path}")
+                    omitidos += 1
+                    continue
+                try:
                     contenido = file_path.read_bytes()
-                    subcarpeta = a.get("folderPath", "").split("/")[-2] if a.get("folderPath") else "A_Tecnicos"
-                    path = f"{codigo}/{subcarpeta}/{a['fileName']}"
-                    url = f"{base}/root:/{path}:/content"
+                except Exception as e:
+                    print(f"[GRAPH] No se pudo leer {local_path}: {e}")
+                    omitidos += 1
+                    continue
+                subcarpeta = self._carpeta_destino(a)
+                destino = self._nombre_ordenado(a)
+                if self._es_ceap(a):
+                    # #25 CEAP -> E_Otros/Documentos para circuitos exclusivos de AP/
+                    rel = f"{self.RAIZ}/{codigo}/{subcarpeta}/{self.CEAP_SUBCARPETA}/{destino}"
+                else:
+                    rel = f"{self.RAIZ}/{codigo}/{subcarpeta}/{destino}"
+                try:
+                    ok = await self._subir_contenido(cliente, headers_auth, base, rel, contenido)
+                    subidos += 1 if ok else 0
+                    omitidos += 0 if ok else 1
+                except Exception as e:
+                    print(f"[GRAPH] Excepcion subiendo {rel}: {e}")
+                    omitidos += 1
+
+                # Anexos / sub-archivos (CEAP y extras del contratista)
+                for sf in a.get("subFiles", []) or []:
+                    sf_local = (sf.get("localPath") or "").strip()
+                    if not sf_local:
+                        continue
+                    sf_path = Path(sf_local)
+                    if not sf_path.exists():
+                        print(f"[GRAPH] Sub-archivo local no encontrado: {sf_local}")
+                        continue
                     try:
-                        resp = await cliente.put(url, headers=headers_auth, content=contenido)
-                        if resp.status_code in (200, 201):
-                            print(f"[GRAPH] Archivo subido a SharePoint: {path}")
-                        else:
-                            print(f"[GRAPH] Error subiendo {path}: {resp.status_code} {resp.text[:200]}")
+                        sf_cont = sf_path.read_bytes()
                     except Exception as e:
-                        print(f"[GRAPH] Excepcion subiendo {path}: {e}")
+                        print(f"[GRAPH] No se pudo leer sub-archivo {sf_local}: {e}")
+                        continue
+                    sf_nombre = self._sanitizar_nombre(
+                        sf.get("subName") or sf.get("fileName") or "anexo"
+                    )
+                    sf_code = sf.get("subCode") or "ANEXO"
+                    sf_base = f"{self._sanitizar_nombre(a.get('docCode', 'DOC'))}_{self._sanitizar_nombre(sf_code)}_{sf_nombre}"
+                    if self._es_ceap(a):
+                        rel_sf = f"{self.RAIZ}/{codigo}/{subcarpeta}/{self.CEAP_SUBCARPETA}/{sf_base}"
+                    else:
+                        rel_sf = f"{self.RAIZ}/{codigo}/{subcarpeta}/{sf_base}"
+                    try:
+                        if await self._subir_contenido(cliente, headers_auth, base, rel_sf, sf_cont):
+                            subidos += 1
+                    except Exception as e:
+                        print(f"[GRAPH] Excepcion subiendo {rel_sf}: {e}")
+
+            # NOTA: los formatos (4.3.7 C) NO se incluyen en la subida por
+            # APROBACIÓN: solo se suben con su botón Subir
+            # (subir_formato_a_sharepoint), sueltos en la raíz del radicado.
+
+        print(f"[GRAPH] Subida {codigo}: {subidos} archivos OK, {omitidos} omitidos")
+        return {"subidos": subidos, "omitidos": omitidos}
+
+    def _nombre_seguro_raiz(self, nombre):
+        # Para archivos sueltos en la raíz del radicado (Formato 4.3.7 C):
+        # solo se quitan caracteres ilegales en SharePoint, se conservan
+        # espacios, puntos y paréntesis del nombre original.
+        seguro = "".join(c for c in str(nombre or "") if c not in '/\\?%*:|"<>').strip() or "formato.pdf"
+        if not seguro.lower().endswith(".pdf"):
+            seguro += ".pdf"
+        return seguro
+
+    async def subir_formato_a_sharepoint(self, numero, formato):
+        """Sube UN formato (4.3.7 C) suelto en la raíz de la carpeta del
+        radicado. Solo se llama desde el botón Subir del formato."""
+        token = await self._obtener_token()
+        headers_auth = {"Authorization": f"Bearer {token}"}
+        headers_json = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        base = await self._drive_url()
+
+        local = (formato.get("localPath") or "").strip()
+        if not local:
+            raise Exception("El formato no tiene archivo local para subir")
+        ruta = Path(local)
+        if not ruta.exists():
+            raise Exception(f"Archivo local del formato no encontrado: {local}")
+        contenido = ruta.read_bytes()
+
+        async with httpx.AsyncClient(timeout=120.0) as cliente:
+            await self._asegurar_carpeta(cliente, headers_json, base, "", self.RAIZ)
+            await self._asegurar_carpeta(cliente, headers_json, base, self.RAIZ, numero)
+            rel = f"{self.RAIZ}/{numero}/{self._nombre_seguro_raiz(formato.get('nombre') or formato.get('fileName'))}"
+            ok = await self._subir_contenido(cliente, headers_auth, base, rel, contenido)
+            if not ok:
+                raise Exception(f"No se pudo subir el formato a {rel}")
+        return {"ok": True, "ruta": rel}
 
     async def _enviar_correo(self, destino, asunto, cuerpo):
         if not destino:
@@ -399,6 +582,41 @@ class GraphService:
         """
         await self._enviar_correo(destino, asunto, cuerpo)
 
+    async def enviar_correo_vencimiento(self, radicacion, dias_restantes, fecha_limite):
+        """Avisa al revisor que un radicado está por vencer (8 / 4 días hábiles)."""
+        destino = self._revisor_email()
+        if not destino:
+            print("[GRAPH] Sin destinatario revisor (M365_NOTIFICATION_RECIPIENT), no se envía aviso de vencimiento")
+            return False
+        meta = radicacion.get("metadata", {})
+        numero = radicacion.get("numeroRadicado", "?")
+        if dias_restantes is not None and dias_restantes < 0:
+            asunto = f"URGENTE: Radicado vencido sin evaluar — {numero}"
+            estado_txt = f"venció hace {-dias_restantes} día(s) hábiles (límite: {fecha_limite})"
+        else:
+            asunto = f"Radicado por vencer ({dias_restantes} días hábiles) — {numero}"
+            estado_txt = f"faltan {dias_restantes} días hábiles (límite: {fecha_limite})"
+        cuerpo = f"""
+        <html><body style="font-family:Arial,sans-serif;color:#1E222A;">
+        <div style="background:#7C2D12;color:#fff;padding:16px 24px;border-radius:8px 8px 0 0;">
+            <h2 style="margin:0;font-size:16px;">INTECOAL SAS — Alerta de vencimiento de revisión</h2>
+        </div>
+        <div style="padding:20px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
+            <p>El siguiente radicado está próximo a vencer su plazo de 15 días hábiles de revisión: <strong>{estado_txt}</strong>.</p>
+            <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0;">
+                <tr><td style="padding:6px 0;font-weight:bold;width:150px;">Radicado:</td><td><strong>{numero}</strong></td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{meta.get('nombreProyecto', '')}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Municipio:</td><td>{meta.get('municipio', '')}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Contratista:</td><td>{meta.get('contratista', '')}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Estado:</td><td>{radicacion.get('estado', '')}</td></tr>
+            </table>
+            <p style="font-size:12px;color:#666;">Evalue el expediente y, si aplica, suba el Formato 4.3.7 C y el Recibo Técnico antes del vencimiento.</p>
+            <p style="font-size:11px;color:#999;margin-top:20px;">INTECOAL SAS — Interventoría Técnica (aviso automático)</p>
+        </div>
+        </body></html>
+        """
+        return await self._enviar_correo(destino, asunto, cuerpo)
+
     def obtener_config(self):
         return {
             "azureClientId": self.client_id,
@@ -533,7 +751,7 @@ class GraphService:
                     estado_map = {"Aprobado": "Aprobado", "Revision": "Con Observaciones", "Pendiente_Firma": "Radicado", "En_Revision": "En Revisión"}
                     estado = estado_map.get(estado_sp, "Radicado")
 
-                    docs_str = fields.get("DocumentosOk", "0/21")
+                    docs_str = fields.get("DocumentosOk", "0/22")
                     try:
                         docs_ok = int(docs_str.split("/")[0])
                     except Exception:
@@ -559,7 +777,7 @@ class GraphService:
                         },
                         "estado": estado,
                         "documentosOk": docs_ok,
-                        "totalDocumentos": 21,
+                        "totalDocumentos": 22,
                         "fechaRadicacion": fields.get("FechaRadicacion", ""),
                         "fechaActualizacion": fields.get("FechaRadicacion", ""),
                         "porcentajeCumplimiento": pct,
@@ -606,7 +824,7 @@ class GraphService:
         }
         estado_sp = estado_map.get(estado, "Pendiente_Firma")
 
-        docs_str = f"{radicacion.get('documentosOk', 0)}/{radicacion.get('totalDocumentos', 21)}"
+        docs_str = f"{radicacion.get('documentosOk', 0)}/{radicacion.get('totalDocumentos', 22)}"
 
         import json
 
@@ -662,6 +880,27 @@ class GraphService:
         async with httpx.AsyncClient(timeout=30.0) as cliente:
             resp = await cliente.post(url, headers=headers, json={"fields": campos})
             print(f"[GRAPH] Item {numero} ({estado}) creado en SharePoint: {resp.status_code}")
+            if resp.status_code not in (200, 201):
+                raise Exception(
+                    f"SharePoint rechazó la fila de la lista ({resp.status_code}): {resp.text[:300]}"
+                )
+
+        # Flujo único: fila + estructura de carpetas por categorías +
+        # archivos con nombre ordenado. Antes este método SOLO creaba la
+        # fila y nunca subía carpetas/archivos.
+        resumen = {"fila": f"{numero} ({estado_sp})", "carpetas": "ok", "archivos": {}}
+        try:
+            await self._crear_carpeta_proyecto(numero)
+        except Exception as e:
+            resumen["carpetas"] = f"error: {e}"
+            print(f"[GRAPH] Error creando carpetas de {numero}: {e}")
+        try:
+            resumen["archivos"] = await self._subir_archivos(radicacion, numero)
+        except Exception as e:
+            resumen["archivos"] = {"error": str(e)}
+            print(f"[GRAPH] Error subiendo archivos de {numero}: {e}")
+
+        return {"ok": True, "resumen": resumen}
 
     async def eliminar_radicacion_de_sharepoint(self, numero):
         token = await self._obtener_token()

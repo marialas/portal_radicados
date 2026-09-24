@@ -1,11 +1,92 @@
 import uuid
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, date
 from typing import Optional
 
 
+# ---------------------------------------------------------------------------
+# Días hábiles para el calendario de revisión (lunes a viernes).
+# El revisor tiene 15 días hábiles desde la radicación para evaluar.
+# ---------------------------------------------------------------------------
+
+def _solo_fecha(valor):
+    """Acepta ISO str, date o datetime y devuelve date (o None)."""
+    if not valor:
+        return None
+    if isinstance(valor, datetime):
+        return valor.date()
+    if isinstance(valor, date):
+        return valor
+    if isinstance(valor, str):
+        try:
+            return datetime.fromisoformat(valor.replace("Z", "+00:00")).date()
+        except ValueError:
+            pass
+        try:
+            return datetime.strptime(valor[:10], "%Y-%m-%d").date()
+        except ValueError:
+            return None
+    return None
+
+
+def es_dia_habil(fecha):
+    return fecha.weekday() < 5
+
+
+def sumar_dias_habiles(fecha, n):
+    d = fecha
+    c = 0
+    while c < n:
+        d += timedelta(days=1)
+        if es_dia_habil(d):
+            c += 1
+    return d
+
+
+def retroceder_dias_habiles(fecha, n):
+    d = fecha
+    c = 0
+    while c < n:
+        d -= timedelta(days=1)
+        if es_dia_habil(d):
+            c += 1
+    return d
+
+
+def dias_habiles_entre(desde, hasta):
+    """Días hábiles en (desde, hasta]: cuántos faltan desde `desde` hasta `hasta`."""
+    c = 0
+    d = desde
+    while d < hasta:
+        d += timedelta(days=1)
+        if es_dia_habil(d):
+            c += 1
+    return c
+
+
+def fecha_limite_revision(fecha_radicacion_iso):
+    f = _solo_fecha(fecha_radicacion_iso)
+    if not f:
+        return None
+    return sumar_dias_habiles(f, 15)
+
+
+def dias_habiles_restantes(fecha_limite, hoy=None):
+    hoy = hoy or datetime.now().date()
+    if not fecha_limite:
+        return None
+    if hoy <= fecha_limite:
+        return dias_habiles_entre(hoy, fecha_limite)
+    return -dias_habiles_entre(fecha_limite, hoy)
+
+
+def fecha_en_que_faltan(fecha_limite, n):
+    """Fecha en la que faltan exactamente n días hábiles para el límite."""
+    return retroceder_dias_habiles(fecha_limite, n)
+
+
 CATALOGO_21_DOCUMENTOS = [
-    # 1. Documentos de Diseño
+    # 1. Documentos de Diseño (A)
     {
         "id": 1, "code": "A1", "name": "Diseño fotométrico aprobado",
         "category": "diseno", "categoryName": "Documentos de Diseño",
@@ -46,9 +127,9 @@ CATALOGO_21_DOCUMENTOS = [
         "id": 7, "code": "A7", "name": "Declaración de cumplimiento RETILAP del diseñador",
         "category": "diseno", "categoryName": "Documentos de Diseño",
         "required": True, "folderGroup": "B_Certificaciones",
-        "description": "Formato oficial de declaración firmada por el diseñador eléctrico."
+        "description": "Conforme al formato 4.3.7.A del RETILAP. Formato oficial de declaración firmada por el diseñador eléctrico."
     },
-    # 2. Luminarias y Materiales
+    # 2. Luminarias y Materiales (B)
     {
         "id": 8, "code": "B8", "name": "Carta de garantía de luminarias",
         "category": "luminarias", "categoryName": "Luminarias y Materiales",
@@ -83,15 +164,15 @@ CATALOGO_21_DOCUMENTOS = [
         "id": 13, "code": "B13", "name": "Certificado de producto — Conectores",
         "category": "luminarias", "categoryName": "Luminarias y Materiales",
         "required": True, "folderGroup": "B_Certificaciones",
-        "description": "Certificados de conectores estancos y ponchados."
+        "description": "Certificados de conectores."
     },
     {
         "id": 14, "code": "B14", "name": "Certificado de producto — Postes",
         "category": "luminarias", "categoryName": "Luminarias y Materiales",
-        "required": False, "folderGroup": "B_Certificaciones",
+        "required": True, "folderGroup": "B_Certificaciones",
         "description": "Certificación de postes de concreto o metálicos (si aplica en el alcance)."
     },
-    # 3. Documentos del Constructor
+    # 3. Documentos del Constructor (C)
     {
         "id": 15, "code": "C15", "name": "Cédula de ciudadanía del constructor",
         "category": "constructor", "categoryName": "Documentos del Constructor",
@@ -114,26 +195,60 @@ CATALOGO_21_DOCUMENTOS = [
         "id": 18, "code": "C18", "name": "Declaración de cumplimiento RETIE y RETILAP del constructor",
         "category": "constructor", "categoryName": "Documentos del Constructor",
         "required": True, "folderGroup": "B_Certificaciones",
-        "description": "Formato de declaración juramentada de la correcta ejecución de la obra."
+        "description": "Conforme al formato 4.3.7.B del RETILAP y formato 4.3.6.2 del RETIE. Formato de declaración juramentada de la correcta ejecución de la obra."
     },
-    # 4. Dictámenes y Permisos
+    # 4. Dictámenes y Permisos (D)
     {
-        "id": 19, "code": "D19", "name": "Dictamen RETIE (si aplica)",
+        "id": 19, "code": "D19", "name": "Dictamen RETIE",
         "category": "dictamenes", "categoryName": "Dictámenes y Permisos",
-        "required": False, "folderGroup": "D_Inventario",
-        "description": "Dictamen de inspección de organismo acreditado ONAC (si el tipo de obra lo exige)."
+        "required": False,
+        "folderGroup": "D_Inventario",
+        "description": "Dictamen de inspección de organismo acreditado ONAC: para proyectos exclusivos de AP."
     },
     {
-        "id": 20, "code": "D20", "name": "Dictamen RETILAP (si aplica)",
+        "id": 20, "code": "D20", "name": "Dictamen RETILAP",
         "category": "dictamenes", "categoryName": "Dictámenes y Permisos",
-        "required": False, "folderGroup": "D_Inventario",
+        "required": True, "requiredIfCategoriaBc": True,
+        "folderGroup": "D_Inventario",
         "description": "Dictamen final de inspección de alumbrado público por organismo de tercera parte."
     },
     {
         "id": 21, "code": "D21", "name": "Recibo de vías por parte del Municipio",
         "category": "dictamenes", "categoryName": "Dictámenes y Permisos",
-        "required": False, "folderGroup": "E_SST_Ambiental",
+        "required": True, "folderGroup": "D_Inventario",
         "description": "Paz y salvo o recibo oficial de intervención de espacio público emitido por la alcaldía."
+    },
+    # 5. Otros
+    {
+        "id": 22, "code": "CAUE", "name": "CAUE — Costo Anual Uniforme Equivalente",
+        "category": "otros", "categoryName": "Otros",
+        "required": True, "folderGroup": "E_Otros",
+        "description": "Estudio financiero del costo anual uniforme equivalente del proyecto."
+    },
+    {
+        "id": 23, "code": "CANT", "name": "Archivo de cantidades de infraestructura a entregar",
+        "category": "otros", "categoryName": "Otros",
+        "required": True, "folderGroup": "E_Otros",
+        "description": "Cantidades de la construcción que se pretende entregar para el Alumbrado Público."
+    },
+    {
+        "id": 24, "code": "CVP", "name": "Certificado de vía pública",
+        "category": "otros", "categoryName": "Otros",
+        "required": True, "folderGroup": "E_Otros",
+        "description": "Certificado de vía pública de Secretaría de Planeación."
+    },
+    {
+        "id": 25, "code": "CEAP", "name": "Documentos para circuitos exclusivos de AP",
+        "category": "otros", "categoryName": "Otros",
+        "required": True, "folderGroup": "E_Otros",
+        "description": "Adicionar para cuando existan circuitos exclusivos de Alumbrado Público.",
+        "hasSubFiles": True,
+        "subFiles": [
+            {"subId": "25a", "subCode": "CEAP-A", "subName": "Tarjeta profesional del diseñador y constructor"},
+            {"subId": "25b", "subCode": "CEAP-B", "subName": "Cédula del diseñador y constructor"},
+            {"subId": "25c", "subCode": "CEAP-C", "subName": "Memoria de cálculo"},
+            {"subId": "25d", "subCode": "CEAP-D", "subName": "Plano eléctrico"}
+        ]
     },
 ]
 
@@ -148,7 +263,8 @@ GRUPOS_CARPETA = {
     "B_Certificaciones": "Certificaciones y Luminarias",
     "C_Contractuales": "Documentación Contractual",
     "D_Inventario": "Dictámenes e Inventario",
-    "E_SST_Ambiental": "SST y Ambiental",
+    "E_Otros": "Otros documentos",
+    "F_Documentos_Adicionales": "Documentos adicionales",
 }
 
 
@@ -184,7 +300,7 @@ def generar_id():
 
 
 def calcular_porcentaje(archivos):
-    total = len(archivos) if archivos else 21
+    total = len(archivos) if archivos else len(CATALOGO_21_DOCUMENTOS)
     validos = sum(1 for a in archivos if a.get("status") in ("CUMPLE", "N/A"))
     return round((validos / total) * 100) if total > 0 else 0
 
@@ -196,7 +312,7 @@ def inicializar_archivos_desde_catalogo(filing, docs_adicionales=None):
         if doc["id"] in archivos_existentes:
             archivos.append(archivos_existentes[doc["id"]])
         else:
-            archivos.append({
+            entry = {
                 "docId": doc["id"],
                 "docCode": doc["code"],
                 "docName": doc["name"],
@@ -208,7 +324,20 @@ def inicializar_archivos_desde_catalogo(filing, docs_adicionales=None):
                 "folderPath": f"/Documentos_Radicacion/{filing['numeroRadicado']}/{doc['folderGroup']}/",
                 "notes": "",
                 "esManual": False,
-            })
+            }
+            if doc.get("hasSubFiles"):
+                entry["hasSubFiles"] = True
+                entry["subFiles"] = []
+                for sf in doc.get("subFiles", []):
+                    entry["subFiles"].append({
+                        "subId": sf["subId"],
+                        "subCode": sf["subCode"],
+                        "subName": sf["subName"],
+                        "fileName": "",
+                        "fileSize": 0,
+                        "status": "PENDIENTE",
+                    })
+            archivos.append(entry)
 
     if docs_adicionales:
         for doc in docs_adicionales:
@@ -225,7 +354,7 @@ def inicializar_archivos_desde_catalogo(filing, docs_adicionales=None):
                     "fileType": "application/pdf",
                     "uploadDate": "",
                     "status": "PENDIENTE",
-                    "folderPath": f"/Documentos_Radicacion/{filing['numeroRadicado']}/Documentos_Adicionales/",
+                    "folderPath": f"/Documentos_Radicacion/{filing['numeroRadicado']}/F_Documentos_Adicionales/",
                     "notes": "",
                     "esManual": True,
                 })

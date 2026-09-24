@@ -1,6 +1,8 @@
 import os
 import json
 import shutil
+import asyncio
+import traceback
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, List
@@ -10,23 +12,35 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, Query
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from jose import jwt, JWTError
 
-from modelos import (
-    CATALOGO_21_DOCUMENTOS, ESTADOS, GRUPOS_CARPETA,
-    generar_numero_radicado, generar_id, calcular_porcentaje,
-    inicializar_archivos_desde_catalogo,
-)
+try:
+    from backend.modelos import (
+        CATALOGO_21_DOCUMENTOS, ESTADOS, GRUPOS_CARPETA,
+        generar_numero_radicado, generar_id, calcular_porcentaje,
+        inicializar_archivos_desde_catalogo,
+        fecha_limite_revision, dias_habiles_restantes, _solo_fecha,
+    )
+except ImportError:
+    from modelos import (
+        CATALOGO_21_DOCUMENTOS, ESTADOS, GRUPOS_CARPETA,
+        generar_numero_radicado, generar_id, calcular_porcentaje,
+        inicializar_archivos_desde_catalogo,
+        fecha_limite_revision, dias_habiles_restantes, _solo_fecha,
+    )
 
 try:
-    from grafos import GraphService
-except ImportError as _imp_err:
-    print(f"[WARNING] No se pudo importar GraphService: {_imp_err}")
-    GraphService = None
+    from backend.grafos import GraphService
+except ImportError:
+    try:
+        from grafos import GraphService
+    except ImportError as _imp_err:
+        print(f"[WARNING] No se pudo importar GraphService: {_imp_err}")
+        GraphService = None
 
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-in-production")
 ALGORITHM = "HS256"
@@ -47,6 +61,44 @@ MIME_PERMITIDOS = {
     "application/octet-stream",
 }
 MAX_TAMANIO_BYTES = 50 * 1024 * 1024
+
+# Extensiones aceptadas (el navegador no siempre reporta el MIME correcto:
+# los .dwg/.dxf llegan como "" u "application/octet-stream" según el equipo,
+# y antes eso tumbaba la radicación con 400 aunque el archivo fuera válido).
+EXTENSIONES_PERMITIDAS = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".dwg", ".dxf"}
+
+
+def archivo_permitido(nombre_archivo: str, mime: str) -> bool:
+    if (mime or "") in MIME_PERMITIDOS:
+        return True
+    ext = Path(nombre_archivo or "").suffix.lower()
+    return ext in EXTENSIONES_PERMITIDAS
+
+
+def detalle_archivo_no_permitido(nombre_archivo: str, mime: str) -> str:
+    return (
+        f"Tipo no permitido en '{nombre_archivo or '?'}' ({mime or 'desconocido'}). "
+        "Solo PDF, imágenes (JPEG, PNG, TIFF, BMP, GIF) y AutoCAD (DWG, DXF)."
+    )
+
+
+def mime_efectivo(nombre_archivo: str, mime: str) -> str:
+    """MIME a guardar: si el navegador no lo reportó, se infiere por extensión."""
+    if mime:
+        return mime
+    ext = Path(nombre_archivo or "").suffix.lower()
+    return {
+        ".pdf": "application/pdf",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".tif": "image/tiff",
+        ".tiff": "image/tiff",
+        ".bmp": "image/bmp",
+        ".gif": "image/gif",
+        ".dwg": "application/dwg",
+        ".dxf": "application/dxf",
+    }.get(ext, "application/octet-stream")
 
 UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
@@ -80,6 +132,75 @@ def cargar_db():
         radicaciones_db = []
 
 
+def lanzar_background(coro, nombre="tarea"):
+    """Ejecuta un coroutine en background sin bloquear la respuesta HTTP.
+
+    Antes el PATCH /estado esperaba a SharePoint + correos (hasta ~55s)
+    y el frontend quedaba "cargando" eternamente. Ahora se responde
+    de inmediato y la subida a SharePoint ocurre en segundo plano.
+    """
+    async def _envuelto():
+        try:
+            await coro
+        except Exception as e:
+            print(f"[BG:{nombre}] Error: {e}")
+    try:
+        asyncio.get_running_loop().create_task(_envuelto())
+    except RuntimeError:
+        print(f"[BG:{nombre}] Sin event loop, se omite ejecución en background")
+
+
+async def revisar_vencimientos():
+    """Revisa plazos de 15 días hábiles y avisa al revisor a los 8 y 4 días.
+
+    Devuelve la lista de radicados notificados en esta pasada. Cada aviso
+    se envía una sola vez (bandera en notifVencimiento) y se persiste.
+    """
+    notificados = []
+    if not graph_service:
+        return notificados
+    hoy = datetime.now().date()
+    for r in radicaciones_db:
+        if r.get("estado") == "Aprobado":
+            continue
+        limite = fecha_limite_revision(r.get("fechaRadicacion"))
+        if not limite:
+            continue
+        rest = dias_habiles_restantes(limite, hoy)
+        flags = r.setdefault("notifVencimiento", {})
+        numero = r.get("numeroRadicado", "?")
+        try:
+            if rest <= 4 and not flags.get("4"):
+                ok = await graph_service.enviar_correo_vencimiento(r, rest, limite.isoformat())
+                if ok:
+                    ahora = datetime.now(timezone.utc).isoformat()
+                    flags["4"] = ahora
+                    flags["8"] = flags.get("8") or ahora
+                    notificados.append({"numeroRadicado": numero, "diasRestantes": rest, "aviso": "4 dias"})
+            elif rest <= 8 and not flags.get("8"):
+                ok = await graph_service.enviar_correo_vencimiento(r, rest, limite.isoformat())
+                if ok:
+                    flags["8"] = datetime.now(timezone.utc).isoformat()
+                    notificados.append({"numeroRadicado": numero, "diasRestantes": rest, "aviso": "8 dias"})
+        except Exception as e:
+            print(f"[VENC] Error revisando {numero}: {e}")
+    if notificados:
+        guardar_db()
+    return notificados
+
+
+async def vigilar_vencimientos():
+    await asyncio.sleep(60)
+    while True:
+        try:
+            notif = await revisar_vencimientos()
+            if notif:
+                print(f"[VENC] Avisos enviados: {notif}")
+        except Exception as e:
+            print(f"[VENC] Error en vigilancia: {e}")
+        await asyncio.sleep(6 * 3600)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global graph_service
@@ -107,12 +228,13 @@ async def lifespan(app: FastAPI):
                 except Exception as e:
                     print(f"[STARTUP] ERROR cargando de SharePoint (intento {attempt+1}/3): {e}")
                     if attempt < 2:
-                        import asyncio
                         await asyncio.sleep(3 * (attempt + 1))
         else:
             print(f"[STARTUP] DB local tiene {len(radicaciones_db)} radicaciones, omitiendo carga SP")
     else:
         print("[STARTUP] GraphService NO DISPONIBLE - grafos.py no importado")
+    # Vigilancia de vencimientos (15 días hábiles): avisa a los 8 y 4 días
+    asyncio.create_task(vigilar_vencimientos())
     yield
 
 
@@ -257,15 +379,81 @@ async def obtener_historial(identificador: str):
 
 @app.delete("/api/radicacion/{identificador}")
 async def eliminar_radicacion(identificador: str, email: Optional[str] = Query(None), rol: Optional[str] = Query(None)):
-    raise HTTPException(
-        status_code=403,
-        detail="La eliminación de radicados está deshabilitada para preservar la numeración consecutiva única. Los radicados solo se pueden editar.",
+    # Solo contratistas pueden eliminar
+    if rol != "contratista":
+        raise HTTPException(status_code=403, detail="Solo el contratista que creó el radicado puede eliminarlo.")
+
+    if not email:
+        raise HTTPException(status_code=403, detail="Falta el correo del solicitante.")
+
+    # Buscar el radicado por id o por número (el frontend envía `identificador`,
+    # que puede ser cualquiera de los dos; antes se buscaba por una clave
+    # "identificador" inexistente y se llamaba a guardar_radicaciones() que
+    # no existe -> siempre 500).
+    radicacion = next(
+        (
+            r for r in radicaciones_db
+            if r.get("id") == identificador
+            or r.get("numeroRadicado") == identificador
+            or r.get("identificador") == identificador
+        ),
+        None,
     )
+    if not radicacion:
+        raise HTTPException(status_code=404, detail="Radicado no encontrado.")
+
+    # Verificar que el contratista sea el creador
+    creador = (radicacion.get("creadorEmail", "") or radicacion.get("metadata", {}).get("creadorEmail", "") or "")
+    if creador.lower().strip() != email.lower().strip():
+        raise HTTPException(status_code=403, detail="Solo el contratista que creó el radicado puede eliminarlo.")
+
+    # Verificar que sea el ÚLTIMO radicado creado a nivel global (de todas
+    # las cuentas). Si otra cuenta crea uno nuevo, los anteriores dejan de
+    # ser eliminables automáticamente.
+    ultimo_global = max(radicaciones_db, key=lambda r: r.get("fechaRadicacion", ""), default=None)
+
+    if ultimo_global is None or ultimo_global.get("id") != radicacion.get("id"):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo se puede eliminar el último radicado creado. Ya existe un radicado más reciente."
+        )
+
+    # No se pueden eliminar radicados aprobados
+    if radicacion.get("estado") == "Aprobado":
+        raise HTTPException(status_code=403, detail="No se puede eliminar un radicado ya aprobado.")
+
+    # Eliminar
+    radicaciones_db.remove(radicacion)
+    guardar_db()
+
+    numero = radicacion.get("numeroRadicado", "")
+    rid = radicacion.get("id", "")
+
+    async def _limpieza():
+        # Borrar archivos locales
+        try:
+            shutil.rmtree(UPLOADS_DIR / rid, ignore_errors=True)
+        except Exception as e:
+            print(f"[DELETE] No se pudo borrar carpeta local {rid}: {e}")
+        # Borrar de SharePoint en background (no bloquea la respuesta)
+        if graph_service:
+            try:
+                await graph_service.eliminar_radicacion_de_sharepoint(numero)
+            except Exception as e:
+                print(f"[DELETE] Error borrando {numero} de SharePoint: {e}")
+
+    lanzar_background(_limpieza(), f"delete-{numero}")
+
+    return {"ok": True, "mensaje": f"Radicado {radicacion['numeroRadicado']} eliminado correctamente."}
 
 
 @app.post("/api/radicacion/nueva")
 async def crear_radicacion(request: Request):
-    form = await request.form()
+    # OJO: Starlette limita cada parte del multipart a 1024KB por defecto
+    # (max_part_size). Sin estos parámetros, cualquier PDF real (>1MB)
+    # moría aquí con "Part exceeded maximum size of 1024KB" antes de que
+    # nuestro código pudiera validarlo contra los 50MB permitidos.
+    form = await request.form(max_files=5000, max_fields=5000, max_part_size=MAX_TAMANIO_BYTES)
 
     text_fields = {}
     uploaded_files = {}
@@ -293,10 +481,50 @@ async def crear_radicacion(request: Request):
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     saved_files = {}
+    extra_sub_files = {}
     for field_name, upload_file in uploaded_files.items():
+        if field_name.startswith('extraSub_'):
+            parts = field_name.split('_')
+            doc_id = int(parts[1])
+            idx = int(parts[2])
+            meta_key = f'extraSubMeta_{doc_id}_{idx}'
+            meta_str = text_fields.get(meta_key, '{}')
+            meta_info = json.loads(meta_str)
+            mime = upload_file.content_type or ""
+            if not archivo_permitido(upload_file.filename or "", mime):
+                continue
+            contenido = await upload_file.read()
+            if len(contenido) > MAX_TAMANIO_BYTES:
+                continue
+            sub_name = meta_info.get('subFileName', f'Anexo {idx + 1}')
+            safe_sub_name = sub_name.replace("/", "_").replace("\\", "_")
+            doc_code = str(doc_id)
+            for doc in CATALOGO_21_DOCUMENTOS:
+                if doc["id"] == doc_id:
+                    doc_code = doc["code"]
+                    break
+            sub_dir = upload_dir / doc_code
+            sub_dir.mkdir(parents=True, exist_ok=True)
+            file_path = sub_dir / safe_sub_name
+            file_path.write_bytes(contenido)
+            if doc_id not in extra_sub_files:
+                extra_sub_files[doc_id] = []
+            extra_sub_files[doc_id].append({
+                "subId": f"extra_{idx + 1}",
+                "subCode": f"ANEXO-{idx + 1}",
+                "subName": sub_name,
+                "fileName": upload_file.filename,
+                "fileSize": len(contenido),
+                "fileType": mime_efectivo(upload_file.filename or "", mime),
+                "uploadDate": datetime.now(timezone.utc).isoformat(),
+                "localPath": str(file_path),
+                "status": "CUMPLE",
+            })
+            continue
+
         mime = upload_file.content_type or ""
-        if mime not in MIME_PERMITIDOS:
-            raise HTTPException(status_code=400, detail=f"Tipo no permitido: {mime}. Solo PDF, imágenes (JPEG, PNG, TIFF, BMP, GIF) y AutoCAD (DWG, DXF).")
+        if not archivo_permitido(upload_file.filename or "", mime):
+            raise HTTPException(status_code=400, detail=detalle_archivo_no_permitido(upload_file.filename, mime))
 
         contenido = await upload_file.read()
         if len(contenido) > MAX_TAMANIO_BYTES:
@@ -310,7 +538,7 @@ async def crear_radicacion(request: Request):
             "filename": safe_name,
             "originalName": upload_file.filename,
             "size": len(contenido),
-            "mimeType": mime,
+            "mimeType": mime_efectivo(upload_file.filename or "", mime),
         }
 
     archivos_estado = []
@@ -346,10 +574,10 @@ async def crear_radicacion(request: Request):
                 "fileType": file_info["mimeType"],
                 "uploadDate": datetime.now(timezone.utc).isoformat(),
                 "status": "CUMPLE",
-                "folderPath": f"/Documentos_Radicacion/{numero}/Documentos_Adicionales/",
+                "folderPath": f"/Documentos_Radicacion/{numero}/F_Documentos_Adicionales/",
                 "notes": "",
                 "esManual": True,
-                "localPath": str(upload_dir / file_info["filename"]),
+                "localPath": str(upload_dir / file_info["filename"]) if file_info else "",
             })
         else:
             archivos_estado.append({
@@ -361,13 +589,21 @@ async def crear_radicacion(request: Request):
                 "fileType": "application/pdf",
                 "uploadDate": "",
                 "status": "PENDIENTE",
-                "folderPath": f"/Documentos_Radicacion/{numero}/Documentos_Adicionales/",
+                "folderPath": f"/Documentos_Radicacion/{numero}/F_Documentos_Adicionales/",
                 "notes": "",
                 "esManual": True,
                 "localPath": "",
             })
 
     documentos_ok = sum(1 for a in archivos_estado if a["status"] in ("CUMPLE", "N/A"))
+
+    for doc_id, subs in extra_sub_files.items():
+        for archivo in archivos_estado:
+            if archivo["docId"] == doc_id:
+                if "subFiles" not in archivo:
+                    archivo["subFiles"] = []
+                archivo["subFiles"].extend(subs)
+                break
 
     radicacion = {
         "id": nuevo_id,
@@ -400,40 +636,47 @@ async def crear_radicacion(request: Request):
 
     print(f"[MAIN] graph_service={'DISPONIBLE' if graph_service else 'NULL'}")
 
+    # Correos en BACKGROUND para no bloquear la respuesta.
+    # A SharePoint NO se sube nada al radicar: la subida (fila +
+    # carpetas + archivos) ocurre únicamente cuando el revisor APRUEBA.
     if graph_service:
-        try:
-            await graph_service.enviar_correo_nuevo_radicado_revisor(radicacion)
-            print(f"[MAIN] Correo de nuevo radicado enviado al revisor para {numero}")
-        except Exception as e:
-            print(f"[MAIN] Error correo nuevo radicado al revisor: {e}")
-
-        try:
-            await graph_service.enviar_correo_nuevo_radicado_contratista(radicacion)
-            print(f"[MAIN] Correo de radicado creado enviado al contratista para {numero}")
-        except Exception as e:
-            print(f"[MAIN] Error correo radicado creado al contratista: {e}")
-
-    if graph_service:
-        for attempt in range(3):
+        async def _post_creacion(rad):
             try:
-                await graph_service.guardar_radicacion_en_sharepoint(radicacion)
-                print(f"[MAIN] Radicado {numero} guardado en SharePoint (intento {attempt+1})")
-                break
+                await graph_service.enviar_correo_nuevo_radicado_revisor(rad)
+                print(f"[MAIN] Correo de nuevo radicado enviado al revisor para {rad.get('numeroRadicado')}")
             except Exception as e:
-                print(f"[MAIN] Error guardando en SharePoint (intento {attempt+1}/3): {e}")
-                if attempt < 2:
-                    import asyncio
-                    await asyncio.sleep(2 * (attempt + 1))
+                print(f"[MAIN] Error correo nuevo radicado al revisor: {e}")
+            try:
+                await graph_service.enviar_correo_nuevo_radicado_contratista(rad)
+                print(f"[MAIN] Correo de radicado creado enviado al contratista para {rad.get('numeroRadicado')}")
+            except Exception as e:
+                print(f"[MAIN] Error correo radicado creado al contratista: {e}")
+
+        lanzar_background(_post_creacion(radicacion), f"nueva-{numero}")
 
     return {"data": radicacion, "ok": True}
 
 
 @app.post("/api/radicacion/{identificador}/archivo")
-async def subir_archivo(
-    identificador: str,
-    docId: int = Form(...),
-    archivo: UploadFile = File(...),
-):
+async def subir_archivo(request: Request, identificador: str):
+    # Se parsea el multipart manualmente con límites ampliados: los
+    # parámetros FastAPI (UploadFile = File(...)) usan el límite interno
+    # de 1024KB por parte y rechazaban archivos reales con
+    # "Part exceeded maximum size of 1024KB".
+    form = await request.form(max_files=100, max_fields=100, max_part_size=MAX_TAMANIO_BYTES)
+    doc_id_raw = form.get("docId")
+    archivo = form.get("archivo")
+    sub_file_name = form.get("subFileName")
+
+    if doc_id_raw is None or archivo is None or not hasattr(archivo, "read"):
+        raise HTTPException(status_code=400, detail="Faltan los campos 'docId' y 'archivo'.")
+
+    try:
+        docId = int(doc_id_raw)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="El campo 'docId' debe ser numérico.")
+
+    subFileName = str(sub_file_name) if sub_file_name not in (None, "") else None
     radicacion = None
     for r in radicaciones_db:
         if r["id"] == identificador or r["numeroRadicado"] == identificador:
@@ -444,10 +687,10 @@ async def subir_archivo(
         raise HTTPException(status_code=404, detail="Radicacion no encontrada")
 
     mime = archivo.content_type or ""
-    if mime not in MIME_PERMITIDOS:
+    if not archivo_permitido(archivo.filename or "", mime):
         raise HTTPException(
             status_code=400,
-            detail=f"Tipo de archivo no permitido: {mime}. Solo se aceptan PDF, imágenes y AutoCAD.",
+            detail=detalle_archivo_no_permitido(archivo.filename, mime),
         )
 
     contenido = await archivo.read()
@@ -460,18 +703,45 @@ async def subir_archivo(
     upload_dir = UPLOADS_DIR / radicacion["id"]
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    safe_name = archivo.filename.replace("/", "_").replace("\\", "_")
-    file_path = upload_dir / safe_name
+    if subFileName:
+        doc_code = ""
+        for doc in radicacion.get("archivos", []):
+            if doc["docId"] == docId:
+                doc_code = doc.get("docCode", str(docId))
+                break
+        sub_dir = upload_dir / doc_code
+        sub_dir.mkdir(parents=True, exist_ok=True)
+        safe_name = subFileName.replace("/", "_").replace("\\", "_")
+        file_path = sub_dir / safe_name
+    else:
+        safe_name = archivo.filename.replace("/", "_").replace("\\", "_")
+        file_path = upload_dir / safe_name
+
     file_path.write_bytes(contenido)
 
     for doc in radicacion["archivos"]:
         if doc["docId"] == docId:
-            doc["fileName"] = archivo.filename
-            doc["fileSize"] = len(contenido)
-            doc["fileType"] = mime
-            doc["uploadDate"] = datetime.now(timezone.utc).isoformat()
-            doc["status"] = "CUMPLE"
-            doc["localPath"] = str(file_path)
+            if subFileName:
+                if "subFiles" not in doc:
+                    doc["subFiles"] = []
+                doc["subFiles"].append({
+                    "subId": f"extra_{len(doc['subFiles']) + 1}",
+                    "subCode": f"ANEXO-{len(doc['subFiles']) + 1}",
+                    "subName": subFileName,
+                    "fileName": archivo.filename,
+                    "fileSize": len(contenido),
+                    "fileType": mime_efectivo(archivo.filename or "", mime),
+                    "uploadDate": datetime.now(timezone.utc).isoformat(),
+                    "localPath": str(file_path),
+                    "status": "CUMPLE",
+                })
+            else:
+                doc["fileName"] = archivo.filename
+                doc["fileSize"] = len(contenido)
+                doc["fileType"] = mime_efectivo(archivo.filename or "", mime)
+                doc["uploadDate"] = datetime.now(timezone.utc).isoformat()
+                doc["status"] = "CUMPLE"
+                doc["localPath"] = str(file_path)
             break
 
     radicacion["documentosOk"] = sum(
@@ -481,17 +751,70 @@ async def subir_archivo(
     radicacion["fechaActualizacion"] = datetime.now(timezone.utc).isoformat()
     guardar_db()
 
+    # Sin sincronización a SharePoint: solo se sube al APROBAR.
+    return {"ok": True, "data": radicacion}
+
+
+@app.post("/api/radicacion/{identificador}/formato")
+async def subir_formato(request: Request, identificador: str):
+    # Parseo manual con límites ampliados (ver /archivo): el límite
+    # interno de 1024KB por parte rechazaba los PDF generados.
+    form = await request.form(max_files=100, max_fields=100, max_part_size=MAX_TAMANIO_BYTES)
+    nombre = form.get("nombre")
+    archivo = form.get("archivo")
+
+    if not nombre or archivo is None or not hasattr(archivo, "read"):
+        raise HTTPException(status_code=400, detail="Faltan los campos 'nombre' y 'archivo'.")
+    nombre = str(nombre)
+    radicacion = None
+    for r in radicaciones_db:
+        if r["id"] == identificador or r["numeroRadicado"] == identificador:
+            radicacion = r
+            break
+
+    if not radicacion:
+        raise HTTPException(status_code=404, detail="Radicación no encontrada")
+
+    contenido = await archivo.read()
+    if len(contenido) > MAX_TAMANIO_BYTES:
+        raise HTTPException(status_code=413, detail="El archivo supera el límite de 50 MB.")
+
+    upload_dir = UPLOADS_DIR / radicacion["id"]
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = nombre.replace("/", "_").replace("\\", "_")
+    file_path = upload_dir / safe_name
+    file_path.write_bytes(contenido)
+
+    if "formatos" not in radicacion:
+        radicacion["formatos"] = []
+
+    radicacion["formatos"].append({
+        "nombre": nombre,
+        "fileName": archivo.filename,
+        "fileSize": len(contenido),
+        "fileType": archivo.content_type or "application/pdf",
+        "uploadDate": datetime.now(timezone.utc).isoformat(),
+        "localPath": str(file_path),
+    })
+
+    radicacion["fechaActualizacion"] = datetime.now(timezone.utc).isoformat()
+    guardar_db()
+
+    # El formato se sube a SharePoint SOLO desde su botón "Subir" (este
+    # endpoint), suelto en la raíz de la carpeta del radicado.
     if graph_service:
-        for attempt in range(3):
+        numero = radicacion.get("numeroRadicado", "")
+        formato_guardado = radicacion["formatos"][-1]
+
+        async def _subir_un_formato(num, fmt):
             try:
-                await graph_service.guardar_radicacion_en_sharepoint(radicacion)
-                print(f"[MAIN] Archivo de {radicacion['numeroRadicado']} sincronizado a SharePoint (intento {attempt+1})")
-                break
+                await graph_service.subir_formato_a_sharepoint(num, fmt)
+                print(f"[MAIN] Formato de {num} subido a SharePoint")
             except Exception as e:
-                print(f"[MAIN] Error sync SharePoint archivo (intento {attempt+1}/3): {e}")
-                if attempt < 2:
-                    import asyncio
-                    await asyncio.sleep(2 * (attempt + 1))
+                print(f"[MAIN] Error subiendo formato de {num} a SharePoint: {e}")
+
+        lanzar_background(_subir_un_formato(numero, formato_guardado), f"formato-{numero}")
 
     return {"ok": True, "data": radicacion}
 
@@ -537,54 +860,115 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado):
         "observaciones": body.observaciones or "",
     })
 
-    if body.estado == "Aprobado" and graph_service:
-        try:
-            await graph_service.sincronizar_a_sharepoint(radicacion)
-            radicacion["m365Synced"] = True
-            print(f"[MAIN] SharePoint sync OK para {radicacion['numeroRadicado']}")
-        except Exception as e:
-            radicacion["m365Synced"] = False
-            print(f"[MAIN] SharePoint sync FALLO para {radicacion['numeroRadicado']}: {e}")
-
-    if graph_service and body.estado != estado_anterior:
-        # Notificar al contratista solo cuando hay un resultado de evaluación (Aprobado / Con Observaciones)
-        if body.estado in ("Aprobado", "Con Observaciones"):
-            try:
-                await graph_service.enviar_correo_estado(radicacion, estado_anterior, body.observaciones)
-                print(f"[MAIN] Correo de estado enviado al contratista para {radicacion['numeroRadicado']}: {estado_anterior} -> {body.estado}")
-            except Exception as e:
-                print(f"[MAIN] Error correo cambio de estado: {e}")
-
-        # Notificar al revisor cuando el contratista reenvía/edita un radicado para revisión
-        # (transición hacia "En Revisión", sea desde Observaciones, Aprobado u otro estado)
-        if body.estado == "En Revisión" and estado_anterior != "En Revisión":
-            try:
-                await graph_service.enviar_correo_reesubido_revisor(radicacion)
-                print(f"[MAIN] Correo de radicado corregido enviado al revisor para {radicacion['numeroRadicado']}")
-            except Exception as e:
-                print(f"[MAIN] Error correo radicado corregido: {e}")
-
-            try:
-                await graph_service.enviar_correo_reenvio_contratista(radicacion)
-                print(f"[MAIN] Correo de confirmación de subida enviado al contratista para {radicacion['numeroRadicado']}")
-            except Exception as e:
-                print(f"[MAIN] Error correo confirmación subida contratista: {e}")
-
+    # Se persiste PRIMERO y se responde de inmediato. Todo lo de red
+    # (SharePoint + correos) va en background para no dejar el botón
+    # "Generar Informe" cargando eternamente.
+    radicacion["m365Synced"] = False
     guardar_db()
+    respuesta = {"ok": True, "data": radicacion}
 
     if graph_service:
-        for attempt in range(3):
-            try:
-                await graph_service.guardar_radicacion_en_sharepoint(radicacion)
-                print(f"[MAIN] Estado de {radicacion['numeroRadicado']} sincronizado a SharePoint (intento {attempt+1})")
-                break
-            except Exception as e:
-                print(f"[MAIN] Error sync SharePoint estado (intento {attempt+1}/3): {e}")
-                if attempt < 2:
-                    import asyncio
-                    await asyncio.sleep(2 * (attempt + 1))
+        estado_final = body.estado
+        obs = body.observaciones or ""
+        email_usuario = body.usuarioEmail or ""
+        nombre_usuario = body.usuarioNombre or ""
 
-    return {"ok": True, "data": radicacion}
+        async def _post_estado(numero, estado_ant):
+            # Releer el radicado actualizado (referencia viva de la DB)
+            rad = next(
+                (r for r in radicaciones_db if r.get("numeroRadicado") == numero),
+                None,
+            )
+            if not rad:
+                return
+            # 1) A SharePoint SOLO se sube al APROBAR (fila + carpetas +
+            # archivos). Con Observaciones / En Revisión solo notifican.
+            if estado_final == "Aprobado":
+                try:
+                    await graph_service.guardar_radicacion_en_sharepoint(rad)
+                    rad["m365Synced"] = True
+                    guardar_db()
+                    print(f"[MAIN] SharePoint sync OK para {numero} (Aprobado)")
+                except Exception as e:
+                    rad["m365Synced"] = False
+                    guardar_db()
+                    print(f"[MAIN] SharePoint sync FALLO para {numero}: {e}")
+                    traceback.print_exc()
+            else:
+                print(f"[MAIN] Sin subida a SharePoint para {numero} ({estado_final}): solo se sube al aprobar")
+            # 2) Notificaciones por correo (con timeout, sin bloquear)
+            if estado_final != estado_ant:
+                if estado_final in ("Aprobado", "Con Observaciones"):
+                    try:
+                        await asyncio.wait_for(
+                            graph_service.enviar_correo_estado(rad, estado_ant, obs),
+                            timeout=25,
+                        )
+                        print(f"[MAIN] Correo de estado enviado para {numero}: {estado_ant} -> {estado_final}")
+                    except Exception as e:
+                        print(f"[MAIN] Error correo cambio de estado: {e}")
+                if estado_final == "En Revisión" and estado_ant != "En Revisión":
+                    try:
+                        await asyncio.wait_for(graph_service.enviar_correo_reesubido_revisor(rad), timeout=25)
+                    except Exception as e:
+                        print(f"[MAIN] Error correo radicado corregido: {e}")
+                    try:
+                        await asyncio.wait_for(graph_service.enviar_correo_reenvio_contratista(rad), timeout=25)
+                    except Exception as e:
+                        print(f"[MAIN] Error correo confirmación subida contratista: {e}")
+
+        lanzar_background(
+            _post_estado(radicacion["numeroRadicado"], estado_anterior),
+            f"estado-{radicacion['numeroRadicado']}",
+        )
+
+    return respuesta
+
+
+@app.post("/api/radicacion/{identificador}/sincronizar")
+async def sincronizar_manual(identificador: str):
+    """Reintento manual de subida a SharePoint (sincrónico y con detalle).
+
+    La subida automática al aprobar corre en background; si falla (p. ej.
+    credenciales, permisos o red), este endpoint permite reintentarla
+    desde el Historial y devuelve el motivo real del fallo en vez de
+    dejarlo solo en los logs del servidor.
+    """
+    radicacion = next(
+        (
+            r for r in radicaciones_db
+            if r.get("id") == identificador or r.get("numeroRadicado") == identificador
+        ),
+        None,
+    )
+    if not radicacion:
+        raise HTTPException(status_code=404, detail="Radicación no encontrada.")
+    if radicacion.get("estado") != "Aprobado":
+        raise HTTPException(status_code=400, detail="Solo se suben a SharePoint los radicados aprobados.")
+    if not graph_service:
+        raise HTTPException(
+            status_code=503,
+            detail="Integración Microsoft 365 no configurada en el servidor (revise AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID, SHAREPOINT_SITE_ID y SHAREPOINT_LIST_ID).",
+        )
+    try:
+        resumen = await asyncio.wait_for(
+            graph_service.guardar_radicacion_en_sharepoint(radicacion), timeout=180
+        )
+        radicacion["m365Synced"] = True
+        guardar_db()
+        return {"ok": True, "data": radicacion, "detalle": resumen}
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="La subida tardó más de 3 minutos y se interrumpió. Intente de nuevo con mejor conexión.",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        radicacion["m365Synced"] = False
+        guardar_db()
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"No se pudo subir a SharePoint: {e}")
 
 
 @app.patch("/api/radicacion/{identificador}/metadata")
@@ -625,18 +1009,7 @@ async def actualizar_metadata(identificador: str, body: ActualizacionMetadata):
     if body.soloAvance:
         return {"ok": True, "data": radicacion, "soloAvance": True}
 
-    if graph_service:
-        for attempt in range(3):
-            try:
-                await graph_service.guardar_radicacion_en_sharepoint(radicacion)
-                print(f"[MAIN] Metadata de {radicacion['numeroRadicado']} sincronizada a SharePoint (intento {attempt+1})")
-                break
-            except Exception as e:
-                print(f"[MAIN] Error sync SharePoint metadata (intento {attempt+1}/3): {e}")
-                if attempt < 2:
-                    import asyncio
-                    await asyncio.sleep(2 * (attempt + 1))
-
+    # Sin sincronización a SharePoint: solo se sube al APROBAR.
     return {"ok": True, "data": radicacion}
 
 
@@ -672,6 +1045,15 @@ async def probar_conexion():
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
     raise HTTPException(status_code=503, detail="GraphService no disponible")
+
+
+@app.post("/api/m365/revisar-vencimientos")
+async def forzar_revision_vencimientos():
+    """Disparo manual de la revisión de vencimientos (para probar avisos)."""
+    if not graph_service:
+        raise HTTPException(status_code=503, detail="GraphService no disponible")
+    notificados = await revisar_vencimientos()
+    return {"ok": True, "notificados": notificados, "total": len(notificados)}
 
 
 @app.get("/api/m365/webhook-config")

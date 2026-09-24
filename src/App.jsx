@@ -5,7 +5,7 @@
  * ============================================================================
  * Componente Principal de la Aplicación en React + JavaScript.
  * Controla la navegación, estados de usuarios (Revisor / Contratista)
- * y la visualización de los 21 requisitos RETILAP.
+ * y la visualización de los 25 requisitos RETILAP.
  * ----------------------------------------------------------------------------
  */
 
@@ -15,6 +15,9 @@ import { Sidebar } from './components/Sidebar';
 import { RadicacionForm } from './components/RadicacionForm';
 import { RadicacionesList } from './components/RadicacionesList';
 import { InformeRecibidoConformidad } from './components/InformeRecibidoConformidad';
+import { Formato437C } from './components/Formato437C';
+import { ReciboTecnico } from './components/ReciboTecnico';
+import { CalendarioRevision } from './components/CalendarioRevision';
 import { EvaluacionRadicacion } from './components/EvaluacionRadicacion';
 import { LoginForm } from './components/LoginForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -119,7 +122,11 @@ export default function App() {
     return filings;
   }, [filings, user]);
 
-  // Keep selectedFiling valid for the active user context
+  // Keep selectedFiling valid for the active user context.
+  // Debe re-ejecutarse cuando llegan los filings del backend: si la app
+  // se recarga con una pestaña guardada (evaluacion/informe/formato) y
+  // selectedFiling es null, sin esto la pantalla queda en blanco.
+  // Solo rellena cuando NO hay selección válida; nunca roba la selección actual.
   useEffect(() => {
     if (user.role === 'contratista') {
       if (userFilings.length > 0) {
@@ -130,11 +137,12 @@ export default function App() {
         setSelectedFiling(null);
       }
     } else {
+      // Only set default if no filing is selected yet
       if (filings.length > 0 && !selectedFiling) {
         setSelectedFiling(filings[0]);
       }
     }
-  }, [userFilings, user.role, filings, selectedFiling]);
+  }, [user.role, filings, userFilings, selectedFiling]);
 
   // Enforce role restrictions on activeTab
   useEffect(() => {
@@ -143,6 +151,9 @@ export default function App() {
     }
     if (user.role === 'contratista' && activeTab === 'evaluacion') {
       setActiveTab('informe');
+    }
+    if (user.role === 'contratista' && (activeTab === 'recibo' || activeTab === 'formato437c' || activeTab === 'calendario')) {
+      setActiveTab('lista');
     }
   }, [user.role, activeTab]);
 
@@ -292,6 +303,13 @@ export default function App() {
     };
   }, []);
 
+  // Re-fetch filings when user authenticates (MSAL redirect completes after mount)
+  useEffect(() => {
+    if (user.isAuthenticated && user.email) {
+      fetchFilings();
+    }
+  }, [user.isAuthenticated, user.email]);
+
   const fetchFilings = async (retryCount = 0) => {
     try {
       const params = new URLSearchParams();
@@ -305,9 +323,6 @@ export default function App() {
         const json = await res.json();
         if (json.data) {
           setFilings(json.data);
-          if (json.data.length > 0 && !selectedFiling) {
-            setSelectedFiling(json.data[0]);
-          }
         }
       } else if (retryCount < 3) {
         await new Promise(r => setTimeout(r, 3000));
@@ -363,18 +378,72 @@ export default function App() {
     }
   };
 
-  const handleSaveEvaluation = async (updatedFiling) => {
+  const handleSaveEvaluation = async (updatedFiling, opts = {}) => {
     setFilings(prev => prev.map(f => f.id === updatedFiling.id ? updatedFiling : f));
     setSelectedFiling(updatedFiling);
 
+    // Refresco diferido: la subida a SharePoint corre en background y el
+    // backend marca m365Synced al terminar. Sin esto, el Historial quedaba
+    // mostrando "Pendiente de subida" aunque la subida hubiera funcionado.
+    if (updatedFiling.estado === 'Aprobado' && !updatedFiling.m365Synced) {
+      setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/radicacion/${updatedFiling.id}`);
+          if (res.ok) {
+            const json = await res.json();
+            if (json.data) {
+              setFilings(prev => prev.map(f => f.id === json.data.id ? json.data : f));
+              setSelectedFiling(prev => (prev && prev.id === json.data.id ? json.data : prev));
+            }
+          }
+        } catch (e) { /* reintento manual disponible en el Historial */ }
+      }, 15000);
+    }
+
+    // skipSync: el llamador ya persistió todo en el backend (ej. /estado
+    // en handleFinalizar, o /metadata con soloAvance en Guardar Avance).
+    // Sin esto se duplica el PATCH y, peor, el borrador caería en el
+    // loop de sincronización a SharePoint.
+    if (opts.skipSync) return;
+
+    fetch(`/api/radicacion/${updatedFiling.id}/metadata`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ metadata: updatedFiling.metadata })
+    }).catch(e => console.warn('Could not sync metadata to backend:', e));
+  };
+
+  const handleUpdateFiling = async (updatedFiling) => {
+    setSelectedFiling(updatedFiling);
+    setFilings(prev => prev.map(f => f.id === updatedFiling.id ? updatedFiling : f));
+
+    fetch(`/api/radicacion/${updatedFiling.id}/metadata`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ metadata: updatedFiling.metadata })
+    }).catch(e => console.warn('Could not sync metadata to backend:', e));
+  };
+
+  const [syncingId, setSyncingId] = useState(null);
+
+  // Reintento manual de subida a SharePoint (sincrónico: devuelve el
+  // motivo real si falla, en vez del silencio del background).
+  const handleRetrySync = async (record) => {
+    if (!record || syncingId) return;
+    if (!confirm(`¿Reintentar la subida de ${record.numeroRadicado} a SharePoint? Puede tardar 1-3 minutos.`)) return;
+    setSyncingId(record.id);
     try {
-      await fetch(`/api/radicacion/${updatedFiling.id}/metadata`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ metadata: updatedFiling.metadata })
-      });
-    } catch (e) {
-      console.warn('Could not sync metadata to backend:', e);
+      const resp = await fetch(`/api/radicacion/${record.id}/sincronizar`, { method: 'POST' });
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok) throw new Error(data?.detail || `El servidor respondió ${resp.status}`);
+      const updated = data.data;
+      setFilings(prev => prev.map(f => f.id === updated.id ? updated : f));
+      setSelectedFiling(prev => (prev && prev.id === updated.id ? updated : prev));
+      alert(`Subida OK: ${record.numeroRadicado} quedó en SharePoint (fila + carpetas + archivos).`);
+    } catch (err) {
+      alert(`No se pudo subir a SharePoint: ${err.message}`);
+    } finally {
+      setSyncingId(null);
     }
   };
 
@@ -388,7 +457,7 @@ export default function App() {
           <div className="bg-[#212631] border border-gray-700/60 rounded-xl p-8 max-w-md w-full text-center shadow-xl">
             <div className="w-12 h-12 border-4 border-[#0078D4] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <h2 className="text-xl font-bold text-white mb-2">Autenticando con Microsoft 365...</h2>
-            <p className="text-sm text-gray-400">Verificando credenciales institucionales y redirigiendo al portal.</p>
+            <p className="text-sm text-gray-300">Verificando credenciales institucionales y redirigiendo al portal.</p>
           </div>
         </main>
       ) : !user.isAuthenticated ? (
@@ -447,16 +516,40 @@ export default function App() {
                     setEditingFiling(null);
                     setActiveTab('nueva');
                   }}
-                  onEditFiling={(record) => {                    setEditingFiling(record);
+                  onEditFiling={(record) => {
+                    setEditingFiling(record);
                     setActiveTab('nueva');
+                  }}
+                  onDeleteFiling={async (record) => {
+                    if (!confirm(`¿Eliminar el radicado ${record.numeroRadicado}? Esta acción no se puede deshacer.`)) return;
+                    try {
+                      const resp = await fetch(`/api/radicacion/${record.identificador}?email=${encodeURIComponent(user.email)}&rol=${user.role}`, { method: 'DELETE' });
+                      const data = await resp.json();
+                      if (!resp.ok) throw new Error(data.detail || 'Error al eliminar');
+                      alert(data.mensaje || 'Radicado eliminado');
+                      setFilings(filings.filter(f => f.id !== record.id));
+                    } catch (err) {
+                      alert('Error: ' + err.message);
+                    }
                   }}
                   userRole={user.role}
                   currentUser={user}
+                  onFormatoC={(record) => {
+                    setSelectedFiling(record);
+                    setActiveTab('formato437c');
+                  }}
+                  onReciboTecnico={(record) => {
+                    setSelectedFiling(record);
+                    setActiveTab('recibo');
+                  }}
+                  onRetrySync={handleRetrySync}
+                  syncingId={syncingId}
                 />
               )}
 
               {activeTab === 'evaluacion' && selectedFiling && (
                 <EvaluacionRadicacion
+                  key={selectedFiling.id || selectedFiling.numeroRadicado}
                   filing={selectedFiling}
                   onSaveEvaluation={handleSaveEvaluation}
                   onViewReport={(filing) => {
@@ -471,16 +564,74 @@ export default function App() {
 
               {activeTab === 'informe' && selectedFiling && (
                 <InformeRecibidoConformidad
+                  key={selectedFiling.id || selectedFiling.numeroRadicado}
                   filing={selectedFiling}
                   onBack={() => setActiveTab('lista')}
                   onEditEvaluation={(filing) => {
                     setSelectedFiling(filing);
                     setActiveTab('evaluacion');
                   }}
+                  onFormatoC={(filing) => {
+                    setSelectedFiling(filing);
+                    setActiveTab('formato437c');
+                  }}
                   onUpdateFiling={handleSaveEvaluation}
                   currentUser={user}
                   userRole={user.role}
                 />
+              )}
+
+              {activeTab === 'formato437c' && selectedFiling && (
+                <Formato437C
+                  filing={selectedFiling}
+                  allFilings={filings}
+                  onSelectFiling={setSelectedFiling}
+                  onBack={() => setActiveTab('lista')}
+                  onUpdateFiling={handleUpdateFiling}
+                />
+              )}
+
+              {activeTab === 'recibo' && user.role === 'interventor' && (
+                <ReciboTecnico
+                  key={selectedFiling?.id || selectedFiling?.numeroRadicado || 'sin-seleccion'}
+                  filings={filings}
+                  filing={selectedFiling}
+                  onSelectFiling={setSelectedFiling}
+                  onBack={() => setActiveTab('lista')}
+                  onUpdateFiling={handleUpdateFiling}
+                  currentUser={user}
+                />
+              )}
+
+              {activeTab === 'calendario' && user.role === 'interventor' && (
+                <CalendarioRevision
+                  filings={filings}
+                  onEvaluateFiling={(record) => {
+                    setSelectedFiling(record);
+                    setActiveTab('evaluacion');
+                  }}
+                  onSelectFiling={(record) => {
+                    setSelectedFiling(record);
+                    setActiveTab('informe');
+                  }}
+                  userRole={user.role}
+                />
+              )}
+
+              {/* Fallback: si la pestaña guardada requiere un expediente pero aún
+                  no hay selección (p. ej. recarga con active_tab en sessionStorage),
+                  mostrar carga en vez de una página en blanco. */}
+              {['evaluacion', 'informe', 'formato437c'].includes(activeTab) && !selectedFiling && (
+                <div className="max-w-md mx-auto my-16 bg-white rounded-2xl border border-gray-200 shadow-md p-8 text-center space-y-4">
+                  <div className="w-10 h-10 border-4 border-[#D9CF43] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                  <p className="text-sm font-bold text-gray-700">Cargando expediente...</p>
+                  <button
+                    onClick={() => setActiveTab('lista')}
+                    className="bg-[#0D0D0D] hover:bg-gray-800 text-[#D9CF43] font-bold text-xs px-4 py-2.5 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Volver a la Lista de Radicaciones
+                  </button>
+                </div>
               )}
             </ErrorBoundary>
           </main>

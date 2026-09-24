@@ -1,5 +1,5 @@
 export const DOCUMENT_CATALOG = [
-  // 1. Documentos de Diseño
+  // 1. Documentos de Diseño (A)
   {
     id: 1,
     code: 'A1',
@@ -68,10 +68,10 @@ export const DOCUMENT_CATALOG = [
     categoryName: 'Documentos de Diseño',
     required: true,
     folderGroup: 'B_Certificaciones',
-    description: 'Formato oficial de declaración firmada por el diseñador eléctrico.'
+    description: 'Conforme al formato 4.3.7.A del RETILAP. Formato oficial de declaración firmada por el diseñador eléctrico.'
   },
 
-  // 2. Luminarias y Materiales
+  // 2. Luminarias y Materiales (B)
   {
     id: 8,
     code: 'B8',
@@ -130,7 +130,7 @@ export const DOCUMENT_CATALOG = [
     categoryName: 'Luminarias y Materiales',
     required: true,
     folderGroup: 'B_Certificaciones',
-    description: 'Certificados de conectores estancos y ponchados.'
+    description: 'Certificados de conectores.'
   },
   {
     id: 14,
@@ -138,12 +138,12 @@ export const DOCUMENT_CATALOG = [
     name: 'Certificado de producto — Postes',
     category: 'luminarias',
     categoryName: 'Luminarias y Materiales',
-    required: false,
+    required: true,
     folderGroup: 'B_Certificaciones',
     description: 'Certificación de postes de concreto o metálicos (si aplica en el alcance).'
   },
 
-  // 3. Documentos del Constructor
+  // 3. Documentos del Constructor (C)
   {
     id: 15,
     code: 'C15',
@@ -182,27 +182,28 @@ export const DOCUMENT_CATALOG = [
     categoryName: 'Documentos del Constructor',
     required: true,
     folderGroup: 'B_Certificaciones',
-    description: 'Formato de declaración juramentada de la correcta ejecución de la obra.'
+    description: 'Conforme al formato 4.3.7.B del RETILAP y formato 4.3.6.2 del RETIE. Formato de declaración juramentada de la correcta ejecución de la obra.'
   },
 
-  // 4. Dictámenes y Permisos
+  // 4. Dictámenes y Permisos (D)
   {
     id: 19,
     code: 'D19',
-    name: 'Dictamen RETIE (si aplica)',
+    name: 'Dictamen RETIE',
     category: 'dictamenes',
     categoryName: 'Dictámenes y Permisos',
     required: false,
     folderGroup: 'D_Inventario',
-    description: 'Dictamen de inspección de organismo acreditado ONAC (si el tipo de obra lo exige).'
+    description: 'Dictamen de inspección de organismo acreditado ONAC: para proyectos exclusivos de AP.'
   },
   {
     id: 20,
     code: 'D20',
-    name: 'Dictamen RETILAP (si aplica)',
+    name: 'Dictamen RETILAP',
     category: 'dictamenes',
     categoryName: 'Dictámenes y Permisos',
-    required: false,
+    required: true,
+    requiredIfCategoriaBc: true,
     folderGroup: 'D_Inventario',
     description: 'Dictamen final de inspección de alumbrado público por organismo de tercera parte.'
   },
@@ -212,9 +213,58 @@ export const DOCUMENT_CATALOG = [
     name: 'Recibo de vías por parte del Municipio',
     category: 'dictamenes',
     categoryName: 'Dictámenes y Permisos',
-    required: false,
-    folderGroup: 'E_SST_Ambiental',
+    required: true,
+    folderGroup: 'D_Inventario',
     description: 'Paz y salvo o recibo oficial de intervención de espacio público emitido por la alcaldía.'
+  },
+
+  // 5. Otros
+  {
+    id: 22,
+    code: 'CAUE',
+    name: 'CAUE — Costo Anual Uniforme Equivalente',
+    category: 'otros',
+    categoryName: 'Otros',
+    required: true,
+    folderGroup: 'E_Otros',
+    description: 'Estudio financiero del costo anual uniforme equivalente del proyecto.'
+  },
+  {
+    id: 23,
+    code: 'CANT',
+    name: 'Archivo de cantidades de infraestructura a entregar',
+    category: 'otros',
+    categoryName: 'Otros',
+    required: true,
+    folderGroup: 'E_Otros',
+    description: 'Cantidades de la construcción que se pretende entregar para el Alumbrado Público.'
+  },
+  {
+    id: 24,
+    code: 'CVP',
+    name: 'Certificado de vía pública',
+    category: 'otros',
+    categoryName: 'Otros',
+    required: true,
+    folderGroup: 'E_Otros',
+    description: 'Certificado de vía pública de Secretaría de Planeación.'
+  },
+  {
+    id: 25,
+    code: 'CEAP',
+    name: 'Documentos para circuitos exclusivos de AP',
+    category: 'otros',
+    categoryName: 'Otros',
+    required: true,
+    folderGroup: 'E_Otros',
+    description: 'Adicionar para cuando existan circuitos exclusivos de Alumbrado Público.',
+    hasSubFiles: true,
+    subFiles: [
+      { subId: '25a', subCode: 'CEAP-A', subName: 'Tarjeta profesional del diseñador y constructor' },
+      { subId: '25b', subCode: 'CEAP-B', subName: 'Cédula del diseñador y constructor' },
+      { subId: '25c', subCode: 'CEAP-C', subName: 'Memoria de cálculo' },
+      { subId: '25d', subCode: 'CEAP-D', subName: 'Plano eléctrico' }
+    ]
   }
 ];
 

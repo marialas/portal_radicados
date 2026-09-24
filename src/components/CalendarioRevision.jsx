@@ -1,0 +1,346 @@
+import React, { useMemo, useState } from 'react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Eye,
+  Edit3,
+  X
+} from 'lucide-react';
+
+// Colores del semáforo de revisión (15 días hábiles)
+const C = {
+  azul: '#2563EB',     // radicado / en término (>8 días)
+  amarillo: '#EAB308', // faltan 8 días o menos
+  rojo: '#DC2626',     // faltan 4 días o menos
+  morado: '#7C3AED',   // fecha límite vencida
+  verde: '#16A34A'     // aprobado
+};
+
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+const aMedianoche = (d) => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+};
+const soloFecha = (v) => {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d) ? null : aMedianoche(d);
+};
+const esHabil = (d) => d.getDay() !== 0 && d.getDay() !== 6;
+const sumarHabiles = (fecha, n) => {
+  const d = aMedianoche(fecha);
+  let c = 0;
+  while (c < n) {
+    d.setDate(d.getDate() + 1);
+    if (esHabil(d)) c++;
+  }
+  return d;
+};
+const retrocederHabiles = (fecha, n) => {
+  const d = aMedianoche(fecha);
+  let c = 0;
+  while (c < n) {
+    d.setDate(d.getDate() - 1);
+    if (esHabil(d)) c++;
+  }
+  return d;
+};
+// Días hábiles en (desde, hasta]
+const habilesEntre = (desde, hasta) => {
+  const d = aMedianoche(desde);
+  const h = aMedianoche(hasta);
+  let c = 0;
+  while (d < h) {
+    d.setDate(d.getDate() + 1);
+    if (esHabil(d)) c++;
+  }
+  return c;
+};
+const clave = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+const fechaAprobacion = (filing) => {
+  const hist = filing.historial || [];
+  const ap = hist.find(h => h.estado === 'Aprobado' && h.fecha);
+  if (ap) return soloFecha(ap.fecha);
+  if (filing.estado === 'Aprobado') return soloFecha(filing.fechaActualizacion);
+  return null;
+};
+
+export const CalendarioRevision = ({
+  filings = [],
+  onEvaluateFiling,
+  onSelectFiling,
+  userRole = 'interventor'
+}) => {
+  const hoy = useMemo(() => aMedianoche(new Date()), []);
+  const [mesVisible, setMesVisible] = useState(() => {
+    const d = new Date();
+    return { anio: d.getFullYear(), mes: d.getMonth() };
+  });
+  const [diaSeleccionado, setDiaSeleccionado] = useState(null);
+
+  // Por radicado: creación, límite (15 hábiles), restantes, fechas de aviso 8/4, aprobación
+  const info = useMemo(() => filings.filter(Boolean).map(f => {
+    const creacion = soloFecha(f.fechaRadicacion);
+    if (!creacion) return null;
+    const limite = sumarHabiles(creacion, 15);
+    const aprob = fechaAprobacion(f);
+    const restantes = hoy <= limite
+      ? habilesEntre(hoy, limite)
+      : -habilesEntre(limite, hoy);
+    return {
+      filing: f,
+      creacion,
+      limite,
+      restantes,
+      aprobacion: aprob,
+      fecha8: retrocederHabiles(limite, 8),
+      fecha4: retrocederHabiles(limite, 4)
+    };
+  }).filter(Boolean), [filings, hoy]);
+
+  // Mapa fecha -> eventos [{info, tipo}] para el mes visible
+  const eventosPorDia = useMemo(() => {
+    const mapa = {};
+    const push = (fecha, item) => {
+      const k = clave(fecha);
+      if (!mapa[k]) mapa[k] = [];
+      if (!mapa[k].some(e => e.info.filing.id === item.info.filing.id && e.tipo === item.tipo)) {
+        mapa[k].push(item);
+      }
+    };
+    info.forEach(i => {
+      // Solo las fechas importantes llevan punto: creación, aviso de 8,
+      // aviso de 4 y aprobación (nada de rangos día por día)
+      push(i.creacion, { info: i, tipo: 'creacion' });
+      if (i.aprobacion) {
+        push(i.aprobacion, { info: i, tipo: 'aprobado' });
+      } else {
+        push(i.fecha8, { info: i, tipo: 'aviso8' });
+        push(i.fecha4, { info: i, tipo: 'aviso4' });
+        if (i.restantes < 0) {
+          push(i.limite, { info: i, tipo: 'vencido' });
+        }
+      }
+    });
+    return mapa;
+  }, [info]);
+
+  const colorTipo = { creacion: C.azul, aviso8: C.amarillo, aviso4: C.rojo, vencido: C.morado, aprobado: C.verde };
+  const etiquetaTipo = {
+    creacion: 'Radicado creado',
+    aviso8: 'Faltan 8 días hábiles',
+    aviso4: 'Faltan 4 días hábiles o menos',
+    vencido: 'Fecha límite vencida',
+    aprobado: 'Aprobado'
+  };
+
+  // Celdas del mes (lunes primero)
+  const celdas = useMemo(() => {
+    const primero = new Date(mesVisible.anio, mesVisible.mes, 1);
+    const desplazamiento = (primero.getDay() + 6) % 7;
+    const inicio = new Date(primero);
+    inicio.setDate(inicio.getDate() - desplazamiento);
+    return Array.from({ length: 42 }, (_, k) => {
+      const d = new Date(inicio);
+      d.setDate(d.getDate() + k);
+      return d;
+    });
+  }, [mesVisible]);
+
+  const eventosDia = diaSeleccionado ? (eventosPorDia[clave(diaSeleccionado)] || []) : [];
+  const fmtCorta = (d) => d ? d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+
+  const moverMes = (delta) => {
+    setMesVisible(prev => {
+      const d = new Date(prev.anio, prev.mes + delta, 1);
+      return { anio: d.getFullYear(), mes: d.getMonth() };
+    });
+    setDiaSeleccionado(null);
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-6 font-sans">
+      {/* Encabezado */}
+      <div className="bg-[#1E222A] text-white rounded-2xl p-6 shadow-xl border border-slate-700/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          <div className="p-2.5 bg-slate-800 rounded-xl border border-slate-700">
+            <CalendarDays className="w-6 h-6 text-[#D9CF43]" />
+          </div>
+          <div>
+            <span className="inline-block bg-[#D9CF43]/20 text-[#D9CF43] text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-[#D9CF43]/40">
+              Plazos de revisión · 15 días hábiles
+            </span>
+            <h1 className="text-xl sm:text-2xl font-black text-white mt-1">
+              Calendario de Radicaciones
+            </h1>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 self-start md:self-auto">
+          <button onClick={() => moverMes(-1)} className="bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl p-2.5 transition-colors cursor-pointer" title="Mes anterior">
+            <ChevronLeft className="w-4 h-4 text-[#D9CF43]" />
+          </button>
+          <button
+            onClick={() => { const d = new Date(); setMesVisible({ anio: d.getFullYear(), mes: d.getMonth() }); }}
+            className="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-black px-4 py-2.5 rounded-xl transition-colors cursor-pointer"
+          >
+            {MESES[mesVisible.mes]} {mesVisible.anio}
+          </button>
+          <button onClick={() => moverMes(1)} className="bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl p-2.5 transition-colors cursor-pointer" title="Mes siguiente">
+            <ChevronRight className="w-4 h-4 text-[#D9CF43]" />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Calendario */}
+        <div className="lg:col-span-2 bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
+          <div className="grid grid-cols-7 bg-[#0D0D0D] text-white text-[11px] font-black uppercase tracking-wider text-center">
+            {DIAS.map(d => <div key={d} className="py-2.5">{d}</div>)}
+          </div>
+          <div className="grid grid-cols-7">
+            {celdas.map((d, k) => {
+              const esOtroMes = d.getMonth() !== mesVisible.mes;
+              const esHoy = clave(d) === clave(hoy);
+              const evs = eventosPorDia[clave(d)] || [];
+              const colores = [...new Set(evs.map(e => colorTipo[e.tipo]))];
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setDiaSeleccionado(evs.length ? d : null)}
+                  className={`min-h-[64px] p-1.5 border-b border-r border-gray-100 flex flex-col items-center justify-start gap-1 transition-colors ${
+                    esOtroMes ? 'bg-gray-50/60 text-gray-300' : 'bg-white text-gray-800'
+                  } ${evs.length ? 'hover:bg-amber-50/60 cursor-pointer' : ''} ${esHoy ? 'ring-2 ring-inset ring-[#D9CF43]' : ''}`}
+                  title={evs.length ? `${evs.length} evento(s) — clic para ver` : ''}
+                >
+                  <span className={`text-xs font-black w-6 h-6 flex items-center justify-center rounded-full ${esHoy ? 'bg-[#0D0D0D] text-[#D9CF43]' : ''}`}>
+                    {d.getDate()}
+                  </span>
+                  {colores.length > 0 && (
+                    <span className="flex items-center justify-center gap-1 flex-wrap">
+                      {colores.map(c => (
+                        <span key={c} className="w-2.5 h-2.5 rounded-full border border-white shadow" style={{ backgroundColor: c }} />
+                      ))}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {/* Leyenda */}
+          <div className="flex flex-wrap items-center gap-4 px-5 py-3 bg-gray-50 border-t border-gray-200 text-[11px] font-bold text-gray-700">
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: C.azul }} /> Radicado</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: C.amarillo }} /> Faltan ≤8 días</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: C.rojo }} /> Faltan ≤4 días</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: C.morado }} /> Vencido</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: C.verde }} /> Aprobado</span>
+          </div>
+        </div>
+
+        {/* Próximos vencimientos */}
+        <div className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden flex flex-col">
+          <div className="px-5 py-3.5 bg-slate-900 text-white flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-[#D9CF43]" />
+            <h2 className="text-xs font-black uppercase tracking-wider">Próximos a vencer</h2>
+          </div>
+          <div className="divide-y divide-gray-100 overflow-y-auto max-h-[420px]">
+            {info.filter(i => !i.aprobacion).sort((a, b) => a.restantes - b.restantes).slice(0, 15).map(i => (
+              <button
+                key={i.filing.id}
+                type="button"
+                onClick={() => setDiaSeleccionado(i.restantes <= 4 ? i.fecha4 : (i.restantes <= 8 ? i.fecha8 : i.creacion))}
+                className="w-full text-left px-5 py-3 hover:bg-amber-50/50 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono font-black text-xs text-gray-900">{i.filing.numeroRadicado}</span>
+                  <span
+                    className="text-[10px] font-black px-2 py-0.5 rounded-full border"
+                    style={{
+                      color: '#fff',
+                      backgroundColor: i.restantes < 0 ? C.morado : i.restantes <= 4 ? C.rojo : i.restantes <= 8 ? '#B45309' : C.azul,
+                      borderColor: 'transparent'
+                    }}
+                  >
+                    {i.restantes < 0 ? `Vencido ${-i.restantes}d` : i.restantes === 0 ? 'Vence hoy' : `${i.restantes}d hábiles`}
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-600 truncate mt-0.5">{i.filing.metadata?.nombreProyecto || ''}</p>
+                <p className="text-[10px] text-gray-400">Límite: {fmtCorta(i.limite)}</p>
+              </button>
+            ))}
+            {info.filter(i => !i.aprobacion).length === 0 && (
+              <p className="text-xs text-gray-500 text-center py-8 font-semibold">Sin radicados pendientes de revisión.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Modal de detalle del día */}
+      {diaSeleccionado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setDiaSeleccionado(null)}>
+          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[#0D0D0D] px-6 py-4 flex items-center justify-between shrink-0">
+              <h3 className="text-white font-black capitalize">
+                {diaSeleccionado.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              </h3>
+              <button onClick={() => setDiaSeleccionado(null)} className="text-gray-300 hover:text-white transition-colors cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3 overflow-y-auto">
+              {eventosDia.map(({ info: i, tipo }, idx) => {
+                const f = i.filing;
+                return (
+                  <div key={`${f.id}-${tipo}-${idx}`} className="border border-gray-200 rounded-xl p-4 space-y-2 bg-gray-50/50">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-mono font-black text-sm text-gray-900">{f.numeroRadicado}</span>
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-0.5 rounded-full text-white" style={{ backgroundColor: colorTipo[tipo] }}>
+                        {tipo === 'aprobado' ? <CheckCircle2 className="w-3.5 h-3.5" /> : tipo === 'creacion' ? <Clock className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                        {etiquetaTipo[tipo]}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-700 space-y-0.5">
+                      <p><strong>Proyecto:</strong> {f.metadata?.nombreProyecto || '—'}</p>
+                      <p><strong>Municipio:</strong> {f.metadata?.municipio || '—'} · <strong>Contratista:</strong> {f.metadata?.contratista || '—'}</p>
+                      <p><strong>Estado:</strong> {f.estado} · <strong>Radicado:</strong> {fmtCorta(i.creacion)}</p>
+                      <p>
+                        <strong>Límite revisión:</strong> {fmtCorta(i.limite)} ·{' '}
+                        <strong>{i.aprobacion ? `Aprobado el ${fmtCorta(i.aprobacion)}` : i.restantes < 0 ? `Vencido hace ${-i.restantes} día(s) hábiles` : `Faltan ${i.restantes} día(s) hábiles`}</strong>
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      {userRole === 'interventor' && onEvaluateFiling && f.estado !== 'Aprobado' && (
+                        <button
+                          onClick={() => { setDiaSeleccionado(null); onEvaluateFiling(f); }}
+                          className="bg-amber-100 hover:bg-amber-200 text-amber-900 font-extrabold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 border border-amber-300 cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" /> Evaluar
+                        </button>
+                      )}
+                      {onSelectFiling && (
+                        <button
+                          onClick={() => { setDiaSeleccionado(null); onSelectFiling(f); }}
+                          className="bg-[#0D0D0D] hover:bg-gray-800 text-[#D9CF43] font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> Informe
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

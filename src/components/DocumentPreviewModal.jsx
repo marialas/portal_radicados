@@ -217,7 +217,7 @@ startxref
                 <span className="bg-[#D9CF43] text-slate-950 font-black text-[11px] px-2 py-0.5 rounded uppercase">
                   {docItem.docCode}
                 </span>
-                <span className="text-xs text-gray-400 font-bold uppercase truncate">
+                <span className="text-xs text-gray-300 font-bold uppercase truncate">
                   {filing?.numeroRadicado} - {filing?.metadata?.municipio}
                 </span>
               </div>
@@ -230,7 +230,7 @@ startxref
           <div className="flex items-center space-x-2 shrink-0">
             <button
               onClick={onClose}
-              className="p-2 hover:bg-slate-800 rounded-lg text-gray-400 hover:text-white transition-colors"
+              className="p-2 hover:bg-slate-800 rounded-lg text-gray-300 hover:text-white transition-colors"
             >
               <X className="w-6 h-6" />
             </button>
@@ -259,7 +259,7 @@ startxref
           <div className="h-full flex flex-col">
             {isNA ? (
               <div className="bg-slate-900 border-2 border-dashed border-slate-700 rounded-2xl p-12 text-center max-w-xl mx-auto space-y-4 my-8">
-                <div className="w-16 h-16 bg-slate-800 text-gray-400 rounded-full flex items-center justify-center mx-auto">
+                <div className="w-16 h-16 bg-slate-800 text-gray-300 rounded-full flex items-center justify-center mx-auto">
                   <MinusCircle className="w-8 h-8" />
                 </div>
                 <div>
@@ -282,7 +282,7 @@ startxref
                 </div>
                 <div>
                   <h4 className="text-lg font-bold text-amber-300 mb-1">Sin Archivo Adjunto</h4>
-                  <p className="text-xs text-gray-400 max-w-md mx-auto">
+                  <p className="text-xs text-gray-300 max-w-md mx-auto">
                     Aún no se ha subido el archivo correspondiente a este código de verificación.
                   </p>
                 </div>
@@ -304,7 +304,7 @@ startxref
                         <h4 className="text-sm font-bold text-amber-300 mb-1">
                           Plano DWG no visualizable en línea
                         </h4>
-                        <p className="text-[11px] text-gray-400 max-w-md mx-auto mb-4">
+                        <p className="text-[11px] text-gray-300 max-w-md mx-auto mb-4">
                           El formato <strong>{docItem.fileName}</strong> (DWG/DWT/DWF) requiere AutoCAD para abrirse.
                           Descárguelo en su equipo para revisarlo con el contratista.
                         </p>
@@ -321,7 +321,7 @@ startxref
                         {cadError && (
                           <div className="bg-slate-900 border border-rose-900/60 rounded-xl px-4 py-3 text-center w-full">
                             <p className="text-xs font-bold text-rose-300 mb-1">No se pudo cargar el plano en línea.</p>
-                            <p className="text-[11px] text-gray-400 mb-3">{cadError}</p>
+                            <p className="text-[11px] text-gray-300 mb-3">{cadError}</p>
                             <button
                               onClick={handleDownloadPdf}
                               className="bg-[#D9CF43] hover:bg-[#c4ba3c] text-[#1E222A] font-black text-xs px-4 py-2 rounded-lg"
@@ -334,7 +334,7 @@ startxref
                         {cadLoading && !cadBuffer && (
                           <div className="w-full h-[560px] bg-slate-900 rounded-xl overflow-hidden border border-slate-700 flex flex-col items-center justify-center space-y-3">
                             <div className="w-8 h-8 border-4 border-[#D9CF43]/30 border-t-[#D9CF43] rounded-full animate-spin" />
-                            <p className="text-xs text-gray-400 font-bold">Cargando plano CAD…</p>
+                            <p className="text-xs text-gray-300 font-bold">Cargando plano CAD…</p>
                           </div>
                         )}
 
@@ -343,7 +343,7 @@ startxref
                             <Suspense fallback={
                               <div className="w-full h-[560px] flex flex-col items-center justify-center space-y-3">
                                 <div className="w-8 h-8 border-4 border-[#D9CF43]/30 border-t-[#D9CF43] rounded-full animate-spin" />
-                                <p className="text-xs text-gray-400 font-bold">Cargando visor CAD…</p>
+                                <p className="text-xs text-gray-300 font-bold">Cargando visor CAD…</p>
                               </div>
                             }>
                               <CadViewerLazy buffer={cadBuffer} />
@@ -353,7 +353,7 @@ startxref
 
                         {!cadLoading && !cadBuffer && !cadError && (
                           <div className="w-full h-[200px] bg-slate-900 rounded-xl border border-slate-700 flex items-center justify-center">
-                            <p className="text-xs text-gray-400">Cargue el DXF localmente desde su equipo para visualizarlo aquí.</p>
+                            <p className="text-xs text-gray-300">Cargue el DXF localmente desde su equipo para visualizarlo aquí.</p>
                           </div>
                         )}
                       </>
@@ -374,7 +374,7 @@ startxref
                     </div>
                     <div>
                       <h4 className="text-lg font-bold text-amber-300 mb-1">Archivo no disponible en el servidor</h4>
-                      <p className="text-xs text-gray-400 max-w-md mx-auto">
+                  <p className="text-xs text-gray-300 max-w-md mx-auto">
                         El archivo <strong>{docItem.fileName}</strong> no se encuentra almacenado en el servidor actual.
                       </p>
                     </div>
@@ -386,7 +386,7 @@ startxref
         </div>
 
         {/* Footer del Modal */}
-        <div className="bg-slate-900 px-6 py-3 border-t border-slate-800 flex items-center justify-between text-xs text-gray-400">
+        <div className="bg-slate-900 px-6 py-3 border-t border-slate-800 flex items-center justify-between text-xs text-gray-300">
           <span className="truncate">INTECOAL SAS • Custodia M365 SharePoint Online</span>
           <button
             onClick={onClose}

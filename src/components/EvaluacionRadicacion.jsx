@@ -38,8 +38,14 @@ export const EvaluacionRadicacion = ({
   const isRol2Contratista = effectiveRole === 'contratista';
 
   const [archivosState, setArchivosState] = useState(() => {
-    return DOCUMENT_CATALOG.map(doc => {
-      const existing = filing.archivos?.find(a => a.docId === doc.id || a.docCode === doc.code);
+    // Preservar TODO lo radicado: base del catálogo + documentos
+    // adicionales (esManual) y sub-archivos. Antes se reconstruía solo
+    // desde DOCUMENT_CATALOG y al guardar se borraban los adicionales.
+    const existentes = new Map(
+      (filing.archivos || []).map(a => [a.docId, a])
+    );
+    const base = DOCUMENT_CATALOG.map(doc => {
+      const existing = existentes.get(doc.id);
       if (existing) return { ...existing };
       return {
         docId: doc.id,
@@ -54,6 +60,11 @@ export const EvaluacionRadicacion = ({
         notes: ''
       };
     });
+    const catalogIds = new Set(DOCUMENT_CATALOG.map(d => d.id));
+    const adicionales = (filing.archivos || [])
+      .filter(a => !catalogIds.has(a.docId))
+      .map(a => ({ ...a }));
+    return [...base, ...adicionales];
   });
 
   const [estadoGeneral, setEstadoGeneral] = useState(filing.estado || 'Radicado');
@@ -76,8 +87,10 @@ export const EvaluacionRadicacion = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
+  const [saveErrorMsg, setSaveErrorMsg] = useState('');
+  const [lastSavedFiling, setLastSavedFiling] = useState(null);
 
-  const totalDocs = 21;
+  const totalDocs = archivosState.length || DOCUMENT_CATALOG.length;
   const cumpleCount = archivosState.filter(a => a.status === 'CUMPLE').length;
   const naCount = archivosState.filter(a => a.status === 'N/A').length;
   const conObsCount = archivosState.filter(a => a.status === 'PENDIENTE').length;
@@ -179,7 +192,9 @@ export const EvaluacionRadicacion = ({
       setSaveSuccessMsg('Avance guardado localmente.');
     } finally {
       setIsSaving(false);
-      onSaveEvaluation(updatedFiling);
+      // El PATCH /metadata con soloAvance ya persistió el borrador en el
+      // backend: solo se actualiza el estado local, sin segundo PATCH.
+      await onSaveEvaluation(updatedFiling, { skipSync: true });
       if (typeof onBack === 'function') onBack();
     }
   };
@@ -189,13 +204,15 @@ export const EvaluacionRadicacion = ({
 
     // El dictamen final requiere la firma digital del revisor (INTECOAL).
     if ((estadoFinal === 'Aprobado' || estadoFinal === 'Con Observaciones') && !firmaInterventoria) {
-      setSaveSuccessMsg('No se puede finalizar el informe: falta la firma digital del revisor (INTECOAL). Estampe la firma antes de guardar.');
+      setSaveErrorMsg('No se puede finalizar el informe: falta la firma digital del revisor (INTECOAL). Estampe la firma antes de guardar.');
+      setSaveSuccessMsg('');
       setIsSaving(false);
       return;
     }
 
     setIsSaving(true);
     setSaveSuccessMsg('');
+    setSaveErrorMsg('');
 
     const updatedFiling = {
       ...filing,
@@ -213,6 +230,9 @@ export const EvaluacionRadicacion = ({
       fechaActualizacion: new Date().toISOString()
     };
 
+    let finalizadoOk = false;
+    let filingFinal = updatedFiling;
+
     try {
       const res = await fetch(`/api/radicacion/${filing.id}/estado`, {
         method: 'PATCH',
@@ -227,31 +247,55 @@ export const EvaluacionRadicacion = ({
         })
       });
 
-      if (res.ok) {
-        if (estadoFinal === 'Aprobado') {
-          updatedFiling.m365Synced = true;
-          setSaveSuccessMsg('¡Radicado APROBADO, notificado al contratista y cargado en SharePoint!');
-        } else {
-          setSaveSuccessMsg('¡Evaluación finalizada y notificada. Expediente con observaciones!');
-        }
+      if (!res.ok) {
+        let detalle = '';
+        try { detalle = (await res.json())?.detail || ''; } catch { detalle = ''; }
+        throw new Error(detalle || `El servidor respondió ${res.status}`);
       }
+
+      // Fuente de verdad: el radicado devuelto por el backend (ya incluye
+      // estado, historial, archivos y metadata persistidos).
+      try {
+        const payload = await res.json();
+        if (payload?.data) filingFinal = payload.data;
+      } catch { filingFinal = updatedFiling; }
+
+      if (estadoFinal === 'Aprobado') {
+        // m365Synced lo confirma el backend cuando la subida en segundo
+        // plano termina (no se fuerza aquí: antes se marcaba como subido
+        // sin verificar y SharePoint quedaba vacío).
+        setSaveSuccessMsg(`¡Radicado ${filingFinal.numeroRadicado} APROBADO y notificado! La subida a SharePoint (carpetas + archivos) continúa en segundo plano. Si no aparece en SharePoint, use «Reintentar subida» en el Historial. Volviendo al Historial de Radicaciones…`);
+      } else {
+        setSaveSuccessMsg(`¡Evaluación de ${filingFinal.numeroRadicado} finalizada y notificada! (A SharePoint solo se sube al aprobar). Volviendo al Historial de Radicaciones…`);
+      }
+      finalizadoOk = true;
     } catch (err) {
-      console.warn('Backend patch not available, using client state', err);
-      setSaveSuccessMsg('Evaluación finalizada localmente.');
+      console.warn('No se pudo finalizar en el servidor:', err);
+      setSaveErrorMsg(`No se pudo guardar en el servidor: ${err.message || err}. Intente de nuevo sin salir de esta pantalla.`);
     } finally {
       setIsSaving(false);
-      onSaveEvaluation(updatedFiling);
-      if (typeof onBack === 'function') onBack();
+    }
+
+    // Solo se sale de la evaluación si el backend confirmó el guardado.
+    // Se navega al HISTORIAL (lista) con el radicado evaluado, nunca al
+    // último creado: se persiste filingFinal (respuesta del backend) y se
+    // espera un momento para que el revisor lea la confirmación.
+    if (finalizadoOk) {
+      setLastSavedFiling(filingFinal);
+      await onSaveEvaluation(filingFinal, { skipSync: true });
+      setTimeout(() => {
+        if (typeof onBack === 'function') onBack();
+      }, 1200);
     }
   };
 
   const groupNamesMap = {
-    'TODAS': 'Todas las Secciones (21 Requisitos)',
-    'A_Tecnicos': 'Grupo A: Documentos Técnicos y Planos (A1-A7)',
+    'TODAS': `Todas las Secciones (${DOCUMENT_CATALOG.length} Requisitos)`,
+    'A_Tecnicos': 'Grupo A: Documentos Técnicos y Planos (A1-A8)',
     'B_Certificaciones': 'Grupo B: Certificaciones y Garantías (B8-B12)',
     'C_Contractuales': 'Grupo C: Documentación Contractual y Legal (C13-C16)',
-    'D_Inventario': 'Grupo D: Inventario y Georreferenciación (D17-D19)',
-    'E_SST_Ambiental': 'Grupo E: SST, Ambiental y Bitácoras (E20-E21)'
+    'D_Inventario': 'Grupo D: Dictámenes e Inventario (D19-D21)',
+    'E_Otros': 'Grupo E: Otros documentos (CAUE, CANT, CVP, CEAP)'
   };
 
   return (
@@ -265,7 +309,7 @@ export const EvaluacionRadicacion = ({
           <div className="space-y-2">
             <button
               onClick={onBack}
-              className="inline-flex items-center space-x-2 text-xs text-gray-400 hover:text-[#D9CF43] transition-colors font-bold mb-1"
+              className="inline-flex items-center space-x-2 text-xs text-gray-300 hover:text-[#D9CF43] transition-colors font-bold mb-1"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Volver a la Lista de Radicaciones</span>
@@ -338,23 +382,30 @@ export const EvaluacionRadicacion = ({
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-5 border-t border-slate-700/80 text-xs">
           <div>
-            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Radicado N°</span>
+            <span className="text-[10px] text-gray-300 font-bold uppercase tracking-wider block">Radicado N°</span>
             <span className="font-mono font-black text-[#D9CF43] text-sm block">{filing.numeroRadicado}</span>
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Radicado</span>
+            <span className="text-[10px] text-gray-300 font-bold uppercase tracking-wider block">Radicado</span>
             <span className="font-bold text-gray-200 block truncate">{filing.numeroRadicado} - {filing.metadata.nombreProyecto}</span>
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Contratista</span>
+            <span className="text-[10px] text-gray-300 font-bold uppercase tracking-wider block">Contratista</span>
             <span className="font-bold text-gray-200 block truncate">{filing.metadata.contratista}</span>
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Municipio</span>
+            <span className="text-[10px] text-gray-300 font-bold uppercase tracking-wider block">Municipio</span>
             <span className="font-bold text-gray-200 block">{filing.metadata.municipio}</span>
           </div>
         </div>
       </div>
+
+      {saveErrorMsg && (
+        <div className="bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-xl text-xs font-bold flex items-center space-x-2 shadow-sm">
+          <XCircle className="w-5 h-5 text-red-600 shrink-0" />
+          <span>{saveErrorMsg}</span>
+        </div>
+      )}
 
       {saveSuccessMsg && (
         <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 px-4 py-3 rounded-xl text-xs font-bold flex items-center justify-between shadow-sm animate-fade-in">
@@ -363,7 +414,7 @@ export const EvaluacionRadicacion = ({
             <span>{saveSuccessMsg}</span>
           </div>
           <button
-            onClick={() => onViewReport(filing)}
+            onClick={() => onViewReport(lastSavedFiling || filing)}
             className="underline text-emerald-900 font-black hover:text-emerald-700 text-xs"
           >
             Ver Informe Oficial →
@@ -544,7 +595,7 @@ export const EvaluacionRadicacion = ({
         </div>
       </div>
 
-      {/* CHECKLIST MATRIX (21 DOCUMENTS) */}
+      {/* CHECKLIST MATRIX (ALL DOCUMENTS) */}
       <div className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-200 bg-slate-900 text-white space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -553,7 +604,7 @@ export const EvaluacionRadicacion = ({
                 LISTA DE CHEQUEO DE DOCUMENTACIÓN TÉCNICA
               </span>
               <h2 className="text-lg font-black text-white mt-0.5">
-                Evaluación Item por Item (21 Requisitos RETILAP / RETIE)
+                Evaluación Item por Item ({DOCUMENT_CATALOG.length} Requisitos RETILAP / RETIE)
               </h2>
             </div>
 
@@ -574,12 +625,12 @@ export const EvaluacionRadicacion = ({
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-2">
             <div className="md:col-span-8 flex flex-wrap gap-1.5">
               {[
-                { id: 'TODAS', label: 'Todos (21)' },
+                { id: 'TODAS', label: `Todos (${DOCUMENT_CATALOG.length})` },
                 { id: 'A_Tecnicos', label: 'A. Técnicos' },
                 { id: 'B_Certificaciones', label: 'B. Certificaciones' },
                 { id: 'C_Contractuales', label: 'C. Contractuales' },
                 { id: 'D_Inventario', label: 'D. Inventario' },
-                { id: 'E_SST_Ambiental', label: 'E. SST/Bitácoras' }
+                { id: 'E_Otros', label: 'E. Otros' }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -769,7 +820,7 @@ export const EvaluacionRadicacion = ({
           <div className="flex items-center space-x-2 text-xs text-gray-300 font-medium">
             <Info className="w-4 h-4 text-[#D9CF43]" />
             <span>
-              Use "Guardar Avance" para guardar el borrador sin notificar (el expediente sigue "En Revisión"). Use "Generar Informe" para finalizar la evaluación, notificar al contratista y cargar en SharePoint.
+              Use "Guardar Avance" para guardar el borrador sin notificar (el expediente sigue "En Revisión"). Use "Generar Informe" para finalizar la evaluación y notificar al contratista (a SharePoint solo se sube al aprobar).
             </span>
           </div>
 

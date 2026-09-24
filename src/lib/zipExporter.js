@@ -10,12 +10,14 @@ export async function downloadFilingZip(filing) {
   const rootFolderName = filing.numeroRadicado || 'EXPEDIENTE_RETILAP';
   const projectFolder = zip.folder(rootFolderName);
 
-  // Subcarpetas estándar M365
+  // Subcarpetas estándar M365 (A-D + E_Otros + F_Documentos_Adicionales)
   const folderA = projectFolder.folder('A_Tecnicos');
   const folderB = projectFolder.folder('B_Certificaciones');
   const folderC = projectFolder.folder('C_Contractuales');
   const folderD = projectFolder.folder('D_Inventario');
-  const folderE = projectFolder.folder('E_SST_Ambiental');
+  const folderE = projectFolder.folder('E_Otros');
+  const folderF = projectFolder.folder('F_Documentos_Adicionales');
+  const folderCEAP = folderE.folder('Documentos para circuitos exclusivos de AP');
 
   // Documento de metadatos e instrucciones de carga SharePoint
   const readmeContent = `EXPEDIENTE TÉCNICO VERIFICACIÓN RETILAP 40150
@@ -27,7 +29,7 @@ DATOS DEL EXPEDIENTE:
 Número de Radicado: ${filing.numeroRadicado || 'N/A'}
 Fecha de Radicación: ${filing.fechaRadicacion || 'N/A'}
 Estado: ${filing.estado || 'Aprobado'}
-Documentos Verificados: ${filing.documentosOk || 21} de 21 requisitos RETILAP
+Documentos Verificados: ${filing.documentosOk || 22} de 22 requisitos RETILAP
 Porcentaje de Cumplimiento: ${filing.porcentajeCumplimiento || 100}%
 
 PASOS PARA SUBIR ESTA CARPETA A TU SHAREPOINT ONLINE:
@@ -45,14 +47,19 @@ PASOS PARA SUBIR ESTA CARPETA A TU SHAREPOINT ONLINE:
   const archivos = filing.archivos || [];
   for (const archivo of archivos) {
     if (archivo.status === 'CUMPLE' || archivo.status === 'N/A' || filing.estado === 'Aprobado') {
+      // #25 CEAP -> subcarpeta anidada dentro de E_Otros (incluye
+      // radicados viejos, cuyo folderPath aún dice A_Tecnicos)
+      const esCEAP = archivo.docId === 25 || (archivo.docCode || '').toUpperCase() === 'CEAP';
       let targetSubFolder = projectFolder;
       const path = archivo.folderPath || '';
 
-      if (path.includes('A_Tecnicos')) targetSubFolder = folderA;
+      if (esCEAP) targetSubFolder = folderCEAP;
+      else if (path.includes('A_Tecnicos')) targetSubFolder = folderA;
       else if (path.includes('B_Certificaciones')) targetSubFolder = folderB;
       else if (path.includes('C_Contractuales')) targetSubFolder = folderC;
       else if (path.includes('D_Inventario')) targetSubFolder = folderD;
-      else if (path.includes('E_SST_Ambiental')) targetSubFolder = folderE;
+      else if (path.includes('E_Otros') || path.includes('E_SST_Ambiental')) targetSubFolder = folderE;
+      else if (path.includes('Documentos_Adicionales')) targetSubFolder = folderF;
 
       const sanitizeName = (str) => (str || 'documento').replace(/[/\\?%*:|"<>]/g, '_');
       const filename = `${archivo.docCode}_${sanitizeName(archivo.fileName || archivo.docName)}.pdf`;

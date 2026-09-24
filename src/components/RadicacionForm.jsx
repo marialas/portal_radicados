@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatNameFromEmail } from '../lib/msalConfig';
 import { DOCUMENT_CATALOG } from '../data/documentsCatalog';
@@ -30,6 +30,8 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
   const [direction, setDirection] = useState(1);
 
   const [selectedFiles, setSelectedFiles] = useState({});
+  const [selectedSubFiles, setSelectedSubFiles] = useState({});
+  const [extraSubFiles, setExtraSubFiles] = useState({});
   const [naDocs, setNaDocs] = useState(
     filingToEdit
       ? (filingToEdit.archivos || [])
@@ -88,6 +90,20 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [categoria, setCategoria] = useState(
+    filingToEdit?.metadata?.categoria || ''
+  );
+
+  useEffect(() => {
+    if (categoria === 'A') {
+      // Categoría A: Doc #20 (D20 Dictamen RETILAP) es "si aplica" → auto N/A
+      setNaDocs(prev => prev.includes(20) ? prev : [...prev, 20]);
+    } else {
+      // Categoría B o C: Doc #20 es obligatorio, remover de N/A si estaba
+      setNaDocs(prev => prev.filter(id => id !== 20));
+    }
+  }, [categoria]);
+
   const [customDocs, setCustomDocs] = useState([]);
   const [showAddDocModal, setShowAddDocModal] = useState(false);
   const [newDoc, setNewDoc] = useState({ code: '', name: '', category: 'diseno', description: '' });
@@ -97,7 +113,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
       number: 1, 
       id: 'archivos', 
       title: 'Paso 1: Carga de Archivos', 
-      subtitle: 'Pliego técnico y 21 documentos RETILAP',
+      subtitle: 'Pliego técnico y 25 documentos RETILAP',
       icon: FileUp
     },
     { 
@@ -148,6 +164,34 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
     }
   };
 
+  const handleSubFileChange = (docId, subId, e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedSubFiles(prev => ({
+        ...prev,
+        [docId]: { ...(prev[docId] || {}), [subId]: file }
+      }));
+    }
+  };
+
+  const handleAddExtraSubFile = (docId, e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setExtraSubFiles(prev => ({
+        ...prev,
+        [docId]: [...(prev[docId] || []), file]
+      }));
+    }
+    e.target.value = '';
+  };
+
+  const handleRemoveExtraSubFile = (docId, index) => {
+    setExtraSubFiles(prev => ({
+      ...prev,
+      [docId]: (prev[docId] || []).filter((_, i) => i !== index)
+    }));
+  };
+
   const handleToggleNA = (docId) => {
     if (naDocs.includes(docId)) {
       setNaDocs(naDocs.filter(id => id !== docId));
@@ -185,7 +229,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
       category: newDoc.category,
       categoryName: catLabels[newDoc.category] || 'Documento Adicional',
       required: false,
-      folderGroup: 'Documentos_Adicionales',
+      folderGroup: 'F_Documentos_Adicionales',
       description: newDoc.description.trim() || 'Documento adicional agregado manualmente.',
       esManual: true
     }]);
@@ -210,7 +254,13 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
   const totalCompleted = attachedCount + naCount + previosCount;
   const percentage = Math.round((totalCompleted / totalDocs) * 100);
 
-  const missingMandatory = allDocs.filter(d => d.required && !selectedFiles[d.id] && !naDocs.includes(d.id) && !archivosPrevios[d.id]);
+  const missingMandatory = allDocs.filter(d => {
+    if (!d.required) return false;
+    // Doc #20 (D20 Dictamen RETILAP): obligatorio si categoría B o C; si A = si aplica
+    if (d.requiredIfCategoriaBc && categoria !== 'B' && categoria !== 'C') return false;
+    if (d.hasSubFiles) return false;
+    return !selectedFiles[d.id] && !naDocs.includes(d.id) && !archivosPrevios[d.id];
+  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -257,6 +307,21 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
           }
         }
 
+        // 1b. Subir anexos (sub-archivos dinámicos)
+        for (const [docIdStr, files] of Object.entries(extraSubFiles)) {
+          const docId = parseInt(docIdStr, 10);
+          for (let i = 0; i < files.length; i++) {
+            const fd = new FormData();
+            fd.append('docId', String(docId));
+            fd.append('archivo', files[i]);
+            fd.append('subFileName', `Anexo ${i + 1} - ${files[i].name}`);
+            await fetch(`/api/radicacion/${filingToEdit.id}/archivo`, {
+              method: 'POST',
+              body: fd
+            });
+          }
+        }
+
         // 2. Actualizar estado de archivos locales según selección
         Object.entries(selectedFiles).forEach(([docIdStr]) => {
           const docId = parseInt(docIdStr, 10);
@@ -274,6 +339,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
           creadorEmail: userEmail,
           creadorName: currentUser?.name || metadata.responsable,
           correoResponsable: metadata.correoResponsable || userEmail,
+          categoria: categoria || '',
           firmaContratista: firmaContratista || undefined
         };
         const metaRes = await fetch(`/api/radicacion/${filingToEdit.id}/metadata`, {
@@ -315,6 +381,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
         creadorEmail: userEmail,
         creadorName: currentUser?.name || metadata.responsable,
         correoResponsable: metadata.correoResponsable || userEmail,
+        categoria: categoria || '',
         firmaContratista: firmaContratista || undefined
       };
       formData.append('metadatos', JSON.stringify(metadataWithSignature));
@@ -337,27 +404,72 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
         formData.append(fieldName, file);
       });
 
-      const sessionEmail = currentUser?.email || 'usuario@intecoal.com.co';
-
-      const response = await fetch('/api/radicacion/nueva', {
-        method: 'POST',
-        headers: {
-          'x-intecoal-session': sessionEmail,
-          'Authorization': `Bearer ${sessionEmail}`
-        },
-        body: formData
+      Object.entries(extraSubFiles).forEach(([docId, files]) => {
+        files.forEach((file, idx) => {
+          formData.append(`extraSub_${docId}_${idx}`, file);
+          formData.append(`extraSubMeta_${docId}_${idx}`, JSON.stringify({ docId: parseInt(docId, 10), subFileName: `Anexo ${idx + 1} - ${file.name}` }));
+        });
       });
 
-      const result = await response.json();
+      const sessionEmail = currentUser?.email || 'usuario@intecoal.com.co';
 
-      if (response.ok && result.data) {
+      // Tiempo amplio: subir 25 archivos puede tardar; sin AbortController
+      // el navegador puede abortar antes y caía en "Error de conexión".
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 180000);
+      let response;
+      try {
+        response = await fetch('/api/radicacion/nueva', {
+          method: 'POST',
+          headers: {
+            'x-intecoal-session': sessionEmail,
+            'Authorization': `Bearer ${sessionEmail}`
+          },
+          body: formData,
+          signal: controller.signal
+        });
+      } catch (fetchErr) {
+        clearTimeout(timeoutId);
+        if (fetchErr?.name === 'AbortError') {
+          alert('La subida tardó demasiado y se interrumpió (3 min). Intente con archivos más livianos o verifique su conexión e intente de nuevo.');
+        } else {
+          alert('No se pudo conectar con el servidor (backend apagado o Render en arranque). Verifique que el backend esté corriendo en http://localhost:8000 o espere 1 minuto si es el servidor en la nube y reintente.');
+        }
+        return;
+      }
+      clearTimeout(timeoutId);
+
+      // El backend puede devolver HTML (502/504 de Render en frío) en vez
+      // de JSON: antes `response.json()` lanzaba y todo caía en el genérico
+      // "Error de conexión", ocultando el motivo real.
+      let result = null;
+      try {
+        result = await response.json();
+      } catch {
+        result = null;
+      }
+
+      if (response.ok && result?.data) {
         onSuccess(result.data);
       } else {
-        alert(result.error || 'Error al guardar la radicación');
+        const detalle = result?.detail || result?.error || result?.mensaje;
+        if (response.status === 413) {
+          alert('Uno de los archivos supera los 50 MB permitidos. Reduzca el tamaño e intente de nuevo.');
+        } else if (response.status === 400 && detalle) {
+          alert(`No se pudo radicar: ${typeof detalle === 'string' ? detalle : JSON.stringify(detalle)}`);
+        } else if (response.status === 409 && detalle) {
+          alert(`${typeof detalle === 'string' ? detalle : JSON.stringify(detalle)} Intente de nuevo.`);
+        } else if (response.status >= 500) {
+          alert('El servidor falló al guardar (error 500). Si es el servidor en la nube, puede estar arrancando: espere 1 minuto y reintente. Si persiste, revise los logs del backend.');
+        } else if (detalle) {
+          alert(`No se pudo radicar: ${typeof detalle === 'string' ? detalle : JSON.stringify(detalle)}`);
+        } else {
+          alert(`No se pudo radicar (HTTP ${response.status}). Verifique su conexión e intente de nuevo.`);
+        }
       }
     } catch (err) {
       console.error('Error enviando formulario:', err);
-      alert('Error de conexión al guardar la radicación');
+      alert(`Error al guardar la radicación: ${err?.message || err}. Verifique que el backend esté corriendo e intente de nuevo.`);
     } finally {
       setIsSubmitting(false);
     }
@@ -368,7 +480,8 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
     { id: 'diseno', label: `1. Diseño (${allDocs.filter(d => d.category === 'diseno').length})` },
     { id: 'luminarias', label: `2. Luminarias (${allDocs.filter(d => d.category === 'luminarias').length})` },
     { id: 'constructor', label: `3. Constructor (${allDocs.filter(d => d.category === 'constructor').length})` },
-    { id: 'dictamenes', label: `4. Dictámenes (${allDocs.filter(d => d.category === 'dictamenes').length})` }
+    { id: 'dictamenes', label: `4. Dictámenes (${allDocs.filter(d => d.category === 'dictamenes').length})` },
+    { id: 'otros', label: `5. Otros (${allDocs.filter(d => d.category === 'otros').length})` }
   ];
 
   const filteredDocs = activeCategory === 'todos' 
@@ -446,7 +559,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                       ? 'bg-[#D9CF43]/15 border border-[#D9CF43]/50 shadow-lg scale-[1.02]' 
                       : isDone
                       ? 'bg-slate-800/80 hover:bg-slate-800 text-gray-200 border border-slate-700'
-                      : 'bg-slate-900/40 text-gray-400 border border-transparent'
+                      : 'bg-slate-900/40 text-gray-300 border border-transparent'
                   }`}
                 >
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 mb-0 md:mb-2 mr-3 md:mr-0 font-black text-sm transition-all ${
@@ -461,12 +574,12 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
 
                   <div>
                     <span className={`text-[11px] font-black uppercase tracking-wider block ${
-                      isActive ? 'text-[#D9CF43]' : isDone ? 'text-[#BFBA6B]' : 'text-gray-500'
+                      isActive ? 'text-[#D9CF43]' : isDone ? 'text-[#BFBA6B]' : 'text-gray-300'
                     }`}>
                       {st.title}
                     </span>
                     <span className={`text-xs font-semibold block mt-0.5 ${
-                      isActive ? 'text-white' : 'text-gray-400'
+                      isActive ? 'text-white' : 'text-gray-300'
                     }`}>
                       {st.subtitle}
                     </span>
@@ -612,7 +725,11 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                                       <h4 className="font-extrabold text-[#0D0D0D] text-sm">
                                         {doc.name}
                                       </h4>
-                                      {doc.required ? (
+                                      {doc.requiredIfCategoriaBc && (categoria !== 'B' && categoria !== 'C') ? (
+                                        <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">
+                                          SI APLICA
+                                        </span>
+                                      ) : doc.required ? (
                                         <span className="text-[10px] font-black bg-red-100 text-red-700 px-2 py-0.5 rounded border border-red-200">
                                           OBLIGATORIO
                                         </span>
@@ -642,7 +759,8 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                                     </button>
                                   )}
 
-                                  {!doc.required && (
+                                  {(!doc.required ||
+                                    (doc.requiredIfCategoriaBc && categoria !== 'B' && categoria !== 'C')) && (
                                     <label className="flex items-center space-x-1.5 text-xs font-bold text-gray-700 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 shadow-sm">
                                       <input
                                         type="checkbox"
@@ -654,10 +772,10 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                                     </label>
                                   )}
 
-                                  {!isNA && (
+                                  {!isNA && !doc.hasSubFiles && !(doc.id === 20 && !categoria) && (
                                     <label className="cursor-pointer bg-[#0D0D0D] hover:bg-gray-800 text-[#D9CF43] text-xs font-bold px-3.5 py-1.5 rounded-lg shadow transition-all flex items-center space-x-1.5 active:scale-95">
                                       <FolderDown className="w-3.5 h-3.5 text-[#D9CF43]" />
-                                      <span>{file ? 'Cambiar PDF' : 'Adjuntar PDF'}</span>
+                                      <span>{file ? 'Cambiar' : 'Adjuntar'}</span>
                                       <input
                                         type="file"
                                         accept=".pdf,.dwg,.dxf,.jpeg,.jpg,.png,.tiff,.tif,.bmp,.gif"
@@ -669,27 +787,132 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                                 </div>
                               </div>
 
-                              {file && (
-                                <div className="mt-2.5 pt-2 border-t border-emerald-200/80 flex items-center justify-between text-xs text-emerald-950 bg-emerald-100/60 px-3 py-1.5 rounded-lg">
-                                  <div className="flex items-center space-x-2 truncate">
-                                    <Check className="w-4 h-4 text-emerald-700 shrink-0" />
-                                    <span className="font-bold truncate">{file.name}</span>
-                                    <span className="text-gray-500 font-medium">
-                                      ({(file.size / (1024 * 1024)).toFixed(2)} MB)
-                                    </span>
+                              {file && !doc.hasSubFiles && (
+                                <div className="mt-2.5 pt-2 border-t border-emerald-200/80 space-y-2">
+                                  <div className="flex items-center justify-between text-xs text-emerald-950 bg-emerald-100/60 px-3 py-1.5 rounded-lg">
+                                    <div className="flex items-center space-x-2 truncate">
+                                      <Check className="w-4 h-4 text-emerald-700 shrink-0" />
+                                      <span className="font-bold truncate">{file.name}</span>
+                                      <span className="text-gray-500 font-medium">
+                                        ({(file.size / (1024 * 1024)).toFixed(2)} MB)
+                                      </span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const updatedFiles = { ...selectedFiles };
+                                        delete updatedFiles[doc.id];
+                                        setSelectedFiles(updatedFiles);
+                                      }}
+                                      className="text-red-500 hover:text-red-700 font-bold ml-2 p-0.5 rounded hover:bg-red-50"
+                                      title="Quitar archivo"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const updatedFiles = { ...selectedFiles };
-                                      delete updatedFiles[doc.id];
-                                      setSelectedFiles(updatedFiles);
-                                    }}
-                                    className="text-red-500 hover:text-red-700 font-bold ml-2 p-0.5 rounded hover:bg-red-50"
-                                    title="Quitar archivo"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
+
+                                  <div className="flex items-center gap-2">
+                                    <label className="cursor-pointer bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-amber-300 transition-all flex items-center space-x-1 active:scale-95">
+                                      <Plus className="w-3 h-3" />
+                                      <span>Agregar anexo</span>
+                                      <input
+                                        type="file"
+                                        accept=".pdf,.dwg,.dxf,.jpeg,.jpg,.png,.tiff,.tif,.bmp,.gif"
+                                        onChange={(e) => handleAddExtraSubFile(doc.id, e)}
+                                        className="hidden"
+                                      />
+                                    </label>
+                                    {(extraSubFiles[doc.id] || []).length > 0 && (
+                                      <span className="text-[10px] text-amber-700 font-semibold">
+                                        {extraSubFiles[doc.id].length} anexo(s) adicional(es)
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {(extraSubFiles[doc.id] || []).length > 0 && (
+                                    <div className="space-y-1">
+                                      {extraSubFiles[doc.id].map((sf, idx) => (
+                                        <div key={idx} className="flex items-center justify-between text-[11px] bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
+                                          <div className="flex items-center space-x-2 truncate min-w-0">
+                                            <Check className="w-3 h-3 text-amber-600 shrink-0" />
+                                            <span className="font-semibold text-amber-900 truncate">Anexo {idx + 1}: {sf.name}</span>
+                                            <span className="text-amber-600 font-medium shrink-0">
+                                              ({(sf.size / (1024 * 1024)).toFixed(2)} MB)
+                                            </span>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveExtraSubFile(doc.id, idx)}
+                                            className="text-red-400 hover:text-red-600 ml-2 p-0.5 rounded hover:bg-red-50 shrink-0"
+                                            title="Quitar anexo"
+                                          >
+                                            <X className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {doc.hasSubFiles && doc.subFiles && !isNA && (
+                                <div className="mt-3 pt-3 border-t border-dashed border-gray-300 space-y-2">
+                                  <span className="text-[10px] font-black uppercase text-gray-600 tracking-wider">
+                                    Sub-archivos requeridos ({doc.subFiles.length}):
+                                  </span>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {doc.subFiles.map((sf) => {
+                                      const subFile = selectedSubFiles[doc.id]?.[sf.subId];
+                                      const prevSubFile = filingToEdit?.archivos?.find(a => a.docId === doc.id)?.subFiles?.find(s => s.subId === sf.subId);
+                                      return (
+                                        <div key={sf.subId} className={`flex items-center justify-between p-2 rounded-lg border text-xs ${subFile || prevSubFile?.fileName ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
+                                          <div className="flex items-center space-x-2 truncate min-w-0">
+                                            {subFile || prevSubFile?.fileName ? (
+                                              <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                            ) : (
+                                              <span className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 shrink-0" />
+                                            )}
+                                            <span className="truncate font-semibold text-gray-700">{sf.subName}</span>
+                                          </div>
+                                          <label className="cursor-pointer text-[#D9CF43] bg-[#0D0D0D] hover:bg-gray-800 text-[10px] font-bold px-2 py-1 rounded shrink-0 ml-2">
+                                            {subFile ? 'Cambiar' : 'Adjuntar'}
+                                            <input
+                                              type="file"
+                                              accept=".pdf,.dwg,.dxf,.jpeg,.jpg,.png,.tiff,.tif,.bmp,.gif"
+                                              onChange={(e) => handleSubFileChange(doc.id, sf.subId, e)}
+                                              className="hidden"
+                                            />
+                                          </label>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {doc.id === 20 && !isNA && (
+                                <div className="mt-3 pt-3 border-t border-dashed border-gray-300">
+                                  <div className="space-y-1.5">
+                                    <label className="block text-xs font-bold text-gray-700 uppercase">
+                                      Categoría del Proyecto *
+                                    </label>
+                                    <select
+                                      name="categoria"
+                                      value={categoria}
+                                      onChange={(e) => setCategoria(e.target.value)}
+                                      className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-xl text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#D9CF43]"
+                                    >
+                                      <option value="">Seleccione la categoría</option>
+                                      <option value="A">Categoría A (≤ 25 luminarias)</option>
+                                      <option value="B">Categoría B (26 a 75 luminarias)</option>
+                                      <option value="C">Categoría C (76 luminarias en adelante)</option>
+                                    </select>
+                                    <p className="text-[11px] text-gray-500">
+                                      {categoria === 'A'
+                                        ? 'Para Categoría A este documento es opcional (sí aplica).'
+                                        : 'Para Categorías B o C este documento es obligatorio.'}
+                                    </p>
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -749,13 +972,9 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                               className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-300 rounded-xl text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#D9CF43]"
                             >
                               <option value="CALIMA-DARIEN">CALIMA-DARIEN</option>
-                              <option value="YUMBO">YUMBO</option>
-                              <option value="CALI">CALI</option>
-                              <option value="PALMIRA">PALMIRA</option>
-                              <option value="JAMUNDI">JAMUNDÍ</option>
-                              <option value="BUENAVENTURA">BUENAVENTURA</option>
-                              <option value="BUGA">BUGA</option>
-                              <option value="CARTAGO">CARTAGO</option>
+                              <option value="ANDALUCIA">ANDALUCÍA</option>
+                              <option value="SAN PEDRO">SAN PEDRO</option>
+                              <option value="VILLAVICENCIO">VILLAVICENCIO</option>
                               <option value="OTRO">OTRO MUNICIPIO</option>
                             </select>
                           </div>
@@ -911,8 +1130,9 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                         </table>
                       </div>
                     </div>
-                  </div>
-                )}
+
+                      </div>
+                    )}
 
                 {currentStep === 3 && (
                   <div className="space-y-6">
@@ -959,20 +1179,20 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                           <div className="grid grid-cols-3 gap-2 text-center">
                             <div className="bg-gray-900 p-2 rounded-xl">
                               <span className="text-lg font-black text-emerald-400">{attachedCount}</span>
-                              <p className="text-[10px] text-gray-400 font-bold uppercase">Archivos</p>
+                              <p className="text-[10px] text-gray-300 font-bold uppercase">Archivos</p>
                             </div>
                             <div className="bg-gray-900 p-2 rounded-xl">
                               <span className="text-lg font-black text-gray-300">{naCount}</span>
-                              <p className="text-[10px] text-gray-400 font-bold uppercase">N/A</p>
+                              <p className="text-[10px] text-gray-300 font-bold uppercase">N/A</p>
                             </div>
                             <div className="bg-gray-900 p-2 rounded-xl">
-                              <span className="text-lg font-black text-amber-400">{21 - totalCompleted}</span>
-                              <p className="text-[10px] text-gray-400 font-bold uppercase">Pendientes</p>
+                              <span className="text-lg font-black text-amber-400">{totalDocs - totalCompleted}</span>
+                              <p className="text-[10px] text-gray-300 font-bold uppercase">Pendientes</p>
                             </div>
                           </div>
                         </div>
 
-                        <div className="mt-3 text-[11px] text-gray-400 border-t border-gray-800 pt-2 flex items-center justify-between">
+                        <div className="mt-3 text-[11px] text-gray-300 border-t border-gray-800 pt-2 flex items-center justify-between">
                           <span>Ítems Físicos: <strong className="text-white">{elementos.length}</strong></span>
                           <span>Carga en SharePoint: <strong className="text-[#D9CF43]">al aprobar el radicado</strong></span>
                         </div>
