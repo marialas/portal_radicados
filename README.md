@@ -2,7 +2,9 @@
 
 Sistema de gestión de radicación de expedientes técnicos para la **verificación RETILAP** (Alumbrado Público) bajo la Resolución 40150 de 2024 y RETIE.
 
-El portal permite al **contratista** radicar los 21 requisitos RETILAP, y al **revisor (interventoría)** evaluarlos, emitir dictamen y generar el **Informe de Recibido a Conformidad**, con firma electrónica, notificaciones por correo y persistencia en **SharePoint** de Microsoft 365.
+El portal permite al **contratista** radicar los 25 requisitos RETILAP, y al **revisor (interventoría)** evaluarlos, emitir dictamen y generar el **Informe de Recibido a Conformidad**, con firma electrónica, notificaciones por correo y persistencia en **SharePoint** de Microsoft 365.
+
+Módulos del revisor: **Evaluación**, **Formato 4.3.7 C**, **Recibo Técnico** y **Calendario** de plazos de revisión (15 días hábiles con alertas).
 
 ## Stack
 

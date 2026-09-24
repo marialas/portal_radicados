@@ -12,11 +12,12 @@
 # En la raíz del proyecto
 pip install -r backend/requirements.txt
 
-# Crear variables de entorno desde la plantilla
-cp backend/.env.example .env          # Windows: copy backend\.env.example .env
+# Crear variables de entorno desde la plantilla (está en la RAÍZ)
+copy .env.example .env          # Windows (Linux/Mac: cp .env.example .env)
 # Editar .env con las credenciales reales de Azure/M365
 
-# Iniciar en el puerto 8000
+# Iniciar en el puerto 8000 (UNA sola instancia: el JSON local no tiene
+# bloqueo; dos servidores a la vez pueden sobrescribirse y resucitar filas)
 uvicorn backend.main:app --reload --port 8000
 ```
 

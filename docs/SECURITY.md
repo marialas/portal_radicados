@@ -47,7 +47,10 @@ Los dominios de correo determinan el rol. La función `isRevisorAllowedEmail`/`v
 
 Reglas de acceso en el frontend:
 - El botón **"Evaluar"** solo aparece para el rol revisor y si el radicado **no** está `Aprobado`.
+- El botón **"Recibo Técnico"** solo aparece para el rol revisor y si el radicado está `Aprobado`.
+- El botón **"Eliminar"** (contratista) solo aparece en el **último radicado global**, si es el creador y no está aprobado.
 - El botón **"Editar"** (contratista) solo aparece si el radicado está `Con Observaciones`.
+- Los módulos **Formato 4.3.7 C**, **Recibo Técnico** y **Calendario** son exclusivos del revisor (el contratista es redirigido al Historial).
 - La columna **estado** es de solo lectura (no editable desde la lista).
 - La **firma de interventoría** es obligatoria para finalizar con `Aprobado` o `Con Observaciones`.
 - La **firma del contratista** es obligatoria al crear una radicación.
@@ -113,7 +116,7 @@ application/acad, application/octet-stream
 ## SharePoint
 
 - **SharePoint Online** actúa como respaldo persistente de radicaciones y documentos.
-- La sincronización ocurre en creación, evaluación (Aprobado), metadata y cambios de estado.
+- **Política de subida:** solo lo **aprobado** (fila + carpetas + archivos) y los formatos solo con su botón **Subir**. Todo corre en background; `m365Synced` refleja el estado real y existe reintento manual (`POST /api/radicacion/{id}/sincronizar`).
 - Los correos y la subida de archivos usan la **Microsoft Graph API** (`backend/grafos.py` → `GraphService`).
 
 ### Permisos de la app de Azure AD (Application)

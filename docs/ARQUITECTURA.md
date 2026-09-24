@@ -21,20 +21,20 @@
 └─────────────────────────────────────────────────────────┘
 ```
 
-- **Frontend (SPA):** React 19, Vite, Tailwind CSS 4, MSAL `@azure/msal-browser`, `lucide-react`, `motion`, `jszip`, `@cadview/react` (visor DXF).
+- **Frontend (SPA):** React 19, Vite, Tailwind CSS 4, MSAL `@azure/msal-browser`, `lucide-react`, `motion`, `jszip`, `html-to-image` + `jspdf` (PDF de formatos), `@cadview/react` (visor DXF).
 - **Backend:** FastAPI con httpx (Graph API), python-jose (JWT), python-dotenv.
-- **Persistencia:** JSON local (`backend/data/radicaciones.json`) + **sincronización a SharePoint Online** como respaldo persistente.
+- **Persistencia:** JSON local (`backend/data/radicaciones.json`, única fuente de escritura) + **sincronización a SharePoint Online solo al aprobar** (fila + carpetas + archivos) y **formatos solo con su botón Subir**.
+- **Tareas en background:** `lanzar_background()` (correos + SharePoint sin bloquear la respuesta) y `vigilar_vencimientos()` (alertas de plazo cada 6 h).
 
 ## Estructura del proyecto
 
 ```
 portal_intecoal/
 ├── backend/
-│   ├── main.py               # API FastAPI (endpoints, CORS, JWT, MIME, archivado)
-│   ├── modelos.py            # Catálogo de 21 docs RETILAP, estados, helpers
+│   ├── main.py               # API FastAPI (endpoints, CORS, JWT, MIME, archivado, watcher)
+│   ├── modelos.py            # Catálogo de 25 docs RETILAP, estados, días hábiles, helpers
 │   ├── grafos.py             # GraphService: SharePoint + correo + Graph API
 │   ├── requirements.txt      # Dependencias Python
-│   ├── .env.example          # Plantilla de variables de entorno
 │   ├── data/radicaciones.json# Persistencia local de radicaciones
 │   └── uploads/              # Archivos subidos por radicado
 ├── src/                      # Frontend React (SPA)
@@ -48,15 +48,20 @@ portal_intecoal/
 │   │   ├── RadicacionesList.jsx      # Histórico de radicaciones
 │   │   ├── EvaluacionRadicacion.jsx  # Evaluación item por item (revisor)
 │   │   ├── InformeRecibidoConformidad.jsx  # Informe digital imprimible
+│   │   ├── Formato437C.jsx           # Formato 4.3.7 C (revisor, por radicado)
+│   │   ├── ReciboTecnico.jsx         # Recibo Técnico (revisor, por radicado)
+│   │   ├── MembreteCorporativo.jsx   # Membrete + franja (#4E3629/#D9CF43) compartidos
+│   │   ├── CalendarioRevision.jsx    # Calendario de plazos 15 días hábiles (revisor)
 │   │   ├── DocumentPreviewModal.jsx  # Visor PDF/imagen/DXF/DWG
 │   │   ├── CadViewerLazy.jsx         # Visor CAD (DXF) vía @cadview/react
 │   │   ├── FirmaDigitalModal.jsx     # Firma electrónica (dibujar/texto/imagen)
 │   │   ├── ErrorBoundary.jsx         # Captura de errores de render
 │   │   └── IntecoalLogo.jsx
-│   ├── data/documentsCatalog.js      # Catálogo de documentos (frontend)
+│   ├── data/documentsCatalog.js      # Catálogo de 25 documentos (frontend)
 │   └── lib/
 │       ├── msalConfig.js     # Cliente MSAL, roles por dominio, helpers
 │       └── zipExporter.js    # Exportar ZIP del expediente
+├── public/recibo-tecnico/    # Logo, iconos, firma y figuras del membrete
 ├── vite.config.ts            # Config Vite + proxy /api
 ├── package.json              # Dependencias y scripts Node
 ├── .env.local                # Variables de entorno del frontend (gitignored)

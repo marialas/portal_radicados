@@ -72,7 +72,7 @@ Verifica la sesión/cuenta de Microsoft 365 y devuelve el usuario autenticado co
 
 ### GET /api/documentos/catalogo
 
-Devuelve el catálogo de los 21 documentos RETILAP.
+Devuelve el catálogo de los 25 documentos RETILAP.
 
 ```jsonc
 // 200
@@ -80,14 +80,14 @@ Devuelve el catálogo de los 21 documentos RETILAP.
   "data": [
     {
       "id": 1,
-      "code": "A.1",
-      "name": "Planos de Luminotecnia",
+      "code": "A1",
+      "name": "Diseño fotométrico aprobado",
       "description": "...",
       "category": "diseno",
-      "folderGroup": "Diseno"
+      "folderGroup": "A_Tecnicos"   // A_Tecnicos | B_Certificaciones | C_Contractuales | D_Inventario | E_Otros
     }
   ],
-  "total": 21
+  "total": 25
 }
 ```
 
@@ -161,7 +161,7 @@ Devuelve el historial de cambios de estado de una radicación.
 
 ### POST /api/radicacion/nueva
 
-Crea una nueva radicación (**multipart/form-data**).
+Crea una nueva radicación (**multipart/form-data**, parseo manual con límite de 50 MB por parte).
 
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
@@ -169,18 +169,33 @@ Crea una nueva radicación (**multipart/form-data**).
 | `elementos` | string (JSON) | No | Array de elementos entregados. |
 | `naDocs` | string (JSON) | No | Array de IDs de docs marcados N/A. |
 | `docsAdicionales` | string (JSON) | No | Array de objetos para documentos manuales. |
-| `archivo_*` | File[] | No | Archivos por código de documento (`archivo_A.1`, `archivo_B.2`, etc.). |
+| `archivo_{CODE}` | File[] | No | Archivos por código (`archivo_A1`, `archivo_custom_{id}` para manuales). |
+| `extraSub_{docId}_{i}` + `extraSubMeta_{docId}_{i}` | File + JSON | No | Anexos adicionales. |
 
-La radicación se crea con estado `Radicado` y notifica al revisor (`enviar_correo_nuevo_radicado_revisor`) y al contratista (`enviar_correo_nuevo_radicado_contratista`).
+La radicación se crea con estado `Radicado`. **No sube nada a SharePoint** (solo al aprobar); notifica al revisor (`enviar_correo_nuevo_radicado_revisor`) y al contratista (`enviar_correo_nuevo_radicado_contratista`) en background. Responde de inmediato.
+
+> Validación por **extensión** como respaldo al MIME (los DWG/DXF suelen llegar sin MIME): `.pdf .jpg .jpeg .png .tif .tiff .bmp .gif .dwg .dxf`.
 
 ### POST /api/radicacion/{identificador}/archivo
 
-Sube/reemplaza el archivo de un documento de una radicación existente.
+Sube/reemplaza el archivo de un documento, o agrega un anexo (`subFileName`). Parseo manual con límite de 50 MB por parte.
 
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
-| `docId` | int | Sí | ID del documento (1–21 para estándar, mayor para manuales). |
-| `archivo` | File | Sí | Archivo (PDF, imagen o DXF/DWG). |
+| `docId` | int | Sí | ID del documento (1–25 estándar, ≥100 manuales). |
+| `archivo` | File | Sí | Archivo (PDF, imagen o DWG/DXF). |
+| `subFileName` | string | No | Si se envía, se guarda como anexo del documento. |
+
+Solo persiste localmente; **no** sincroniza a SharePoint (eso ocurre al aprobar).
+
+### POST /api/radicacion/{identificador}/formato
+
+Guarda un formato generado (4.3.7 C o Recibo Técnico) y **lo sube a SharePoint** suelto en la raíz de la carpeta del radicado (único caso de subida fuera de la aprobación).
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `nombre` | string | Sí | Nombre del PDF (ej. `formato 4.3.7 C RAD-2026-001.pdf`). |
+| `archivo` | File | Sí | PDF generado. |
 
 ### PATCH /api/radicacion/{identificador}/estado
 
@@ -199,10 +214,23 @@ Actualiza el estado y (opcionalmente) metadata/archivos de una radicación.
 ```
 
 **Efectos secundarios (automatizados por el backend):**
+- Se persiste primero y se **responde de inmediato**; SharePoint y correos corren en background.
 - Se registra la entrada en el **historial** de la radicación.
-- Si `estado = "Aprobado"` → sincronización automática a SharePoint.
+- Si `estado = "Aprobado"` → subida a SharePoint (fila + carpetas + archivos con nombre ordenado); marca `m365Synced` (falla → `false` + traceback en logs).
+- Otros estados **no** suben a SharePoint (solo notifican).
 - Si `estado` cambia a `Aprobado`/`Con Observaciones` → correo de resultado al **contratista** (`enviar_correo_estado`).
 - Si `estado` cambia **a `En Revisión`** (desde otro estado) → correo al **revisor** (`enviar_correo_reesubido_revisor`) y correo de confirmación de subida al **contratista** (`enviar_correo_reenvio_contratista`).
+
+### POST /api/radicacion/{identificador}/sincronizar
+
+Reintento manual de subida a SharePoint (**sincrónico**, hasta 180 s). Solo radicados `Aprobado`. Devuelve el motivo real si falla.
+
+```jsonc
+// 200
+{ "ok": true, "data": { "..." }, "detalle": { "fila": "...", "carpetas": "ok", "archivos": { "subidos": 12, "omitidos": 0 } } }
+
+// 400 si no está aprobado · 503 si M365 no está configurado · 504 si excede 3 min
+```
 
 ### PATCH /api/radicacion/{identificador}/metadata
 
@@ -223,13 +251,15 @@ Actualiza metadatos, archivos u observaciones de una radicación sin cambiar nec
 
 ### DELETE /api/radicacion/{identificador}
 
-Elimina una radicación. Solo permite eliminar la **más reciente** (primera de la lista).
+Elimina una radicación. Query params: `email`, `rol=contratista`.
+
+Reglas (todas deben cumplirse): rol contratista, solicitante = creador, es el **ÚLTIMO radicado creado globalmente** (de todas las cuentas) y no está `Aprobado`. Además borra su carpeta local y sus filas de SharePoint en background.
 
 ```jsonc
 // 200
-{ "ok": true, "message": "Radicación eliminada correctamente" }
+{ "ok": true, "mensaje": "Radicado RAD-2026-001 eliminado correctamente." }
 
-// 400 si no es la más reciente
+// 403 si no es el último global, no es el creador o está aprobado
 ```
 
 ---
@@ -276,6 +306,15 @@ Prueba la conexión con Microsoft Graph.
 { "ok": true, "conexion": "Exitosa", "usuario": "interventoriaapalborada@intecoalsas.com" }
 ```
 
+### POST /api/m365/revisar-vencimientos
+
+Disparo manual de la revisión de plazos (la automática corre cada 6 h). Envía avisos de 8/4 días hábiles no enviados y devuelve lo notificado.
+
+```jsonc
+// 200
+{ "ok": true, "notificados": [{ "numeroRadicado": "RAD-2026-001", "diasRestantes": 7, "aviso": "8 dias" }], "total": 1 }
+```
+
 ### GET /api/m365/webhook-config
 
 Obtiene la configuración del webhook (Power Automate).
@@ -309,15 +348,18 @@ Devuelve el esquema/catálogo documental usado para SharePoint.
 | Código | Significado |
 |--------|-------------|
 | 200 | Éxito |
-| 400 | Solicitud inválida (datos faltantes, MIME no permitido) |
+| 400 | Solicitud inválida (datos faltantes, MIME/extensión no permitida, no aprobado para sincronizar) |
+| 403 | Prohibido (eliminar sin ser último global/creador/aprobado; rol insuficiente) |
 | 404 | Recurso no encontrado |
 | 413 | Archivo supera el límite de 50 MB |
-| 500 | Error interno del servidor |
-| 503 | Servicio no disponible (GraphService offline) |
+| 500 | Error interno del servidor (incluye motivo de fallo de SharePoint) |
+| 503 | Servicio no disponible (GraphService offline / M365 sin configurar) |
+| 504 | Subida a SharePoint excedió 3 minutos |
 
 ---
 
 ## Validación de Archivos (Backend)
 
-- **MIME permitidos:** PDF, imágenes (JPEG, PNG, TIFF, BMP, GIF) y planos (DWG, DXF, ACAD). (`MIME_PERMITIDOS` en `backend/main.py`)
+- **Límite Starlette:** `max_part_size` = 50 MB en los 3 endpoints multipart (el valor interno de 1 MB rechazaba PDFs reales con *"Part exceeded maximum size"*).
+- **MIME permitidos + respaldo por extensión** (`.pdf .jpg .jpeg .png .tif .tiff .bmp .gif .dwg .dxf`): si el navegador no reporta MIME (típico en DWG/DXF), se valida por extensión y se infiere el tipo.
 - **Límite:** 50 MB por archivo (`MAX_TAMANIO_BYTES`).

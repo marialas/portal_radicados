@@ -53,7 +53,7 @@ AZURE_CLIENT_SECRET=<client-secret>
 
 SHAREPOINT_SITE_ID=<site-id>
 SHAREPOINT_LIST_ID=<list-id>
-SHAREPOINT_LIBRARY_ID=Documentos_Radicacion
+SHAREPOINT_LIBRARY_ID=Documents   # nombre de la librería (se resuelve por nombre; si no existe usa la primera)
 
 M365_SENDER_EMAIL=interventoriaapalborada@intecoalsas.com
 M365_NOTIFICATION_RECIPIENT=<correo-del-revisor>
@@ -168,13 +168,19 @@ Se puede añadir en un archivo `public/_redirects` o como redirect en Netlify.
 **Síntoma:** `403 Forbidden` al crear carpetas o subir archivos.
 **Solución:** Verificar permisos `Sites.ReadWrite.All`, `Files.ReadWrite.All`, `Mail.Send` en la app Azure AD (Application) con consentimiento de administrador.
 
+> Nota: la creación automática de columnas de lista (`RawJson`, `NombreProyecto`, `CreadorEmail`) exige permiso de escritura de esquema. Sin él verás `403` en el arranque (`[GRAPH] Error creando columna...`); la app sigue funcionando pero omite esas columnas (créalas manualmente como texto si las necesitas).
+
 ### Error JWT / sesión
 **Síntoma:** `401 Unauthorized`.
 **Solución:** Verificar `SECRET_KEY` configurado y consistente entre instancias.
 
 ### Archivos no suben
 **Síntoma:** 413/400 al subir.
-**Solución:** Tamaño ≤ 50 MB y MIME permitido (PDF, imágenes, DXF/DWG).
+**Solución:** Tamaño ≤ 50 MB y extensión permitida (PDF, imágenes, DWG/DXF; la validación acepta por MIME o por extensión).
+
+### Render en frío (plan gratuito)
+**Síntoma:** la primera petición tras inactividad falla o tarda ~1 min.
+**Solución:** reintentar pasado un minuto. El frontend espera hasta 3 min en la radicación y el reintento de SharePoint hasta 3 min; si falla, muestra el motivo real en lugar de un error genérico.
 
 ### Login M365 falla
 **Síntoma:** `timed_out` / `block_nested_popups`.

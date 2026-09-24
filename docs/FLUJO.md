@@ -6,7 +6,7 @@ El login es **exclusivamente con cuenta de Microsoft 365** (no hay "Ingreso Dire
 
 | Rol | Dominio permitido | Permisos |
 |-----|-------------------|----------|
-| **Revisor / Interventor** | `@intecoalsas.com`, `@intecoal.com.co` | Evaluar documentos, dictaminar (Aprobado / Con Observaciones), firmar el informe, sincronizar a SharePoint. Su correo recibe la notificación de radicado por revisar. |
+| **Revisor / Interventor** | `@intecoalsas.com`, `@intecoal.com.co` | Evaluar documentos, dictaminar (Aprobado / Con Observaciones), firmar el informe, Formato 4.3.7 C, Recibo Técnico y Calendario. Su correo recibe la notificación de radicado por revisar y las alertas de vencimiento. |
 | **Contratista / Creador** | Cualquier correo M365 | Crear radicaciones, subir/corregir archivos, firmar declaración, ver sus radicaciones. Recibe confirmación de subida y resultado de evaluación. |
 
 > Los correos de notificación al **revisor** van a `M365_NOTIFICATION_RECIPIENT`; los del **contratista** van a su correo registrado en la metadata del radicado (`creadorEmail`/`correoResponsable`).
@@ -41,12 +41,13 @@ Contratista            Revisor (Interventoría)
 ## Funcionalidades por rol
 
 ### Contratista
-- Crear nueva radicación con los 21 requisitos RETILAP + documentos adicionales manuales.
+- Crear nueva radicación con los 25 requisitos RETILAP + documentos adicionales manuales.
 - Subir archivos (PDF, imágenes y planos DXF/DWG) — máx. 50 MB por archivo.
 - **Firma electrónica obligatoria al radicar** (no se permite crear sin firmar).
 - Marcar documentos como N/A.
 - Ver solo sus propias radicaciones.
 - **Editar/re-subir** un radicado con observaciones.
+- **Eliminar solo el ÚLTIMO radicado creado globalmente** (de todas las cuentas), si es el creador y no está aprobado. Si otra cuenta radica uno nuevo, la opción desaparece de los anteriores.
 - Descargar ZIP del expediente.
 
 ### Revisor (Interventoría)
@@ -55,8 +56,10 @@ Contratista            Revisor (Interventoría)
 - Guardar avance (borrador) o finalizar la evaluación.
 - **Firma de interventoría obligatoria** para finalizar con Aprobado o Con Observaciones.
 - Generar informe de conformidad (imprimible) sin numeración en títulos.
-- Aprobado → sincronización automática a SharePoint.
-- Ver historial de cambios de estado de cada radicación.
+- **Aprobado → subida a SharePoint** (fila + carpetas + archivos, en background) con insignia de estado y botón **Reintentar subida** si queda pendiente.
+- **Formato 4.3.7 C** (por radicado): número, municipio/ciudad y fecha se autodiligencian; la fecha se actualiza a diario hasta subirlo y luego se congela. Botones Editar/Guardar/Subir/Imprimir.
+- **Recibo Técnico** (por radicado, botón en el Historial solo en aprobados): solo asunto y cuerpo editables; firma del jefe permanente; correo del membrete según municipio (Tuluá/Andalucía/San Pedro/Calima); fecha viva hasta subir y congelada después. Botones Editar/Guardar/Subir/Imprimir + selector de radicado.
+- **Calendario** de plazos: 15 días hábiles por radicado (lun–vie). Bolitas 🔵 radicación, 🟡 faltan ≤8, 🔴 faltan ≤4, 🟣 vencido, 🟢 aprobado. Clic en fecha → detalle del radicado con acceso a Evaluar/Informe.
 
 ### Visor de documentos
 - **PDF e imágenes:** se muestran en línea (Content-Disposition: inline).
@@ -72,6 +75,25 @@ Contratista            Revisor (Interventoría)
 | Resultado de evaluación (Aprobado/Con Observaciones) | Contratista | `enviar_correo_estado` |
 | Radicado reenviado/editado | Revisor | `enviar_correo_reesubido_revisor` |
 | Confirmación de reenvío | Contratista | `enviar_correo_reenvio_contratista` |
+| Faltan 8 / 4 días hábiles (una sola vez c/u) | Revisor | `enviar_correo_vencimiento` (vigilancia cada 6 h) |
+
+## Estructura en SharePoint
+
+```
+Documentos_Radicacion/{RAD-XXXX-XXX}/
+├── formato 4.3.7 C {RAD}.pdf   ← suelto en la raíz (botón Subir)
+├── Recibo Tecnico {RAD}.pdf    ← suelto en la raíz (botón Subir)
+├── A_Tecnicos/                 (diseño y técnicos)
+├── B_Certificaciones/          (garantías y certificados)
+├── C_Contractuales/            (contractual y legal)
+├── D_Inventario/               (dictámenes D19–D21)
+├── E_Otros/                    (CAUE, CANT, CVP)
+│   └── Documentos para circuitos exclusivos de AP/  (archivos del #25 CEAP)
+└── F_Documentos_Adicionales/   (manuales del contratista)
+```
+
+- Archivos con nombre ordenado: `{orden:02d}_{código}_{original}` (ej. `01_A1_plano.pdf`).
+- **Política de subida:** a SharePoint solo sube lo **aprobado** (fila + carpetas + archivos); los formatos solo con su botón **Subir**. Todo corre en background para no bloquear la interfaz (`m365Synced` indica el estado real).
 
 ---
 
