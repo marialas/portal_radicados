@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from fastapi import FastAPI, HTTPException, Request, Query
+from fastapi import FastAPI, HTTPException, Request, Query, Depends
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -23,14 +23,14 @@ try:
         CATALOGO_21_DOCUMENTOS, ESTADOS, GRUPOS_CARPETA,
         generar_numero_radicado, generar_id, calcular_porcentaje,
         inicializar_archivos_desde_catalogo,
-        fecha_limite_revision, dias_habiles_restantes, _solo_fecha,
+        fecha_limite_revision, dias_restantes, _solo_fecha,
     )
 except ImportError:
     from modelos import (
         CATALOGO_21_DOCUMENTOS, ESTADOS, GRUPOS_CARPETA,
         generar_numero_radicado, generar_id, calcular_porcentaje,
         inicializar_archivos_desde_catalogo,
-        fecha_limite_revision, dias_habiles_restantes, _solo_fecha,
+        fecha_limite_revision, dias_restantes, _solo_fecha,
     )
 
 try:
@@ -151,37 +151,53 @@ def lanzar_background(coro, nombre="tarea"):
 
 
 async def revisar_vencimientos():
-    """Revisa plazos de 15 días hábiles y avisa al revisor a los 8 y 4 días.
+    """Revisa plazos de 15 días hábiles y avisa al revisor.
 
-    Devuelve la lista de radicados notificados en esta pasada. Cada aviso
-    se envía una sola vez (bandera en notifVencimiento) y se persiste.
+    - A los 8 y 4 días (calendario, exactos): un solo aviso por umbral.
+    - Vencidos (sin aprobar): recordatorio cada 24 h a las 8:00 a.m.
+      (hora local del servidor) hasta que se apruebe.
+    - Todo solo al revisor: el contratista no recibe nada del calendario.
+    Devuelve la lista de radicados notificados en esta pasada.
     """
     notificados = []
     if not graph_service:
         return notificados
-    hoy = datetime.now().date()
+    ahora = datetime.now(timezone.utc)
+    hoy = ahora.date()
+    # 8:00 a.m. hora Colombia (UTC-5) para el recordatorio diario
+    hora_colombia = ahora.astimezone(timezone(timedelta(hours=-5))).hour
     for r in radicaciones_db:
         if r.get("estado") == "Aprobado":
             continue
+        numero = r.get("numeroRadicado", "?")
         limite = fecha_limite_revision(r.get("fechaRadicacion"))
         if not limite:
+            print(f"[VENC] {numero} sin fecha de radicación válida: se omite, NO recibirá avisos de plazo")
             continue
-        rest = dias_habiles_restantes(limite, hoy)
+        rest = dias_restantes(limite, hoy)
         flags = r.setdefault("notifVencimiento", {})
-        numero = r.get("numeroRadicado", "?")
+        ya_avisado_4 = bool(flags.get("4"))
         try:
-            if rest <= 4 and not flags.get("4"):
+            if rest <= 4 and not ya_avisado_4:
                 ok = await graph_service.enviar_correo_vencimiento(r, rest, limite.isoformat())
                 if ok:
-                    ahora = datetime.now(timezone.utc).isoformat()
-                    flags["4"] = ahora
-                    flags["8"] = flags.get("8") or ahora
+                    marca = datetime.now(timezone.utc).isoformat()
+                    flags["4"] = marca
+                    flags["8"] = flags.get("8") or marca
                     notificados.append({"numeroRadicado": numero, "diasRestantes": rest, "aviso": "4 dias"})
             elif rest <= 8 and not flags.get("8"):
                 ok = await graph_service.enviar_correo_vencimiento(r, rest, limite.isoformat())
                 if ok:
                     flags["8"] = datetime.now(timezone.utc).isoformat()
                     notificados.append({"numeroRadicado": numero, "diasRestantes": rest, "aviso": "8 dias"})
+            # Vencido sin aprobar: una vez al día a las 8 a.m. hasta aprobar
+            if rest < 0 and ya_avisado_4:
+                ultima = _solo_fecha(flags.get("diaria"))
+                if hora_colombia >= 8 and (ultima is None or ultima < hoy):
+                    ok = await graph_service.enviar_correo_vencimiento(r, rest, limite.isoformat())
+                    if ok:
+                        flags["diaria"] = datetime.now(timezone.utc).isoformat()
+                        notificados.append({"numeroRadicado": numero, "diasRestantes": rest, "aviso": "diaria 8am"})
         except Exception as e:
             print(f"[VENC] Error revisando {numero}: {e}")
     if notificados:
@@ -198,13 +214,15 @@ async def vigilar_vencimientos():
                 print(f"[VENC] Avisos enviados: {notif}")
         except Exception as e:
             print(f"[VENC] Error en vigilancia: {e}")
-        await asyncio.sleep(6 * 3600)
+        await asyncio.sleep(3600)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global graph_service
     cargar_db()
+    if SECRET_KEY == "dev-secret-change-in-production":
+        print("[SECURITY] ADVERTENCIA: SECRET_KEY de desarrollo en uso. Defina una clave real de 32+ caracteres en producción.")
     if GraphService:
         graph_service = GraphService()
         cfg = graph_service.obtener_config()
@@ -241,17 +259,61 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Portal INTECOAL - Radicación Técnica", lifespan=lifespan)
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
-cors_origins = [FRONTEND_URL, "http://localhost:5173", "http://localhost:8000"]
-if FRONTEND_URL not in cors_origins:
+# SEGURIDAD: orígenes explícitos (nunca "*" salvo opt-in). En local se
+# permiten los puertos de desarrollo; en producción los define el entorno.
+cors_origins = ["http://localhost:5173", "http://localhost:8000"]
+if FRONTEND_URL and FRONTEND_URL not in cors_origins:
     cors_origins.append(FRONTEND_URL)
+for origen in os.getenv("ALLOWED_ORIGINS", "").split(","):
+    origen = origen.strip().rstrip("/")
+    if origen and origen not in cors_origins:
+        cors_origins.append(origen)
+if "*" in cors_origins:
+    cors_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# Autenticación: todos los endpoints de negocio exigen JWT (emitido por
+# /api/auth/msal-verify tras login M365). El email/rol NUNCA se aceptan
+# del cliente sin verificar: antes viajaban como query params falsificables.
+# Para <img>/<iframe> (visor) se acepta ?token= como alternativa al header.
+# ---------------------------------------------------------------------------
+
+def _extraer_token(request: Request) -> Optional[str]:
+    auth = request.headers.get("Authorization", "")
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip() or None
+    return request.query_params.get("token") or None
+
+
+def requerir_usuario(request: Request) -> dict:
+    token = _extraer_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="No autenticado. Inicie sesión.")
+    datos = verificar_token(token)
+    if not datos or not datos.get("email"):
+        raise HTTPException(status_code=401, detail="Sesión inválida o expirada. Inicie sesión de nuevo.")
+    return datos
+
+
+def requerir_interventor(usuario: dict = Depends(requerir_usuario)) -> dict:
+    if usuario.get("role") != "interventor":
+        raise HTTPException(status_code=403, detail="Solo el Responsable de Revisión puede realizar esta acción.")
+    return usuario
+
+
+def requerir_contratista(usuario: dict = Depends(requerir_usuario)) -> dict:
+    if usuario.get("role") != "contratista":
+        raise HTTPException(status_code=403, detail="Solo el contratista puede realizar esta acción.")
+    return usuario
 
 
 class MetadataRadicacion(BaseModel):
@@ -311,57 +373,77 @@ async def schema_sharepoint():
 
 @app.get("/api/radicacion/lista")
 async def listar_radicaciones(
+    usuario: dict = Depends(requerir_usuario),
     search: Optional[str] = Query(None),
     municipio: Optional[str] = Query(None),
     estado: Optional[str] = Query(None),
     tipo: Optional[str] = Query(None),
-    email: Optional[str] = Query(None),
-    rol: Optional[str] = Query(None),
 ):
     resultados = list(radicaciones_db)
+    email = (usuario.get("email") or "").lower().strip()
+    rol = usuario.get("role")
 
-    if rol != "interventor" and email:
-        email_lower = email.lower().strip()
+    if rol != "interventor":
         resultados = [
             r for r in resultados
-            if (r.get("creadorEmail", "").lower().strip() == email_lower
-                or r.get("metadata", {}).get("creadorEmail", "").lower().strip() == email_lower)
+            if (r.get("creadorEmail", "").lower().strip() == email
+                or r.get("metadata", {}).get("creadorEmail", "").lower().strip() == email)
         ]
 
     if search:
         s = search.lower()
         resultados = [
             r for r in resultados
-            if s in r["numeroRadicado"].lower()
-            or s in r["metadata"].get("nombreProyecto", "").lower()
-            or s in r["metadata"].get("contratista", "").lower()
-            or s in r["metadata"].get("municipio", "").lower()
+            if s in (r.get("numeroRadicado") or "").lower()
+            or s in ((r.get("metadata") or {}).get("nombreProyecto", "") or "").lower()
+            or s in ((r.get("metadata") or {}).get("contratista", "") or "").lower()
+            or s in ((r.get("metadata") or {}).get("municipio", "") or "").lower()
         ]
 
     if municipio and municipio != "TODOS":
-        resultados = [r for r in resultados if r["metadata"].get("municipio") == municipio]
+        resultados = [r for r in resultados if (r.get("metadata") or {}).get("municipio") == municipio]
 
     if estado and estado != "TODOS":
         resultados = [r for r in resultados if r.get("estado") == estado]
 
     if tipo and tipo != "TODOS":
-        resultados = [r for r in resultados if r["metadata"].get("tipoEntrega") == tipo]
+        resultados = [r for r in resultados if (r.get("metadata") or {}).get("tipoEntrega") == tipo]
 
-    return {"data": resultados, "total": len(resultados)}
+    # Último número del consecutivo GLOBAL (todas las cuentas, sin filtrar):
+    # el contratista solo recibe sus radicados en `data`, pero necesita saber
+    # cuál es el último global para mostrar/ocultar "Eliminar" correctamente.
+    ultimo = max(radicaciones_db, key=lambda r: r.get("numeroRadicado", ""), default=None)
+    return {
+        "data": resultados,
+        "total": len(resultados),
+        "ultimoGlobal": {"id": ultimo.get("id"), "numeroRadicado": ultimo.get("numeroRadicado")} if ultimo else None,
+    }
 
 
 @app.get("/api/radicacion/{identificador}")
-async def obtener_radicacion(identificador: str):
+async def obtener_radicacion(identificador: str, usuario: dict = Depends(requerir_usuario)):
     for r in radicaciones_db:
-        if r["id"] == identificador or r["numeroRadicado"] == identificador:
+        if r.get("id") == identificador or r.get("numeroRadicado") == identificador:
+            if usuario.get("role") != "interventor":
+                email = (usuario.get("email") or "").lower().strip()
+                creador = (r.get("creadorEmail", "") or r.get("metadata", {}).get("creadorEmail", "") or "").lower().strip()
+                if creador != email:
+                    raise HTTPException(status_code=403, detail="No tiene acceso a este radicado.")
             return {"data": r}
     raise HTTPException(status_code=404, detail="Radicación no encontrada")
 
 
 @app.get("/api/radicacion/{identificador}/historial")
-async def obtener_historial(identificador: str):
+async def obtener_historial(identificador: str, usuario: dict = Depends(requerir_usuario)):
     for r in radicaciones_db:
-        if r["id"] == identificador or r["numeroRadicado"] == identificador:
+        if r.get("id") == identificador or r.get("numeroRadicado") == identificador:
+            if usuario.get("role") != "interventor":
+                email = (usuario.get("email") or "").lower().strip()
+                creador = (r.get("creadorEmail", "") or r.get("metadata", {}).get("creadorEmail", "") or "").lower().strip()
+                if creador != email:
+                    raise HTTPException(status_code=403, detail="No tiene acceso a este radicado.")
+    for r in radicaciones_db:
+        if r.get("id") == identificador or r.get("numeroRadicado") == identificador:
             historial = r.get("historial", [])
             if not historial:
                 historial = [
@@ -373,16 +455,13 @@ async def obtener_historial(identificador: str):
                         "observaciones": r.get("observacionesGenerales", ""),
                     }
                 ]
-            return {"data": historial, "numeroRadicado": r["numeroRadicado"]}
+            return {"data": historial, "numeroRadicado": r.get("numeroRadicado", "")}
     raise HTTPException(status_code=404, detail="Radicación no encontrada")
 
 
 @app.delete("/api/radicacion/{identificador}")
-async def eliminar_radicacion(identificador: str, email: Optional[str] = Query(None), rol: Optional[str] = Query(None)):
-    # Solo contratistas pueden eliminar
-    if rol != "contratista":
-        raise HTTPException(status_code=403, detail="Solo el contratista que creó el radicado puede eliminarlo.")
-
+async def eliminar_radicacion(identificador: str, usuario: dict = Depends(requerir_contratista)):
+    email = (usuario.get("email") or "").lower().strip()
     if not email:
         raise HTTPException(status_code=403, detail="Falta el correo del solicitante.")
 
@@ -407,10 +486,10 @@ async def eliminar_radicacion(identificador: str, email: Optional[str] = Query(N
     if creador.lower().strip() != email.lower().strip():
         raise HTTPException(status_code=403, detail="Solo el contratista que creó el radicado puede eliminarlo.")
 
-    # Verificar que sea el ÚLTIMO radicado creado a nivel global (de todas
-    # las cuentas). Si otra cuenta crea uno nuevo, los anteriores dejan de
-    # ser eliminables automáticamente.
-    ultimo_global = max(radicaciones_db, key=lambda r: r.get("fechaRadicacion", ""), default=None)
+    # Verificar que sea el ÚLTIMO número del consecutivo a nivel global
+    # (de todas las cuentas). Si existe un número mayor, los anteriores
+    # dejan de ser eliminables automáticamente.
+    ultimo_global = max(radicaciones_db, key=lambda r: r.get("numeroRadicado", ""), default=None)
 
     if ultimo_global is None or ultimo_global.get("id") != radicacion.get("id"):
         raise HTTPException(
@@ -448,7 +527,7 @@ async def eliminar_radicacion(identificador: str, email: Optional[str] = Query(N
 
 
 @app.post("/api/radicacion/nueva")
-async def crear_radicacion(request: Request):
+async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_usuario)):
     # OJO: Starlette limita cada parte del multipart a 1024KB por defecto
     # (max_part_size). Sin estos parámetros, cualquier PDF real (>1MB)
     # moría aquí con "Part exceeded maximum size of 1024KB" antes de que
@@ -464,10 +543,14 @@ async def crear_radicacion(request: Request):
         else:
             text_fields[key] = value
 
-    meta = json.loads(text_fields.get("metadatos", "{}"))
-    elems = json.loads(text_fields.get("elementos", "[]"))
-    na = json.loads(text_fields.get("naDocs", "[]"))
-    docs_adic = json.loads(text_fields.get("docsAdicionales", "[]"))
+    meta = elems = na = docs_adic = None
+    try:
+        meta = json.loads(text_fields.get("metadatos", "{}"))
+        elems = json.loads(text_fields.get("elementos", "[]"))
+        na = json.loads(text_fields.get("naDocs", "[]"))
+        docs_adic = json.loads(text_fields.get("docsAdicionales", "[]"))
+    except (json.JSONDecodeError, ValueError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=f"Campos JSON inválidos en el formulario: {e}")
 
     numero = generar_numero_radicado(radicaciones_db)
     nuevo_id = generar_id()
@@ -482,7 +565,50 @@ async def crear_radicacion(request: Request):
 
     saved_files = {}
     extra_sub_files = {}
+    slot_sub_files = {}
     for field_name, upload_file in uploaded_files.items():
+        if field_name.startswith('subFile_'):
+            # Sub-archivo predefinido (ej. CEAP 25a-25d): subFile_{docId}_{subId}
+            # ANTES no se recibían: el frontend los seleccionaba pero nunca los
+            # enviaba, así que el #25 CEAP llegaba vacío a evaluación y a SP.
+            try:
+                _, doc_id_s, sub_id = field_name.split('_', 2)
+                doc_id = int(doc_id_s)
+            except (ValueError, TypeError):
+                continue
+            meta_str = text_fields.get(f'subFileMeta_{doc_id}_{sub_id}', '{}')
+            try:
+                meta_info = json.loads(meta_str)
+            except (json.JSONDecodeError, ValueError, TypeError):
+                meta_info = {}
+            mime = upload_file.content_type or ""
+            if not archivo_permitido(upload_file.filename or "", mime):
+                continue
+            contenido = await upload_file.read()
+            if len(contenido) > MAX_TAMANIO_BYTES:
+                continue
+            doc_code = str(doc_id)
+            for doc in CATALOGO_21_DOCUMENTOS:
+                if doc["id"] == doc_id:
+                    doc_code = doc["code"]
+                    break
+            sub_dir = upload_dir / doc_code
+            sub_dir.mkdir(parents=True, exist_ok=True)
+            safe_name = (upload_file.filename or f"{sub_id}.pdf").replace("/", "_").replace("\\", "_")
+            file_path = sub_dir / safe_name
+            file_path.write_bytes(contenido)
+            slot_sub_files.setdefault(doc_id, []).append({
+                "subId": sub_id,
+                "subCode": meta_info.get('subCode', sub_id),
+                "subName": meta_info.get('subName', safe_name),
+                "fileName": upload_file.filename,
+                "fileSize": len(contenido),
+                "fileType": mime_efectivo(upload_file.filename or "", mime),
+                "uploadDate": datetime.now(timezone.utc).isoformat(),
+                "localPath": str(file_path),
+                "status": "CUMPLE",
+            })
+            continue
         if field_name.startswith('extraSub_'):
             parts = field_name.split('_')
             doc_id = int(parts[1])
@@ -597,6 +723,10 @@ async def crear_radicacion(request: Request):
 
     documentos_ok = sum(1 for a in archivos_estado if a["status"] in ("CUMPLE", "N/A"))
 
+    # SEGURIDAD: la identidad del creador la impone el JWT, no el formulario
+    meta["creadorEmail"] = (usuario.get("email") or "").lower().strip()
+    meta["creadorName"] = usuario.get("name") or meta.get("creadorName", "") or meta.get("responsable", "")
+
     for doc_id, subs in extra_sub_files.items():
         for archivo in archivos_estado:
             if archivo["docId"] == doc_id:
@@ -604,6 +734,25 @@ async def crear_radicacion(request: Request):
                     archivo["subFiles"] = []
                 archivo["subFiles"].extend(subs)
                 break
+
+    # Sub-archivos predefinidos (ej. CEAP 25a-25d): con archivos reales el
+    # documento queda CUMPLE (salvo N/A) para que cuente en el cumplimiento
+    for doc_id, subs in slot_sub_files.items():
+        for archivo in archivos_estado:
+            if archivo["docId"] == doc_id:
+                if "subFiles" not in archivo:
+                    archivo["subFiles"] = []
+                vistos = {s.get("subId") for s in archivo["subFiles"]}
+                for s in subs:
+                    if s.get("subId") not in vistos:
+                        archivo["subFiles"].append(s)
+                        vistos.add(s.get("subId"))
+                if archivo.get("status") != "N/A":
+                    archivo["status"] = "CUMPLE"
+                    archivo["uploadDate"] = archivo["uploadDate"] or datetime.now(timezone.utc).isoformat()
+                break
+
+    documentos_ok = sum(1 for a in archivos_estado if a["status"] in ("CUMPLE", "N/A"))
 
     radicacion = {
         "id": nuevo_id,
@@ -658,7 +807,7 @@ async def crear_radicacion(request: Request):
 
 
 @app.post("/api/radicacion/{identificador}/archivo")
-async def subir_archivo(request: Request, identificador: str):
+async def subir_archivo(request: Request, identificador: str, usuario: dict = Depends(requerir_usuario)):
     # Se parsea el multipart manualmente con límites ampliados: los
     # parámetros FastAPI (UploadFile = File(...)) usan el límite interno
     # de 1024KB por parte y rechazaban archivos reales con
@@ -677,9 +826,13 @@ async def subir_archivo(request: Request, identificador: str):
         raise HTTPException(status_code=400, detail="El campo 'docId' debe ser numérico.")
 
     subFileName = str(sub_file_name) if sub_file_name not in (None, "") else None
+    sub_id = form.get("subId")
+    sub_id = str(sub_id) if sub_id not in (None, "") else None
+    sub_code = form.get("subCode")
+    sub_code = str(sub_code) if sub_code not in (None, "") else None
     radicacion = None
     for r in radicaciones_db:
-        if r["id"] == identificador or r["numeroRadicado"] == identificador:
+        if r.get("id") == identificador or r.get("numeroRadicado") == identificador:
             radicacion = r
             break
 
@@ -705,8 +858,8 @@ async def subir_archivo(request: Request, identificador: str):
 
     if subFileName:
         doc_code = ""
-        for doc in radicacion.get("archivos", []):
-            if doc["docId"] == docId:
+        for doc in (radicacion.get("archivos") or []):
+            if doc.get("docId") == docId:
                 doc_code = doc.get("docCode", str(docId))
                 break
         sub_dir = upload_dir / doc_code
@@ -719,22 +872,44 @@ async def subir_archivo(request: Request, identificador: str):
 
     file_path.write_bytes(contenido)
 
-    for doc in radicacion["archivos"]:
-        if doc["docId"] == docId:
+    for doc in (radicacion.get("archivos") or []):
+        if doc.get("docId") == docId:
             if subFileName:
                 if "subFiles" not in doc:
                     doc["subFiles"] = []
-                doc["subFiles"].append({
-                    "subId": f"extra_{len(doc['subFiles']) + 1}",
-                    "subCode": f"ANEXO-{len(doc['subFiles']) + 1}",
-                    "subName": subFileName,
-                    "fileName": archivo.filename,
-                    "fileSize": len(contenido),
-                    "fileType": mime_efectivo(archivo.filename or "", mime),
-                    "uploadDate": datetime.now(timezone.utc).isoformat(),
-                    "localPath": str(file_path),
-                    "status": "CUMPLE",
-                })
+                if sub_id:
+                    # Ranura predefinida (ej. CEAP 25a-25d): se actualiza en
+                    # su sitio para poder verla y evaluarla por separado
+                    slot = next((s for s in doc["subFiles"] if str(s.get("subId")) == sub_id), None)
+                    datos_slot = {
+                        "subId": sub_id,
+                        "subCode": sub_code or (slot.get("subCode") if slot else sub_id),
+                        "subName": subFileName,
+                        "fileName": archivo.filename,
+                        "fileSize": len(contenido),
+                        "fileType": mime_efectivo(archivo.filename or "", mime),
+                        "uploadDate": datetime.now(timezone.utc).isoformat(),
+                        "localPath": str(file_path),
+                        "status": "CUMPLE",
+                    }
+                    if slot:
+                        slot.update(datos_slot)
+                    else:
+                        doc["subFiles"].append(datos_slot)
+                else:
+                    doc["subFiles"].append({
+                        "subId": f"extra_{len(doc['subFiles']) + 1}",
+                        "subCode": f"ANEXO-{len(doc['subFiles']) + 1}",
+                        "subName": subFileName,
+                        "fileName": archivo.filename,
+                        "fileSize": len(contenido),
+                        "fileType": mime_efectivo(archivo.filename or "", mime),
+                        "uploadDate": datetime.now(timezone.utc).isoformat(),
+                        "localPath": str(file_path),
+                        "status": "CUMPLE",
+                    })
+                if doc.get("status") != "N/A":
+                    doc["status"] = "CUMPLE"
             else:
                 doc["fileName"] = archivo.filename
                 doc["fileSize"] = len(contenido)
@@ -745,9 +920,9 @@ async def subir_archivo(request: Request, identificador: str):
             break
 
     radicacion["documentosOk"] = sum(
-        1 for a in radicacion["archivos"] if a["status"] in ("CUMPLE", "N/A")
+        1 for a in (radicacion.get("archivos") or []) if a.get("status") in ("CUMPLE", "N/A")
     )
-    radicacion["porcentajeCumplimiento"] = calcular_porcentaje(radicacion["archivos"])
+    radicacion["porcentajeCumplimiento"] = calcular_porcentaje(radicacion.get("archivos") or [])
     radicacion["fechaActualizacion"] = datetime.now(timezone.utc).isoformat()
     guardar_db()
 
@@ -756,7 +931,7 @@ async def subir_archivo(request: Request, identificador: str):
 
 
 @app.post("/api/radicacion/{identificador}/formato")
-async def subir_formato(request: Request, identificador: str):
+async def subir_formato(request: Request, identificador: str, usuario: dict = Depends(requerir_usuario)):
     # Parseo manual con límites ampliados (ver /archivo): el límite
     # interno de 1024KB por parte rechazaba los PDF generados.
     form = await request.form(max_files=100, max_fields=100, max_part_size=MAX_TAMANIO_BYTES)
@@ -768,7 +943,7 @@ async def subir_formato(request: Request, identificador: str):
     nombre = str(nombre)
     radicacion = None
     for r in radicaciones_db:
-        if r["id"] == identificador or r["numeroRadicado"] == identificador:
+        if r.get("id") == identificador or r.get("numeroRadicado") == identificador:
             radicacion = r
             break
 
@@ -820,25 +995,35 @@ async def subir_formato(request: Request, identificador: str):
 
 
 @app.patch("/api/radicacion/{identificador}/estado")
-async def actualizar_estado(identificador: str, body: ActualizacionEstado):
+async def actualizar_estado(identificador: str, body: ActualizacionEstado, usuario: dict = Depends(requerir_usuario)):
     radicacion = None
     for r in radicaciones_db:
-        if r["id"] == identificador or r["numeroRadicado"] == identificador:
+        if r.get("id") == identificador or r.get("numeroRadicado") == identificador:
             radicacion = r
             break
 
     if not radicacion:
         raise HTTPException(status_code=404, detail="Radicación no encontrada")
 
+    # SEGURIDAD: el dictamen final solo lo emite el revisor; el contratista
+    # solo puede devolver a revisión. La identidad del historial es del JWT.
+    if body.estado in ("Aprobado", "Con Observaciones") and usuario.get("role") != "interventor":
+        raise HTTPException(status_code=403, detail="Solo el Responsable de Revisión puede emitir este dictamen.")
+    body.usuarioEmail = (usuario.get("email") or "").lower().strip()
+    body.usuarioNombre = usuario.get("name") or body.usuarioNombre or ""
+
     estado_anterior = radicacion["estado"]
     radicacion["estado"] = body.estado
     radicacion["observacionesGenerales"] = body.observaciones or ""
 
     if body.archivos:
-        local_paths = {a["docId"]: a.get("localPath", "") for a in radicacion["archivos"]}
+        # SEGURIDAD: el localPath SIEMPRE lo impone el servidor. Aceptar el
+        # que envía el cliente permitiría leer archivos arbitrarios del
+        # servidor (LFI) y subirlos a SharePoint. Los docId desconocidos
+        # quedan sin ruta local (se omiten al subir).
+        local_paths = {a.get("docId"): a.get("localPath", "") for a in (radicacion.get("archivos") or [])}
         for a in body.archivos:
-            if not a.get("localPath") and a["docId"] in local_paths:
-                a["localPath"] = local_paths[a["docId"]]
+            a["localPath"] = local_paths.get(a.get("docId"), "")
         radicacion["archivos"] = body.archivos
         radicacion["documentosOk"] = sum(
             1 for a in body.archivos if a.get("status") in ("CUMPLE", "N/A")
@@ -870,8 +1055,6 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado):
     if graph_service:
         estado_final = body.estado
         obs = body.observaciones or ""
-        email_usuario = body.usuarioEmail or ""
-        nombre_usuario = body.usuarioNombre or ""
 
         async def _post_estado(numero, estado_ant):
             # Releer el radicado actualizado (referencia viva de la DB)
@@ -926,7 +1109,7 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado):
 
 
 @app.post("/api/radicacion/{identificador}/sincronizar")
-async def sincronizar_manual(identificador: str):
+async def sincronizar_manual(identificador: str, usuario: dict = Depends(requerir_interventor)):
     """Reintento manual de subida a SharePoint (sincrónico y con detalle).
 
     La subida automática al aprobar corre en background; si falla (p. ej.
@@ -972,10 +1155,10 @@ async def sincronizar_manual(identificador: str):
 
 
 @app.patch("/api/radicacion/{identificador}/metadata")
-async def actualizar_metadata(identificador: str, body: ActualizacionMetadata):
+async def actualizar_metadata(identificador: str, body: ActualizacionMetadata, usuario: dict = Depends(requerir_usuario)):
     radicacion = None
     for r in radicaciones_db:
-        if r["id"] == identificador or r["numeroRadicado"] == identificador:
+        if r.get("id") == identificador or r.get("numeroRadicado") == identificador:
             radicacion = r
             break
 
@@ -985,10 +1168,10 @@ async def actualizar_metadata(identificador: str, body: ActualizacionMetadata):
     if body.metadata:
         radicacion["metadata"].update(body.metadata)
     if body.archivos:
-        local_paths = {a["docId"]: a.get("localPath", "") for a in radicacion["archivos"]}
+        # SEGURIDAD: igual que en /estado, el localPath lo impone el servidor.
+        local_paths = {a.get("docId"): a.get("localPath", "") for a in (radicacion.get("archivos") or [])}
         for a in body.archivos:
-            if not a.get("localPath") and a["docId"] in local_paths:
-                a["localPath"] = local_paths[a["docId"]]
+            a["localPath"] = local_paths.get(a.get("docId"), "")
         radicacion["archivos"] = body.archivos
         radicacion["documentosOk"] = sum(
             1 for a in body.archivos if a.get("status") in ("CUMPLE", "N/A")
@@ -1027,7 +1210,7 @@ async def estado_m365():
 
 
 @app.get("/api/m365/list-columns")
-async def columnas_lista():
+async def columnas_lista(usuario: dict = Depends(requerir_usuario)):
     if not graph_service:
         raise HTTPException(status_code=503, detail="GraphService no disponible")
     try:
@@ -1038,7 +1221,7 @@ async def columnas_lista():
 
 
 @app.post("/api/m365/test-connection")
-async def probar_conexion():
+async def probar_conexion(usuario: dict = Depends(requerir_usuario)):
     if graph_service:
         try:
             return await graph_service.probar_conexion()
@@ -1048,7 +1231,7 @@ async def probar_conexion():
 
 
 @app.post("/api/m365/revisar-vencimientos")
-async def forzar_revision_vencimientos():
+async def forzar_revision_vencimientos(usuario: dict = Depends(requerir_interventor)):
     """Disparo manual de la revisión de vencimientos (para probar avisos)."""
     if not graph_service:
         raise HTTPException(status_code=503, detail="GraphService no disponible")
@@ -1057,7 +1240,7 @@ async def forzar_revision_vencimientos():
 
 
 @app.get("/api/m365/webhook-config")
-async def obtener_webhook():
+async def obtener_webhook(usuario: dict = Depends(requerir_usuario)):
     return {
         "webhookUrl": os.getenv("POWER_AUTOMATE_WEBHOOK_URL", ""),
         "autoSyncOnApprove": True,
@@ -1065,7 +1248,7 @@ async def obtener_webhook():
 
 
 @app.post("/api/m365/webhook-config")
-async def actualizar_webhook(request: Request):
+async def actualizar_webhook(request: Request, usuario: dict = Depends(requerir_interventor)):
     body = await request.json()
     os.environ["POWER_AUTOMATE_WEBHOOK_URL"] = body.get("webhookUrl", "")
     return {"ok": True}
@@ -1077,6 +1260,7 @@ def crear_token(data: dict) -> str:
         "email": data.get("email", ""),
         "role": data.get("role", "contratista"),
         "company": data.get("company", ""),
+        "name": data.get("name", ""),
         "exp": datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRE_HOURS),
         "iat": datetime.now(timezone.utc),
     }
@@ -1090,50 +1274,52 @@ def verificar_token(token: str) -> dict:
         return None
 
 
-@app.post("/api/auth/token")
-async def generar_token(request: Request):
-    body = await request.json()
-    email = body.get("email", "")
-    company = body.get("company", "")
-    role = body.get("role", "contratista")
-
-    nombre = email.split("@")[0].replace(".", " ").replace("_", " ").title()
-    token = crear_token({"email": email, "company": company, "role": role})
-    return {"token": token, "user": {"email": email, "name": nombre, "company": company, "role": role}}
-
-
 @app.post("/api/auth/msal-verify")
 async def verificar_msal(request: Request):
     body = await request.json()
     account = body.get("account", {})
-    email = account.get("username", account.get("localAccountId", ""))
+    email = (account.get("username", account.get("localAccountId", "")) or "").strip()
+    rol_solicitado = (body.get("role") or "").strip().lower()
 
-    if not email:
+    if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Cuenta no válida")
 
-    dominio = email.split("@")[-1].lower() if "@" in email else ""
-    if dominio in ("intecoalsas.com", "intecoal.com"):
+    email = email.lower()
+    dominio = email.split("@")[-1]
+    es_interventor = dominio in ("intecoalsas.com", "intecoal.com", "intecoal.com.co")
+
+    # SEGURIDAD: el rol interventor exige dominio INTECOAL aunque se solicite.
+    if rol_solicitado == "interventor":
+        if not es_interventor:
+            raise HTTPException(
+                status_code=403,
+                detail="El Responsable de Revisión solo puede entrar con correo de INTECOAL.",
+            )
         rol = "interventor"
+    elif rol_solicitado == "contratista":
+        rol = "contratista"
+    else:
+        rol = "interventor" if es_interventor else "contratista"
+
+    if es_interventor:
         empresa = "INTECOAL S.A.S."
     elif dominio in ("soy.sena.edu.co", "sena.edu.co"):
         rol = "contratista"
         empresa = "SENA"
     elif dominio in ("electroingenieria.com.co",):
-        rol = "contratista"
         empresa = "ELECTROINGENIERIA S.A.S."
     else:
-        rol = "contratista"
         empresa = dominio.upper().replace(".COM", "").replace(".CO", "")
 
     nombre = email.split("@")[0].replace(".", " ").replace("_", " ").title()
-    token = crear_token({"email": email, "company": empresa, "role": rol})
+    token = crear_token({"email": email, "company": empresa, "role": rol, "name": nombre})
 
     return {
         "token": token,
         "user": {
             "isAuthenticated": True,
             "name": nombre,
-            "email": email.lower(),
+            "email": email,
             "role": rol,
             "company": empresa,
         }
@@ -1141,11 +1327,37 @@ async def verificar_msal(request: Request):
 
 
 @app.get("/api/files/view/{radicacion_id}/{doc_id}")
-async def ver_archivo(radicacion_id: str, doc_id: int):
+async def ver_archivo(
+    radicacion_id: str,
+    doc_id: int,
+    usuario: dict = Depends(requerir_usuario),
+    subId: Optional[str] = Query(None),
+):
     for r in radicaciones_db:
-        if r["id"] == radicacion_id or r["numeroRadicado"] == radicacion_id:
-            for a in r.get("archivos", []):
-                if a["docId"] == doc_id and a.get("localPath"):
+        if r.get("id") == radicacion_id or r.get("numeroRadicado") == radicacion_id:
+            if usuario.get("role") != "interventor":
+                email = (usuario.get("email") or "").lower().strip()
+                creador = (r.get("creadorEmail", "") or r.get("metadata", {}).get("creadorEmail", "") or "").lower().strip()
+                if creador != email:
+                    raise HTTPException(status_code=403, detail="No tiene acceso a este archivo.")
+            for a in (r.get("archivos") or []):
+                if a.get("docId") != doc_id:
+                    continue
+                if subId is not None:
+                    # Sub-archivo (ej. CEAP 25a-25d o anexos)
+                    sf = next((s for s in (a.get("subFiles") or []) if str(s.get("subId")) == str(subId)), None)
+                    if not sf or not sf.get("localPath"):
+                        raise HTTPException(status_code=404, detail="Sub-archivo no encontrado")
+                    sf_path = Path(sf["localPath"])
+                    if not sf_path.exists():
+                        raise HTTPException(status_code=404, detail="Sub-archivo no encontrado en disco")
+                    return FileResponse(
+                        path=str(sf_path),
+                        media_type=sf.get("fileType", "application/pdf"),
+                        filename=sf.get("fileName", "documento.pdf"),
+                        content_disposition_type="inline",
+                    )
+                if a.get("docId") == doc_id and a.get("localPath"):
                     file_path = Path(a["localPath"])
                     if file_path.exists():
                         return FileResponse(
@@ -1155,7 +1367,7 @@ async def ver_archivo(radicacion_id: str, doc_id: int):
                             content_disposition_type="inline",
                         )
                     raise HTTPException(status_code=404, detail="Archivo no encontrado en disco")
-                if a["docId"] == doc_id and a.get("fileName"):
+                if a.get("docId") == doc_id and a.get("fileName"):
                     return {
                         "fileName": a["fileName"],
                         "fileType": a.get("fileType", "application/pdf"),

@@ -15,7 +15,25 @@ const printExact = {
   printColorAdjust: 'exact'
 };
 
-// Correo del encabezado según municipio (sin tildes, minúsculas)
+// Dirección y teléfono del encabezado según municipio
+const datosPorMunicipio = (municipio) => {
+  const m = (municipio || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+  if (m.includes('villavicencio')) {
+    return {
+      direccion: 'Carrera. 33a #15-49 Conjunto Residencial El Oasis – Casa 23',
+      ciudad: 'Villavicencio - Meta',
+      telefono: '310 355 6449'
+    };
+  }
+  return {
+    direccion: 'Calle 41ª #24-38 Barrio Príncipe, Tuluá – Valle del Cauca',
+    ciudad: '',
+    telefono: '224 8763'
+  };
+};
 const correoPorMunicipio = (municipio) => {
   const m = (municipio || '')
     .toLowerCase()
@@ -25,12 +43,15 @@ const correoPorMunicipio = (municipio) => {
   if (m.includes('andalucia')) return 'andalucia@intecoalsas.com';
   if (m.includes('san pedro')) return 'sanpedro@intecoalsas.com';
   if (m.includes('calima')) return 'calima@intecoalsas.com';
+  if (m.includes('villavicencio')) return 'villavicencio@intecoalsas.com';
   return 'andalucia@intecoalsas.com';
 };
 
-export const MembreteRecibo = ({ municipio }) => (
+export const MembreteRecibo = ({ municipio }) => {
+  const datos = datosPorMunicipio(municipio);
+  return (
   <div className="pb-2" style={printExact}>
-    <div className="flex items-start justify-between gap-4">
+    <div className="flex items-center justify-start gap-4">
       <div className="flex flex-col items-start">
         <img
           src="/recibo-tecnico/logo.png"
@@ -39,25 +60,29 @@ export const MembreteRecibo = ({ municipio }) => (
         />
         <span style={{ fontSize: '10px', fontWeight: 700, color: '#000000', paddingLeft: '22px' }}>NIT: 901.582.227-1</span>
       </div>
-      <div className="text-right space-y-1 pt-1" style={{ fontSize: '11px', color: '#595959' }}>
-        <div className="flex items-center justify-end" style={{ gap: '4px' }}>
+      <div className="text-left space-y-1 pt-1" style={{ fontSize: '11px', color: '#595959' }}>
+        <div className="flex items-center justify-start" style={{ gap: '4px' }}>
           <img src="/recibo-tecnico/dir.png" alt="" style={{ width: '13px', height: '13px' }} />
-          <span>Calle 41ª #24-38 Barrio Príncipe, Tuluá – Valle del Cauca</span>
+          <span>{datos.direccion}</span>
         </div>
-        <div className="flex items-center justify-end" style={{ gap: '4px' }}>
+        {datos.ciudad && (
+          <div className="font-bold" style={{ color: '#000000', paddingLeft: '17px' }}>{datos.ciudad}</div>
+        )}
+        <div className="flex items-center justify-start" style={{ gap: '4px' }}>
           <img src="/recibo-tecnico/mail.png" alt="" style={{ width: '13px', height: '13px' }} />
           <span>{correoPorMunicipio(municipio)}</span>
         </div>
-        <div className="flex items-center justify-end" style={{ gap: '4px' }}>
+        <div className="flex items-center justify-start" style={{ gap: '4px' }}>
           <img src="/recibo-tecnico/tel.png" alt="" style={{ width: '13px', height: '13px' }} />
-          <span>224 8763</span>
+          <span>{datos.telefono}</span>
         </div>
       </div>
     </div>
     {/* Línea superior: abajo del encabezado, de margen a margen */}
     <hr style={{ border: 'none', height: '3px', backgroundColor: '#4E3629', margin: '20px 0', width: '100%', ...printExact }} />
   </div>
-);
+  );
+};
 
 export const FranjaCorporativa = () => (
   <footer style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'sans-serif', marginTop: '60px', paddingBottom: '50px', ...printExact }}>

@@ -59,7 +59,7 @@ Contratista            Revisor (Interventoría)
 - **Aprobado → subida a SharePoint** (fila + carpetas + archivos, en background) con insignia de estado y botón **Reintentar subida** si queda pendiente.
 - **Formato 4.3.7 C** (por radicado): número, municipio/ciudad y fecha se autodiligencian; la fecha se actualiza a diario hasta subirlo y luego se congela. Botones Editar/Guardar/Subir/Imprimir.
 - **Recibo Técnico** (por radicado, botón en el Historial solo en aprobados): solo asunto y cuerpo editables; firma del jefe permanente; correo del membrete según municipio (Tuluá/Andalucía/San Pedro/Calima); fecha viva hasta subir y congelada después. Botones Editar/Guardar/Subir/Imprimir + selector de radicado.
-- **Calendario** de plazos: 15 días hábiles por radicado (lun–vie). Bolitas 🔵 radicación, 🟡 faltan ≤8, 🔴 faltan ≤4, 🟣 vencido, 🟢 aprobado. Clic en fecha → detalle del radicado con acceso a Evaluar/Informe.
+- **Calendario** de plazos: límite = 15 días hábiles por radicado (lun–vie); el conteo restante es en días calendario exactos. Bolitas 🔵 radicación, 🟡 faltan ≤8, 🔴 faltan ≤4, 🟣 vencido, 🟢 aprobado. Clic en fecha → detalle del radicado con acceso a Evaluar/Informe.
 
 ### Visor de documentos
 - **PDF e imágenes:** se muestran en línea (Content-Disposition: inline).
@@ -68,6 +68,8 @@ Contratista            Revisor (Interventoría)
 
 ## Notificaciones por correo
 
+Plantilla plana (sin marco): título, contenido y al final el **logo del municipio** como imagen inline (`backend/assets/correos/logo-{tulua,andalucia,sanpedro,calima,villavicencio,general}`), elegido por el municipio del radicado.
+
 | Evento | Destinatario | Función backend |
 |--------|--------------|-----------------|
 | Nuevo radicado | Revisor | `enviar_correo_nuevo_radicado_revisor` |
@@ -75,7 +77,10 @@ Contratista            Revisor (Interventoría)
 | Resultado de evaluación (Aprobado/Con Observaciones) | Contratista | `enviar_correo_estado` |
 | Radicado reenviado/editado | Revisor | `enviar_correo_reesubido_revisor` |
 | Confirmación de reenvío | Contratista | `enviar_correo_reenvio_contratista` |
-| Faltan 8 / 4 días hábiles (una sola vez c/u) | Revisor | `enviar_correo_vencimiento` (vigilancia cada 6 h) |
+| Faltan 8 / 4 días (una sola vez c/u) | Revisor | `enviar_correo_vencimiento` (vigilancia cada 1 h) |
+| Vencido sin aprobar (diario 8:00 a.m. hasta aprobar) | Revisor | `enviar_correo_vencimiento` (bandera `diaria`) |
+
+> Los avisos del calendario son **solo para el revisor**; el contratista no recibe nada de esto. Al aprobarse el radicado se desactivan automáticamente (los aprobados se omiten).
 
 ## Estructura en SharePoint
 

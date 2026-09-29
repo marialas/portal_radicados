@@ -21,6 +21,7 @@ import {
   Download
 } from 'lucide-react';
 import { downloadFilingZip } from '../lib/zipExporter';
+import { apiFetch, getToken } from '../lib/api';
 import { IntecoalLogo } from './IntecoalLogo';
 import { FirmaDigitalModal } from './FirmaDigitalModal';
 import { DocumentPreviewModal } from './DocumentPreviewModal';
@@ -129,11 +130,48 @@ export const EvaluacionRadicacion = ({
     }));
   };
 
-  const abrirVisor = (item) => {
+  // Evaluación individual de cada sub-archivo (ej. CEAP 25a-25d y anexos)
+  const handleSubStatusChange = (docId, subId, newStatus) => {
+    setArchivosState(prev => prev.map(item => {
+      if (item.docId !== docId) return item;
+      return {
+        ...item,
+        subFiles: (item.subFiles || []).map(s => s.subId === subId ? { ...s, status: newStatus } : s)
+      };
+    }));
+  };
+
+  const handleSubNotesChange = (docId, subId, newNotes) => {
+    setArchivosState(prev => prev.map(item => {
+      if (item.docId !== docId) return item;
+      return {
+        ...item,
+        subFiles: (item.subFiles || []).map(s => s.subId === subId ? { ...s, notes: newNotes } : s)
+      };
+    }));
+  };
+
+  const urlConToken = (base) => {
+    const tk = getToken();
+    return tk ? `${base}${base.includes('?') ? '&' : '?'}token=${encodeURIComponent(tk)}` : base;
+  };
+
+  const abrirVisor = (item, sub = null) => {
+    if (sub) {
+      setPreviewingDocItem({
+        ...item,
+        fileName: sub.fileName || sub.subName,
+        fileType: sub.fileType || 'application/pdf',
+        status: sub.status || 'CUMPLE',
+        fileUrl: urlConToken(`/api/files/view/${filing.id}/${item.docId}?subId=${encodeURIComponent(sub.subId)}`),
+        blobUrl: undefined
+      });
+      return;
+    }
     const tieneArchivo = item.fileName && item.fileName !== 'N/A';
     let previewItem = { ...item };
     if (tieneArchivo) {
-      previewItem.fileUrl = `/api/files/view/${filing.id}/${item.docId}`;
+      previewItem.fileUrl = urlConToken(`/api/files/view/${filing.id}/${item.docId}`);
       previewItem.blobUrl = undefined;
     }
     setPreviewingDocItem(previewItem);
@@ -170,7 +208,7 @@ export const EvaluacionRadicacion = ({
     };
 
     try {
-      const res = await fetch(`/api/radicacion/${filing.id}/metadata`, {
+      const res = await apiFetch(`/api/radicacion/${filing.id}/metadata`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -234,7 +272,7 @@ export const EvaluacionRadicacion = ({
     let filingFinal = updatedFiling;
 
     try {
-      const res = await fetch(`/api/radicacion/${filing.id}/estado`, {
+      const res = await apiFetch(`/api/radicacion/${filing.id}/estado`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -727,8 +765,73 @@ export const EvaluacionRadicacion = ({
                           title="Ver detalles de este requisito"
                         >
                           <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                          <span>Sin archivo adjunto</span>
+                          <span>{(item.subFiles || []).some(s => s.fileName) ? 'Ver sub-archivos abajo' : 'Sin archivo adjunto'}</span>
                         </button>
+                      )}
+                      {(item.subFiles || []).filter(sf => sf.fileName).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 w-full pt-1">
+                          {(item.subFiles || []).filter(sf => sf.fileName).map((sf, k) => (
+                            <button
+                              key={sf.subId || k}
+                              type="button"
+                              onClick={() => abrirVisor(item, sf)}
+                              className="inline-flex items-center space-x-1.5 text-sky-900 bg-sky-100 hover:bg-sky-200 px-2.5 py-1 rounded-lg text-[11px] font-extrabold border border-sky-400 transition-all cursor-pointer shadow-sm"
+                              title={`Ver ${sf.subName || sf.fileName}`}
+                            >
+                              <Eye className="w-3.5 h-3.5 text-sky-700 shrink-0" />
+                              <span className="truncate max-w-[200px] sm:max-w-[260px]">
+                                {sf.subCode ? `${sf.subCode} · ` : ''}{sf.subName || sf.fileName}
+                              </span>
+                              <span className="bg-sky-800 text-white text-[9px] px-1.5 py-0.2 rounded font-black ml-1">
+                                VER
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Evaluación individual de sub-archivos */}
+                      {(item.subFiles || []).filter(sf => sf.fileName).length > 0 && (
+                        <div className="w-full mt-2 pt-2 border-t border-dashed border-gray-300 space-y-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 block">
+                            Evaluar sub-archivos ({(item.subFiles || []).filter(sf => sf.fileName).length})
+                          </span>
+                          {(item.subFiles || []).filter(sf => sf.fileName).map((sf) => (
+                            <div key={`ev-${sf.subId}`} className="bg-white border border-gray-200 rounded-xl p-2.5 space-y-2">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <span className="text-[11px] font-extrabold text-gray-800 truncate">
+                                  {sf.subCode ? `${sf.subCode} · ` : ''}{sf.subName || sf.fileName}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  {[
+                                    { v: 'CUMPLE', cls: sf.status === 'CUMPLE' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-white text-emerald-800 border-gray-300' },
+                                    { v: 'PENDIENTE', cls: sf.status === 'PENDIENTE' || !sf.status ? 'bg-amber-500 text-slate-950 border-amber-600' : 'bg-white text-amber-800 border-gray-300' },
+                                    { v: 'NO CUMPLE', cls: sf.status === 'NO CUMPLE' ? 'bg-red-600 text-white border-red-700' : 'bg-white text-red-800 border-gray-300' }
+                                  ].map(o => (
+                                    <button
+                                      key={o.v}
+                                      type="button"
+                                      onClick={() => handleSubStatusChange(item.docId, sf.subId, o.v)}
+                                      className={`px-2 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${o.cls}`}
+                                    >
+                                      {o.v === 'CUMPLE' ? 'Cumple' : o.v === 'PENDIENTE' ? 'Pendiente' : 'No cumple'}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="relative">
+                                <MessageSquare className="w-3 h-3 text-gray-400 absolute left-2.5 top-2.5" />
+                                <textarea
+                                  value={sf.notes || ''}
+                                  onChange={(e) => handleSubNotesChange(item.docId, sf.subId, e.target.value)}
+                                  placeholder="Observación del revisor para este sub-archivo (por qué no pasó / qué debe re-subir)…"
+                                  rows={1}
+                                  className="w-full pl-8 pr-2 py-1.5 bg-white border border-gray-300 rounded-lg text-[11px] text-gray-900 focus:ring-2 focus:ring-[#D9CF43] placeholder-gray-400"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>

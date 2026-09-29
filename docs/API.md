@@ -11,11 +11,13 @@ Todos los endpoints de negocio viven bajo el prefijo `/api`.
 
 La autenticación es mediante **cuenta de Microsoft 365 (MSAL)**. El frontend obtiene el identificador de la cuenta M365 y lo verifica en el backend para generar un JWT de sesión.
 
-Todas las peticiones autenticadas llevan el header:
+Todas las peticiones autenticadas llevan el header (inyectado por `src/lib/api.js`):
 
 ```
 Authorization: Bearer <jwt_token>
 ```
+
+Sin token válido → **401** y el frontend devuelve al ingreso. El visor de archivos (`<img>`/`<iframe>`) usa `?token=` como alternativa. El `email`/`rol` ya no se aceptan como parámetros: salen del JWT.
 
 ### POST /api/auth/token
 
@@ -38,20 +40,19 @@ Genera un token JWT a partir de identidad de sesión (flujo no-M365 / verificaci
 
 ### POST /api/auth/msal-verify
 
-Verifica la sesión/cuenta de Microsoft 365 y devuelve el usuario autenticado con su rol.
+Verifica la sesión/cuenta de Microsoft 365, valida el rol solicitado y devuelve el usuario autenticado **con su JWT**.
 
 ```jsonc
 // Request
 {
-  "email": "anyeli_cabezas@soy.sena.edu.co",
-  "name": "Anyeli Cabezas",
-  "role": "contratista"
+  "account": { "username": "anyeli_cabezas@soy.sena.edu.co" },
+  "role": "contratista"   // "interventor" exige dominio INTECOAL o responde 403
 }
 
 // Response 200
 {
   "token": "eyJhbGciOiJIUzI1NiJ9...",
-  "user": { "isAuthenticated": true, "name": "...", "email": "...", "role": "contratista" }
+  "user": { "isAuthenticated": true, "name": "...", "email": "...", "role": "contratista", "company": "..." }
 }
 ```
 
@@ -123,9 +124,12 @@ Lista radicaciones con filtros. El **contratista** solo ve sus propias radicacio
       "historial": [ { "estado": "Radicado", "fecha": "...", "usuario": "..." } ]
     }
   ],
-  "total": 3
+  "total": 3,
+  "ultimoGlobal": { "id": "abc-999", "numeroRadicado": "RAD-2026-0021" }
 }
 ```
+
+> `ultimoGlobal` es el último consecutivo de **todas** las cuentas (el contratista solo recibe lo suyo en `data`, pero necesita este dato para mostrar/ocultar "Eliminar").
 
 ### GET /api/radicacion/{identificador}
 

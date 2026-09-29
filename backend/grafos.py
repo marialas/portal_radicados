@@ -1,6 +1,12 @@
 import os
+import html
 from pathlib import Path
 import httpx
+
+
+def esc(valor):
+    """Escapa texto para interpolarlo en HTML de correos (anti-XSS/HTML injection)."""
+    return html.escape(str(valor or ""), quote=True)
 
 
 class GraphService:
@@ -179,13 +185,22 @@ class GraphService:
         # flujo que crea la fila + carpetas + archivos.
         return await self.guardar_radicacion_en_sharepoint(radicacion)
 
+    @staticmethod
+    def _filtro_seguro(valor):
+        """Escapa comillas simples para valores dentro de $filter OData.
+
+        Sin esto, un número de radicado con apóstrofe rompería la consulta
+        o permitiría inyección de filtro (OData injection).
+        """
+        return str(valor or "").replace("'", "''")
+
     async def _buscar_por_titulo(self, titulo):
         token = await self._obtener_token()
         headers = {"Authorization": f"Bearer {token}"}
 
         url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items"
         params = {
-            "$filter": f"fields/Title eq '{titulo}'",
+            "$filter": f"fields/Title eq '{self._filtro_seguro(titulo)}'",
             "$top": 1,
             "$expand": "fields",
             "$select": "id",
@@ -412,7 +427,67 @@ class GraphService:
                 raise Exception(f"No se pudo subir el formato a {rel}")
         return {"ok": True, "ruta": rel}
 
-    async def _enviar_correo(self, destino, asunto, cuerpo):
+    ASSETS_CORREOS = Path(__file__).resolve().parent / "assets" / "correos"
+
+    def _normalizar_municipio(self, municipio):
+        import unicodedata
+        m = (municipio or "").lower().strip()
+        return "".join(c for c in unicodedata.normalize("NFD", m) if unicodedata.category(c) != "Mn")
+
+    def _logo_por_municipio(self, municipio):
+        """Devuelve (cid, ruta_local, content_type) del logo según municipio."""
+        m = self._normalizar_municipio(municipio)
+        if "tulua" in m:
+            nombre = "logo-tulua.jpg"
+        elif "andalucia" in m:
+            nombre = "logo-andalucia.jpg"
+        elif "san pedro" in m:
+            nombre = "logo-sanpedro.jpg"
+        elif "calima" in m:
+            nombre = "logo-calima.jpg"
+        elif "villavicencio" in m:
+            nombre = "logo-villavicencio.png"
+        else:
+            nombre = "logo-general.png"
+        ruta = self.ASSETS_CORREOS / nombre
+        if not ruta.exists():
+            ruta = self.ASSETS_CORREOS / "logo-general.png"
+        cid = ruta.stem.replace("-", "_")
+        tipo = "image/png" if ruta.suffix.lower() == ".png" else "image/jpeg"
+        return cid, str(ruta), tipo
+
+    def _pie_logo_html(self, municipio):
+        """Firma visual al final del correo (sin marco): logo del municipio."""
+        cid, _, _ = self._logo_por_municipio(municipio)
+        return f'<img src="cid:{cid}" alt="INTECOAL SAS" style="max-width:520px;width:100%;height:auto;margin:12px 0 4px 0;" />'
+
+    def _adjunto_logo(self, municipio):
+        import base64
+        cid, ruta, tipo = self._logo_por_municipio(municipio)
+        try:
+            data = Path(ruta).read_bytes()
+        except Exception as e:
+            print(f"[GRAPH] No se pudo leer logo {ruta}: {e}")
+            return None
+        return {
+            "@odata.type": "#microsoft.graph.fileAttachment",
+            "name": Path(ruta).name,
+            "contentType": tipo,
+            "contentId": cid,
+            "contentBytes": base64.b64encode(data).decode(),
+            "isInline": True,
+        }
+
+    def _plantilla_correo(self, titulo, cuerpo_interno, municipio):
+        """Plantilla plana (sin marco de cuadro) + logo del municipio al final."""
+        return f"""<html><body style="font-family:Arial,sans-serif;color:#1E222A;">
+<h2 style="margin:0 0 12px 0;font-size:17px;color:#1E222A;">{titulo}</h2>
+{cuerpo_interno}
+{self._pie_logo_html(municipio)}
+<p style="font-size:11px;color:#999;">INTECOAL SAS — Interventoría Técnica</p>
+</body></html>"""
+
+    async def _enviar_correo(self, destino, asunto, cuerpo, adjuntos=None):
         if not destino:
             return False
         token = await self._obtener_token()
@@ -425,6 +500,8 @@ class GraphService:
                 "toRecipients": [{"emailAddress": {"address": destino}}],
             }
         }
+        if adjuntos:
+            mensaje["message"]["attachments"] = adjuntos
         url = f"https://graph.microsoft.com/v1.0/users/{self.sender_email}/sendMail"
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=30.0)) as cliente:
             try:
@@ -452,28 +529,23 @@ class GraphService:
         if not destino:
             return
         meta = radicacion["metadata"]
-        asunto = f"Nuevo Radicado por Revisar — {radicacion['numeroRadicado']}"
-        cuerpo = f"""
-        <html><body style="font-family:Arial,sans-serif;color:#1E222A;">
-        <div style="background:#1E222A;color:#D9CF43;padding:16px 24px;border-radius:8px 8px 0 0;">
-            <h2 style="margin:0;font-size:16px;">INTECOAL SAS — Nuevo Radicado para Revisar</h2>
-        </div>
-        <div style="padding:20px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
+        municipio = meta.get("municipio", "")
+        asunto = f"Nuevo Radicado por Revisar — {esc(radicacion['numeroRadicado'])}"
+        interno = f"""
             <p>Se ha registrado un nuevo radicado y requiere su revisión:</p>
             <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0;">
-                <tr><td style="padding:6px 0;font-weight:bold;width:140px;">Radicado:</td><td>{radicacion['numeroRadicado']}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{meta.get('nombreProyecto', '')}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Municipio:</td><td>{meta.get('municipio', '')}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Contratista:</td><td>{meta.get('contratista', '')}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Responsable:</td><td>{meta.get('responsable', '')}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Tipo Entrega:</td><td>{meta.get('tipoEntrega', '')}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;width:140px;">Radicado:</td><td>{esc(radicacion['numeroRadicado'])}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{esc(meta.get('nombreProyecto', ''))}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Municipio:</td><td>{esc(meta.get('municipio', ''))}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Contratista:</td><td>{esc(meta.get('contratista', ''))}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Responsable:</td><td>{esc(meta.get('responsable', ''))}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Tipo Entrega:</td><td>{esc(meta.get('tipoEntrega', ''))}</td></tr>
             </table>
             <p style="font-size:12px;color:#666;">Acceda al portal para revisar y evaluar la documentación.</p>
-            <p style="font-size:11px;color:#999;margin-top:20px;">INTECOAL SAS — Interventoría Técnica</p>
-        </div>
-        </body></html>
         """
-        await self._enviar_correo(destino, asunto, cuerpo)
+        cuerpo = self._plantilla_correo("INTECOAL SAS — Nuevo Radicado para Revisar", interno, municipio)
+        adj = self._adjunto_logo(municipio)
+        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None)
 
     async def enviar_correo_nuevo_radicado_contratista(self, radicacion):
         """Notifica al contratista que su radicado fue creado y quedó en revisión."""
@@ -481,25 +553,20 @@ class GraphService:
         if not destino:
             return
         meta = radicacion["metadata"]
-        asunto = f"Radicado Registrado — {radicacion['numeroRadicado']}"
-        cuerpo = f"""
-        <html><body style="font-family:Arial,sans-serif;color:#1E222A;">
-        <div style="background:#1E222A;color:#D9CF43;padding:16px 24px;border-radius:8px 8px 0 0;">
-            <h2 style="margin:0;font-size:16px;">INTECOAL SAS — Radicado Registrado</h2>
-        </div>
-        <div style="padding:20px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
+        municipio = meta.get("municipio", "")
+        asunto = f"Radicado Registrado — {esc(radicacion['numeroRadicado'])}"
+        interno = f"""
             <p>Su radicado fue creado correctamente y quedó en <strong>revisión por la Interventoría Técnica</strong>.</p>
             <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0;">
-                <tr><td style="padding:6px 0;font-weight:bold;width:140px;">Radicado:</td><td>{radicacion['numeroRadicado']}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{meta.get('nombreProyecto', '')}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Municipio:</td><td>{meta.get('municipio', '')}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;width:140px;">Radicado:</td><td>{esc(radicacion['numeroRadicado'])}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{esc(meta.get('nombreProyecto', ''))}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Municipio:</td><td>{esc(meta.get('municipio', ''))}</td></tr>
             </table>
             <p style="font-size:12px;color:#666;">Le notificaremos el resultado una vez sea evaluado.</p>
-            <p style="font-size:11px;color:#999;margin-top:20px;">INTECOAL SAS — Interventoría Técnica</p>
-        </div>
-        </body></html>
         """
-        await self._enviar_correo(destino, asunto, cuerpo)
+        cuerpo = self._plantilla_correo("INTECOAL SAS — Radicado Registrado", interno, municipio)
+        adj = self._adjunto_logo(municipio)
+        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None)
 
     async def enviar_correo_estado(self, radicacion, estado_anterior, observaciones):
         """Notifica al contratista el resultado de la evaluación (Aprobado / Con Observaciones)."""
@@ -509,26 +576,21 @@ class GraphService:
             return
 
         estado_final = radicacion.get("estado", "")
+        municipio = meta.get("municipio", "")
 
-        asunto = f"Radicado {radicacion['numeroRadicado']} — {estado_final}"
-        cuerpo = f"""
-        <html><body style="font-family:Arial,sans-serif;color:#1E222A;">
-        <div style="background:#1E222A;color:#D9CF43;padding:16px 24px;border-radius:8px 8px 0 0;">
-            <h2 style="margin:0;font-size:16px;">INTECOAL SAS — Resultado de Evaluación</h2>
-        </div>
-        <div style="padding:20px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
+        asunto = f"Radicado {esc(radicacion['numeroRadicado'])} — {estado_final}"
+        interno = f"""
             <p>Su radicado fue evaluado por la Interventoría Técnica:</p>
             <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0;">
-                <tr><td style="padding:6px 0;font-weight:bold;width:140px;">Radicado:</td><td>{radicacion['numeroRadicado']}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{meta.get('nombreProyecto', '')}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Estado:</td><td><strong style="font-size:14px;">{estado_final}</strong></td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;width:140px;">Radicado:</td><td>{esc(radicacion['numeroRadicado'])}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{esc(meta.get('nombreProyecto', ''))}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Estado:</td><td><strong style="font-size:14px;">{esc(estado_final)}</strong></td></tr>
             </table>
             <p style="font-size:12px;color:#666;">Acceda al portal para revisar los detalles completos.</p>
-            <p style="font-size:11px;color:#999;margin-top:20px;">INTECOAL SAS — Interventoría Técnica</p>
-        </div>
-        </body></html>
         """
-        await self._enviar_correo(destino, asunto, cuerpo)
+        cuerpo = self._plantilla_correo("INTECOAL SAS — Resultado de Evaluación", interno, municipio)
+        adj = self._adjunto_logo(municipio)
+        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None)
 
     async def enviar_correo_reesubido_revisor(self, radicacion):
         """Notifica al revisor que el contratista reenvió/actualizó el radicado y hay trabajo pendiente por revisar."""
@@ -536,51 +598,41 @@ class GraphService:
         if not destino:
             return
         meta = radicacion["metadata"]
-        asunto = f"Radicado para Revisar — {radicacion['numeroRadicado']}"
-        cuerpo = f"""
-        <html><body style="font-family:Arial,sans-serif;color:#1E222A;">
-        <div style="background:#1E222A;color:#D9CF43;padding:16px 24px;border-radius:8px 8px 0 0;">
-            <h2 style="margin:0;font-size:16px;">INTECOAL SAS — Radicado pendiente de Revisión</h2>
-        </div>
-        <div style="padding:20px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
-            <p>El contratista <strong>{meta.get('contratista', '')}</strong> envió o actualizó un radicado que requiere su revisión. Tiene uno (1) radicado pendiente por evaluar:</p>
+        municipio = meta.get("municipio", "")
+        asunto = f"Radicado para Revisar — {esc(radicacion['numeroRadicado'])}"
+        interno = f"""
+            <p>El contratista <strong>{esc(meta.get('contratista', ''))}</strong> envió o actualizó un radicado que requiere su revisión. Tiene uno (1) radicado pendiente por evaluar:</p>
             <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0;">
-                <tr><td style="padding:6px 0;font-weight:bold;width:140px;">Radicado:</td><td>{radicacion['numeroRadicado']}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{meta.get('nombreProyecto', '')}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;width:140px;">Radicado:</td><td>{esc(radicacion['numeroRadicado'])}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{esc(meta.get('nombreProyecto', ''))}</td></tr>
                 <tr><td style="padding:6px 0;font-weight:bold;">Estado:</td><td>En Revisión</td></tr>
             </table>
             <p style="font-size:12px;color:#666;">Acceda al portal para evaluar la documentación del radicado.</p>
-            <p style="font-size:11px;color:#999;margin-top:20px;">INTECOAL SAS — Interventoría Técnica</p>
-        </div>
-        </body></html>
         """
-        await self._enviar_correo(destino, asunto, cuerpo)
+        cuerpo = self._plantilla_correo("INTECOAL SAS — Radicado pendiente de Revisión", interno, municipio)
+        adj = self._adjunto_logo(municipio)
+        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None)
 
     async def enviar_correo_reenvio_contratista(self, radicacion):
         """Notifica al contratista que su radicado editado fue subido correctamente y quedó en revisión."""
         meta = radicacion["metadata"]
+        municipio = meta.get("municipio", "")
         destino = self._contratista_email(radicacion)
         if not destino:
             return
-        asunto = f"Radicado Actualizado — {radicacion['numeroRadicado']}"
-        cuerpo = f"""
-        <html><body style="font-family:Arial,sans-serif;color:#1E222A;">
-        <div style="background:#1E222A;color:#D9CF43;padding:16px 24px;border-radius:8px 8px 0 0;">
-            <h2 style="margin:0;font-size:16px;">INTECOAL SAS — Radicado Actualizado</h2>
-        </div>
-        <div style="padding:20px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
+        asunto = f"Radicado Actualizado — {esc(radicacion['numeroRadicado'])}"
+        interno = f"""
             <p>Confirmamos que su radicado fue <strong>actualizado y subido correctamente</strong>. Ahora quedó en <strong>revisión por la Interventoría Técnica</strong>.</p>
             <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0;">
-                <tr><td style="padding:6px 0;font-weight:bold;width:140px;">Radicado:</td><td>{radicacion['numeroRadicado']}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{meta.get('nombreProyecto', '')}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Municipio:</td><td>{meta.get('municipio', '')}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;width:140px;">Radicado:</td><td>{esc(radicacion['numeroRadicado'])}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{esc(meta.get('nombreProyecto', ''))}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Municipio:</td><td>{esc(meta.get('municipio', ''))}</td></tr>
             </table>
             <p style="font-size:12px;color:#666;">Le notificaremos el resultado una vez sea evaluado por la Interventoría.</p>
-            <p style="font-size:11px;color:#999;margin-top:20px;">INTECOAL SAS — Interventoría Técnica</p>
-        </div>
-        </body></html>
         """
-        await self._enviar_correo(destino, asunto, cuerpo)
+        cuerpo = self._plantilla_correo("INTECOAL SAS — Radicado Actualizado", interno, municipio)
+        adj = self._adjunto_logo(municipio)
+        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None)
 
     async def enviar_correo_vencimiento(self, radicacion, dias_restantes, fecha_limite):
         """Avisa al revisor que un radicado está por vencer (8 / 4 días hábiles)."""
@@ -590,32 +642,28 @@ class GraphService:
             return False
         meta = radicacion.get("metadata", {})
         numero = radicacion.get("numeroRadicado", "?")
+        municipio = meta.get("municipio", "")
         if dias_restantes is not None and dias_restantes < 0:
-            asunto = f"URGENTE: Radicado vencido sin evaluar — {numero}"
-            estado_txt = f"venció hace {-dias_restantes} día(s) hábiles (límite: {fecha_limite})"
+            asunto = f"URGENTE: Radicado vencido sin evaluar — {esc(numero)}"
+            estado_txt = f"venció hace {-dias_restantes} día(s) (límite: {fecha_limite})"
         else:
-            asunto = f"Radicado por vencer ({dias_restantes} días hábiles) — {numero}"
-            estado_txt = f"faltan {dias_restantes} días hábiles (límite: {fecha_limite})"
-        cuerpo = f"""
-        <html><body style="font-family:Arial,sans-serif;color:#1E222A;">
-        <div style="background:#7C2D12;color:#fff;padding:16px 24px;border-radius:8px 8px 0 0;">
-            <h2 style="margin:0;font-size:16px;">INTECOAL SAS — Alerta de vencimiento de revisión</h2>
-        </div>
-        <div style="padding:20px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
-            <p>El siguiente radicado está próximo a vencer su plazo de 15 días hábiles de revisión: <strong>{estado_txt}</strong>.</p>
+            asunto = f"Radicado por vencer ({dias_restantes} días) — {esc(numero)}"
+            estado_txt = f"faltan {dias_restantes} días (límite: {fecha_limite})"
+        interno = f"""
+            <p>El siguiente radicado está próximo a vencer su plazo de 15 días hábiles de revisión: <strong>{esc(estado_txt)}</strong>.</p>
             <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0;">
-                <tr><td style="padding:6px 0;font-weight:bold;width:150px;">Radicado:</td><td><strong>{numero}</strong></td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{meta.get('nombreProyecto', '')}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Municipio:</td><td>{meta.get('municipio', '')}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Contratista:</td><td>{meta.get('contratista', '')}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Estado:</td><td>{radicacion.get('estado', '')}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;width:150px;">Radicado:</td><td><strong>{esc(numero)}</strong></td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{esc(meta.get('nombreProyecto', ''))}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Municipio:</td><td>{esc(meta.get('municipio', ''))}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Contratista:</td><td>{esc(meta.get('contratista', ''))}</td></tr>
+                <tr><td style="padding:6px 0;font-weight:bold;">Estado:</td><td>{esc(radicacion.get('estado', ''))}</td></tr>
             </table>
             <p style="font-size:12px;color:#666;">Evalue el expediente y, si aplica, suba el Formato 4.3.7 C y el Recibo Técnico antes del vencimiento.</p>
-            <p style="font-size:11px;color:#999;margin-top:20px;">INTECOAL SAS — Interventoría Técnica (aviso automático)</p>
-        </div>
-        </body></html>
+            <p style="font-size:11px;color:#999;">INTECOAL SAS — Interventoría Técnica (aviso automático)</p>
         """
-        return await self._enviar_correo(destino, asunto, cuerpo)
+        cuerpo = self._plantilla_correo("INTECOAL SAS — Alerta de vencimiento de revisión", interno, municipio)
+        adj = self._adjunto_logo(municipio)
+        return await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None)
 
     def obtener_config(self):
         return {
@@ -908,7 +956,7 @@ class GraphService:
 
         url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items"
         params = {
-            "$filter": f"fields/NumeroRadicado eq '{numero}'",
+            "$filter": f"fields/NumeroRadicado eq '{self._filtro_seguro(numero)}'",
             "$expand": "fields",
             "$select": "id",
         }

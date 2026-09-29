@@ -4,6 +4,12 @@
 
 El acceso al portal es **exclusivamente con cuenta de Microsoft 365 (MSAL)**. No existe "Ingreso Directo".
 
+### JWT de sesión (obligatorio en la API)
+
+Tras el login M365, el frontend pide `POST /api/auth/msal-verify` (`{account: {username}, role}`) y guarda el JWT (`m365_jwt`). **Todos** los endpoints de negocio exigen `Authorization: Bearer <jwt>` (o `?token=` solo para el visor `<img>/<iframe>`); sin token válido responden **401** y el frontend (`src/lib/api.js` → `apiFetch`) limpia la sesión y vuelve al ingreso. El endpoint abierto `POST /api/auth/token` (emitía roles arbitrarios) fue **eliminado**.
+
+El backend valida además el rol por endpoint: dictamen final (`Aprobado`/`Con Observaciones`), sincronización y revisión de vencimientos exigen `interventor`; eliminar exige `contratista` creador del último consecutivo; el contratista solo accede a sus radicados (obtener/historial/ver-archivo). La identidad del creador y del historial la impone el JWT, nunca el formulario.
+
 ### MSAL (Microsoft Authentication Library)
 
 - **Librería:** `@azure/msal-browser` (instalada, no CDN).

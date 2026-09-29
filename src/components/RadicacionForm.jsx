@@ -21,9 +21,11 @@ import {
   FileText,
   PenTool,
   ShieldCheck,
-  Edit3
+  Edit3,
+  MessageSquare
 } from 'lucide-react';
 import { FirmaDigitalModal } from './FirmaDigitalModal';
+import { apiFetch } from '../lib/api';
 
 export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit }) => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -48,6 +50,30 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
         )
       : {}
   );
+
+  // Observaciones de la interventoría para mostrarle al contratista qué
+  // corregir (solo pendientes: lo verificado ya no se toca)
+  const obsGenerales = filingToEdit?.observacionesGenerales || '';
+  const docsConNota = filingToEdit
+    ? (filingToEdit.archivos || []).filter(a => a.notes && a.status !== 'CUMPLE' && a.status !== 'N/A')
+    : [];
+  const subsConNota = filingToEdit
+    ? (filingToEdit.archivos || []).flatMap(a =>
+        (a.subFiles || [])
+          .filter(s => s.notes && s.status !== 'CUMPLE' && s.status !== 'N/A')
+          .map(s => ({ ...s, docCode: a.docCode, docName: a.docName }))
+      )
+    : [];
+  const hayObs = Boolean(obsGenerales) || docsConNota.length > 0 || subsConNota.length > 0;
+  // Veredicto previo del revisor: CUMPLE/N/A quedan bloqueados (no editables)
+  const veredictoPrevio = (docId) => (filingToEdit ? archivosPrevios[docId]?.status : null) || null;
+  const bloqueadoPorRevision = (docId) => filingToEdit && ['CUMPLE', 'N/A'].includes(veredictoPrevio(docId));
+  const subPrevio = (docId, subId) =>
+    filingToEdit?.archivos?.find(a => a.docId === docId)?.subFiles?.find(s => s.subId === subId) || null;
+  const subBloqueado = (docId, subId) => {
+    const p = subPrevio(docId, subId);
+    return filingToEdit && p && ['CUMPLE', 'N/A'].includes(p.status);
+  };
   const [activeCategory, setActiveCategory] = useState('todos');
 
   const [metadata, setMetadata] = useState(
@@ -89,17 +115,18 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
   );
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Confirmación visible al enviar la subsanación (no se navega a ciegas)
+  const [mensajeEnvio, setMensajeEnvio] = useState(null);
 
   const [categoria, setCategoria] = useState(
     filingToEdit?.metadata?.categoria || ''
   );
 
   useEffect(() => {
-    if (categoria === 'A') {
-      // Categoría A: Doc #20 (D20 Dictamen RETILAP) es "si aplica" → auto N/A
-      setNaDocs(prev => prev.includes(20) ? prev : [...prev, 20]);
-    } else {
-      // Categoría B o C: Doc #20 es obligatorio, remover de N/A si estaba
+    // El N/A del #20 D20 lo decide SIEMPRE el usuario (antes se marcaba
+    // solo al elegir categoría A). Solo se retira si pasa a B/C, donde es
+    // obligatorio y el N/A no es válido.
+    if (categoria === 'B' || categoria === 'C') {
       setNaDocs(prev => prev.filter(id => id !== 20));
     }
   }, [categoria]);
@@ -157,6 +184,8 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
 
   const handleFileChange = (docId, e) => {
     if (e.target.files && e.target.files[0]) {
+      // Bloqueado por interventoría (CUMPLE/N/A) no se puede cambiar
+      if (filingToEdit && archivosPrevios[docId]?.status && ['CUMPLE', 'N/A'].includes(archivosPrevios[docId].status)) return;
       const file = e.target.files[0];
       setSelectedFiles(prev => ({ ...prev, [docId]: file }));
       setNaDocs(prev => prev.filter(id => id !== docId));
@@ -166,6 +195,9 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
 
   const handleSubFileChange = (docId, subId, e) => {
     if (e.target.files && e.target.files[0]) {
+      // Ranura verificada (CUMPLE/N/A) no se puede cambiar
+      const prevSub = filingToEdit?.archivos?.find(a => a.docId === docId)?.subFiles?.find(s => s.subId === subId);
+      if (prevSub && ['CUMPLE', 'N/A'].includes(prevSub.status)) return;
       const file = e.target.files[0];
       setSelectedSubFiles(prev => ({
         ...prev,
@@ -193,6 +225,8 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
   };
 
   const handleToggleNA = (docId) => {
+    // Veredicto previo (CUMPLE/N/A) no se puede alterar
+    if (filingToEdit && archivosPrevios[docId]?.status && ['CUMPLE', 'N/A'].includes(archivosPrevios[docId].status)) return;
     if (naDocs.includes(docId)) {
       setNaDocs(naDocs.filter(id => id !== docId));
       if (filingToEdit) {
@@ -291,7 +325,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
           const fd = new FormData();
           fd.append('docId', String(docId));
           fd.append('archivo', file);
-          const up = await fetch(`/api/radicacion/${filingToEdit.id}/archivo`, {
+          const up = await apiFetch(`/api/radicacion/${filingToEdit.id}/archivo`, {
             method: 'POST',
             body: fd
           });
@@ -315,7 +349,27 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
             fd.append('docId', String(docId));
             fd.append('archivo', files[i]);
             fd.append('subFileName', `Anexo ${i + 1} - ${files[i].name}`);
-            await fetch(`/api/radicacion/${filingToEdit.id}/archivo`, {
+            await apiFetch(`/api/radicacion/${filingToEdit.id}/archivo`, {
+              method: 'POST',
+              body: fd
+            });
+          }
+        }
+
+        // 1c. Subir sub-archivos predefinidos (ej. CEAP 25a-25d) en su ranura
+        for (const [docIdStr, subs] of Object.entries(selectedSubFiles)) {
+          const docId = parseInt(docIdStr, 10);
+          const docDef = allDocs.find(d => d.id === docId);
+          for (const [subId, file] of Object.entries(subs || {})) {
+            if (!file) continue;
+            const sfDef = docDef?.subFiles?.find(s => s.subId === subId);
+            const fd = new FormData();
+            fd.append('docId', String(docId));
+            fd.append('archivo', file);
+            fd.append('subFileName', sfDef?.subName || file.name);
+            fd.append('subId', subId);
+            fd.append('subCode', sfDef?.subCode || subId);
+            await apiFetch(`/api/radicacion/${filingToEdit.id}/archivo`, {
               method: 'POST',
               body: fd
             });
@@ -327,6 +381,11 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
           const docId = parseInt(docIdStr, 10);
           const found = archivos.find(a => a.docId === docId);
           if (found) found.status = 'CUMPLE';
+        });
+        Object.keys(selectedSubFiles).forEach((docIdStr) => {
+          const docId = parseInt(docIdStr, 10);
+          const found = archivos.find(a => a.docId === docId);
+          if (found && found.status !== 'N/A') found.status = 'CUMPLE';
         });
         naDocs.forEach(docId => {
           const found = archivos.find(a => a.docId === docId);
@@ -342,7 +401,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
           categoria: categoria || '',
           firmaContratista: firmaContratista || undefined
         };
-        const metaRes = await fetch(`/api/radicacion/${filingToEdit.id}/metadata`, {
+        const metaRes = await apiFetch(`/api/radicacion/${filingToEdit.id}/metadata`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -353,7 +412,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
         });
 
         // 4. Reiniciar estado a "En Revisión" para nueva evaluación
-        await fetch(`/api/radicacion/${filingToEdit.id}/estado`, {
+        const estadoRes = await apiFetch(`/api/radicacion/${filingToEdit.id}/estado`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -364,12 +423,28 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
           })
         });
 
-        const res = await fetch(`/api/radicacion/${filingToEdit.id}`);
+        if (!metaRes.ok) {
+          const d = await metaRes.json().catch(() => null);
+          throw new Error(d?.detail || 'No se pudieron guardar los datos del radicado.');
+        }
+        if (!estadoRes.ok) {
+          const d = await estadoRes.json().catch(() => null);
+          throw new Error(d?.detail || 'No se pudo reenviar a revisión.');
+        }
+
+        const res = await apiFetch(`/api/radicacion/${filingToEdit.id}`);
         const result = await res.json();
         if (res.ok && result.data) {
+          // Confirmación explícita antes de salir: número + nuevo estado,
+          // con pausa para leerla (antes se navegaba de inmediato sin aviso)
+          setMensajeEnvio({
+            tipo: 'ok',
+            texto: `¡Cambios del radicado ${result.data.numeroRadicado} enviados correctamente! Quedó En Revisión para nueva evaluación. Abriendo el informe…`
+          });
+          await new Promise(r => setTimeout(r, 2200));
           onSuccess(result.data);
         } else {
-          alert('Error al guardar los cambios del radicado.');
+          setMensajeEnvio({ tipo: 'error', texto: 'No se pudo confirmar el guardado en el servidor. Revise su conexión e intente de nuevo.' });
         }
         return;
       }
@@ -404,6 +479,22 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
         formData.append(fieldName, file);
       });
 
+      Object.entries(selectedSubFiles).forEach(([docIdStr, subs]) => {
+        const docId = parseInt(docIdStr, 10);
+        const docDef = allDocs.find(d => d.id === docId);
+        Object.entries(subs || {}).forEach(([subId, file]) => {
+          if (!file) return;
+          const sfDef = docDef?.subFiles?.find(s => s.subId === subId);
+          formData.append(`subFile_${docId}_${subId}`, file);
+          formData.append(`subFileMeta_${docId}_${subId}`, JSON.stringify({
+            docId,
+            subId,
+            subCode: sfDef?.subCode || subId,
+            subName: sfDef?.subName || file.name
+          }));
+        });
+      });
+
       Object.entries(extraSubFiles).forEach(([docId, files]) => {
         files.forEach((file, idx) => {
           formData.append(`extraSub_${docId}_${idx}`, file);
@@ -411,20 +502,13 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
         });
       });
 
-      const sessionEmail = currentUser?.email || 'usuario@intecoal.com.co';
-
-      // Tiempo amplio: subir 25 archivos puede tardar; sin AbortController
-      // el navegador puede abortar antes y caía en "Error de conexión".
+      // apiFetch inyecta el JWT (antes se enviaba el correo como Bearer).
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 180000);
       let response;
       try {
-        response = await fetch('/api/radicacion/nueva', {
+        response = await apiFetch('/api/radicacion/nueva', {
           method: 'POST',
-          headers: {
-            'x-intecoal-session': sessionEmail,
-            'Authorization': `Bearer ${sessionEmail}`
-          },
           body: formData,
           signal: controller.signal
         });
@@ -469,7 +553,11 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
       }
     } catch (err) {
       console.error('Error enviando formulario:', err);
-      alert(`Error al guardar la radicación: ${err?.message || err}. Verifique que el backend esté corriendo e intente de nuevo.`);
+      if (filingToEdit) {
+        setMensajeEnvio({ tipo: 'error', texto: `No se pudo enviar la actualización: ${err?.message || err}. Se quedó en esta pantalla sin perder lo digitado.` });
+      } else {
+        alert(`Error al guardar la radicación: ${err?.message || err}. Verifique que el backend esté corriendo e intente de nuevo.`);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -592,6 +680,18 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
       </div>
 
       <form onSubmit={handleSubmit}>
+        {mensajeEnvio && (
+          <div className={`mb-4 px-4 py-3 rounded-xl text-xs font-bold flex items-center space-x-2 shadow-sm ${
+            mensajeEnvio.tipo === 'ok'
+              ? 'bg-emerald-50 border border-emerald-300 text-emerald-800'
+              : 'bg-red-50 border border-red-300 text-red-800'
+          }`}>
+            {mensajeEnvio.tipo === 'ok'
+              ? <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              : <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />}
+            <span>{mensajeEnvio.texto}</span>
+          </div>
+        )}
         <div className="bg-[#F8F9FA] rounded-2xl shadow-xl border border-[#BFBFBF] p-6 sm:p-8 min-h-[500px] flex flex-col justify-between relative">
           
           <div className="overflow-hidden">
@@ -671,11 +771,53 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                         </div>
                       )}
 
+                      {filingToEdit && hayObs && (
+                        <div className="bg-sky-50 border-l-4 border-sky-600 p-4 rounded-r-xl text-xs text-sky-950 shadow-sm space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <MessageSquare className="w-4 h-4 text-sky-700 shrink-0" />
+                            <span className="font-black uppercase tracking-wide">Observaciones de la interventoría — corrija lo indicado</span>
+                          </div>
+                          {obsGenerales && (
+                            <p className="bg-white border border-sky-200 rounded-lg px-3 py-2 leading-relaxed">{obsGenerales}</p>
+                          )}
+                          {docsConNota.length > 0 && (
+                            <ul className="space-y-1.5">
+                              {docsConNota.map(a => (
+                                <li key={a.docId} className="bg-white border border-sky-200 rounded-lg px-3 py-2">
+                                  <span className="font-black">{a.docCode} · {a.docName} </span>
+                                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${a.status === 'NO CUMPLE' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                                    {a.status}
+                                  </span>
+                                  <span className="block mt-0.5 text-sky-900">{a.notes}</span>
+                                  {a.fileName && <span className="block text-[11px] text-gray-500">Archivo actual: {a.fileName} → vuelva a subirlo corregido.</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {subsConNota.length > 0 && (
+                            <ul className="space-y-1.5">
+                              {subsConNota.map(s => (
+                                <li key={s.subId} className="bg-white border border-sky-200 rounded-lg px-3 py-2">
+                                  <span className="font-black">{s.docCode} · {s.subCode ? `${s.subCode} · ` : ''}{s.subName || s.fileName} </span>
+                                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${s.status === 'NO CUMPLE' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                                    {s.status || 'PENDIENTE'}
+                                  </span>
+                                  <span className="block mt-0.5 text-sky-900">{s.notes}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          <p className="text-[11px] text-sky-800 font-semibold">Los documentos marcados como Cumple o N/A quedaron verificados y no se pueden modificar: solo corrija los Pendientes o No cumple.</p>
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-1 gap-3">
                         {filteredDocs.map((doc) => {
                           const file = selectedFiles[doc.id];
                           const isNA = naDocs.includes(doc.id);
                           const previo = archivosPrevios[doc.id];
+                          // Verificado por el revisor (CUMPLE/N/A): bloqueado, no editable
+                          const bloqueado = bloqueadoPorRevision(doc.id);
 
                           let cardBorder = 'border-gray-200 bg-white';
                           let statusBadge = (
@@ -742,13 +884,29 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                                     <p className="text-xs text-gray-600 mt-0.5">
                                       {doc.description}
                                     </p>
+                                    {previo?.notes && (
+                                      <div className="mt-1.5 bg-sky-50 border border-sky-200 rounded-lg px-2.5 py-1.5 text-[11px] text-sky-900">
+                                        <span className="font-black">Observación del revisor: </span>
+                                        {previo.notes}
+                                        {previo.status !== 'CUMPLE' && previo.status !== 'N/A' && (
+                                          <span className="block text-sky-700">Vuelva a subir este documento corregido.</span>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2 shrink-0">
-                                  {statusBadge}
+                                  {bloqueado && previo ? (
+                                    <span className="bg-emerald-100 text-emerald-900 text-xs font-bold px-2.5 py-1 rounded-lg border border-emerald-300 flex items-center space-x-1">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                      <span>VERIFICADO</span>
+                                    </span>
+                                  ) : (
+                                    <>{statusBadge}</>
+                                  )}
 
-                                  {doc.esManual && (
+                                  {doc.esManual && !bloqueado && (
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveCustomDoc(doc.id)}
@@ -760,7 +918,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                                   )}
 
                                   {(!doc.required ||
-                                    (doc.requiredIfCategoriaBc && categoria !== 'B' && categoria !== 'C')) && (
+                                    (doc.requiredIfCategoriaBc && categoria !== 'B' && categoria !== 'C')) && !bloqueado && (
                                     <label className="flex items-center space-x-1.5 text-xs font-bold text-gray-700 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 shadow-sm">
                                       <input
                                         type="checkbox"
@@ -772,7 +930,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                                     </label>
                                   )}
 
-                                  {!isNA && !doc.hasSubFiles && !(doc.id === 20 && !categoria) && (
+                                  {!bloqueado && !isNA && !doc.hasSubFiles && (
                                     <label className="cursor-pointer bg-[#0D0D0D] hover:bg-gray-800 text-[#D9CF43] text-xs font-bold px-3.5 py-1.5 rounded-lg shadow transition-all flex items-center space-x-1.5 active:scale-95">
                                       <FolderDown className="w-3.5 h-3.5 text-[#D9CF43]" />
                                       <span>{file ? 'Cambiar' : 'Adjuntar'}</span>
@@ -864,8 +1022,10 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                                     {doc.subFiles.map((sf) => {
                                       const subFile = selectedSubFiles[doc.id]?.[sf.subId];
                                       const prevSubFile = filingToEdit?.archivos?.find(a => a.docId === doc.id)?.subFiles?.find(s => s.subId === sf.subId);
+                                      const ranuraBloqueada = subBloqueado(doc.id, sf.subId);
                                       return (
-                                        <div key={sf.subId} className={`flex items-center justify-between p-2 rounded-lg border text-xs ${subFile || prevSubFile?.fileName ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
+                                        <div key={sf.subId} className="space-y-1">
+                                        <div className={`flex items-center justify-between p-2 rounded-lg border text-xs ${subFile || prevSubFile?.fileName ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
                                           <div className="flex items-center space-x-2 truncate min-w-0">
                                             {subFile || prevSubFile?.fileName ? (
                                               <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
@@ -873,7 +1033,16 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                                               <span className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 shrink-0" />
                                             )}
                                             <span className="truncate font-semibold text-gray-700">{sf.subName}</span>
+                                            {ranuraBloqueada && prevSubFile && (
+                                              <span className="text-[9px] font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-300 shrink-0">VERIFICADO</span>
+                                            )}
+                                            {!ranuraBloqueada && prevSubFile?.status && prevSubFile.status !== 'CUMPLE' && (
+                                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 ${prevSubFile.status === 'NO CUMPLE' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                {prevSubFile.status}
+                                              </span>
+                                            )}
                                           </div>
+                                          {!ranuraBloqueada ? (
                                           <label className="cursor-pointer text-[#D9CF43] bg-[#0D0D0D] hover:bg-gray-800 text-[10px] font-bold px-2 py-1 rounded shrink-0 ml-2">
                                             {subFile ? 'Cambiar' : 'Adjuntar'}
                                             <input
@@ -883,6 +1052,13 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                                               className="hidden"
                                             />
                                           </label>
+                                          ) : null}
+                                        </div>
+                                        {prevSubFile?.notes && (
+                                          <div className="bg-sky-50 border border-sky-200 rounded-lg px-2.5 py-1.5 text-[11px] text-sky-900">
+                                            <span className="font-black">Revisor: </span>{prevSubFile.notes}
+                                          </div>
+                                        )}
                                         </div>
                                       );
                                     })}
@@ -971,11 +1147,11 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                               onChange={handleMetaChange}
                               className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-300 rounded-xl text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#D9CF43]"
                             >
-                              <option value="CALIMA-DARIEN">CALIMA-DARIEN</option>
-                              <option value="ANDALUCIA">ANDALUCÍA</option>
+                              <option value="TULUÁ">TULUÁ</option>
+                              <option value="ANDALUCÍA">ANDALUCÍA</option>
                               <option value="SAN PEDRO">SAN PEDRO</option>
+                              <option value="CALIMA">CALIMA</option>
                               <option value="VILLAVICENCIO">VILLAVICENCIO</option>
-                              <option value="OTRO">OTRO MUNICIPIO</option>
                             </select>
                           </div>
                         </div>

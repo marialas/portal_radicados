@@ -23,6 +23,7 @@ import { LoginForm } from './components/LoginForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 import { logoutM365User, ensureMsalInit, extractCompanyFromEmail, formatNameFromEmail, msalInstance, isRevisorAllowedEmail, REVISOR_DOMAIN_HINT } from './lib/msalConfig';
+import { apiFetch, getToken, setToken as guardarToken, obtenerJwt } from './lib/api';
 
 export default function App() {
   // Pestaña activa del sistema: lista, nueva, informe o evaluacion
@@ -33,6 +34,9 @@ export default function App() {
   
   // Lista de radicaciones cargadas en memoria o backend
   const [filings, setFilings] = useState([]);
+  // Último consecutivo global (lo informa el backend aunque el contratista
+  // solo reciba lo suyo): único con opción Eliminar
+  const [ultimoGlobal, setUltimoGlobal] = useState(null);
   const [selectedFiling, setSelectedFiling] = useState(null);
   const [editingFiling, setEditingFiling] = useState(null);
 
@@ -144,6 +148,20 @@ export default function App() {
     }
   }, [user.role, filings, userFilings, selectedFiling]);
 
+  // Si se recarga en plena edición, se pierde qué radicado se editaba y el
+  // formulario se abría como "nuevo" (creando otro en vez de subsanar).
+  // Se persiste el id y se restaura al cargar la lista.
+  useEffect(() => {
+    if (activeTab === 'nueva' && !editingFiling && filings.length > 0 && typeof window !== 'undefined') {
+      const editId = sessionStorage.getItem('editing_filing_id');
+      if (editId) {
+        const f = filings.find(x => x.id === editId || x.numeroRadicado === editId);
+        if (f) setEditingFiling(f);
+        else sessionStorage.removeItem('editing_filing_id');
+      }
+    }
+  }, [activeTab, filings, editingFiling]);
+
   // Enforce role restrictions on activeTab
   useEffect(() => {
     if (user.role === 'interventor' && activeTab === 'nueva') {
@@ -156,6 +174,17 @@ export default function App() {
       setActiveTab('lista');
     }
   }, [user.role, activeTab]);
+
+  // JWT de sesión (emitido por el backend tras validar M365). Sin él,
+  // la API responde 401 y apiFetch devuelve al ingreso automáticamente.
+  const [jwt, setJwt] = useState(() => getToken());
+
+  // Pide el JWT al backend y lo guarda. Lanza si el rol no es válido.
+  const asegurarJwt = async (email, role) => {
+    if (getToken()) return getToken();
+    await obtenerJwt(email, role);
+    setJwt(getToken());
+  };
 
   // Fetch filings from backend API on mount & process MSAL redirect response
   useEffect(() => {
@@ -251,6 +280,9 @@ export default function App() {
             localStorage.setItem('m365_user_session', JSON.stringify(newUser));
           }
           setActiveTab('lista');
+          asegurarJwt(newUser.email, newUser.role).catch((err) => {
+            setMsalAuthError(err.message || 'No se pudo validar la sesión en el servidor.');
+          });
         } else if (wasAttemptingMsal && pendingEmail) {
           const userEmailToUse = pendingEmail.toLowerCase();
           const company = extractCompanyFromEmail(userEmailToUse);
@@ -279,6 +311,9 @@ export default function App() {
             localStorage.setItem('m365_user_session', JSON.stringify(newUser));
           }
           setActiveTab('lista');
+          asegurarJwt(newUser.email, newUser.role).catch((err) => {
+            setMsalAuthError(err.message || 'No se pudo validar la sesión en el servidor.');
+          });
         } else {
           cleanPendingMsalStorage();
         }
@@ -306,24 +341,25 @@ export default function App() {
   // Re-fetch filings when user authenticates (MSAL redirect completes after mount)
   useEffect(() => {
     if (user.isAuthenticated && user.email) {
-      fetchFilings();
+      // Sin JWT no hay acceso a la API: se obtiene y luego se lista
+      if (!getToken()) {
+        asegurarJwt(user.email, user.role).then(() => fetchFilings()).catch(() => {});
+      } else {
+        fetchFilings();
+      }
     }
-  }, [user.isAuthenticated, user.email]);
+  }, [user.isAuthenticated, user.email, jwt]);
 
   const fetchFilings = async (retryCount = 0) => {
+    if (!user.isAuthenticated) return;
     try {
-      const params = new URLSearchParams();
-      if (user.email && user.isAuthenticated) {
-        params.set('email', user.email);
-        params.set('rol', user.role);
-      }
-      const qs = params.toString();
-      const res = await fetch(`/api/radicacion/lista${qs ? '?' + qs : ''}`);
+      const res = await apiFetch('/api/radicacion/lista');
       if (res.ok) {
         const json = await res.json();
         if (json.data) {
           setFilings(json.data);
         }
+        setUltimoGlobal(json.ultimoGlobal || null);
       } else if (retryCount < 3) {
         await new Promise(r => setTimeout(r, 3000));
         fetchFilings(retryCount + 1);
@@ -344,10 +380,17 @@ export default function App() {
       sessionStorage.setItem('m365_user_session', JSON.stringify(newUser));
     }
     setActiveTab(defaultTab);
+    if (newUser?.email) {
+      asegurarJwt(newUser.email, newUser.role).catch((err) => {
+        setMsalAuthError(err.message || 'No se pudo validar la sesión en el servidor.');
+      });
+    }
   };
 
   const handleLogout = async () => {
     await logoutM365User();
+    guardarToken('');
+    setJwt('');
     if (typeof sessionStorage !== 'undefined') {
       sessionStorage.removeItem('m365_user_session');
       sessionStorage.removeItem('pending_msal_role');
@@ -366,6 +409,9 @@ export default function App() {
   };
 
   const handleFilingCreated = (newRecord) => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('editing_filing_id');
+    }
     if (editingFiling) {
       setFilings(prev => prev.map(f => f.id === newRecord.id ? newRecord : f));
       setEditingFiling(null);
@@ -376,6 +422,7 @@ export default function App() {
       setSelectedFiling(newRecord);
       setActiveTab('informe');
     }
+    setUltimoGlobal({ id: newRecord.id, numeroRadicado: newRecord.numeroRadicado });
   };
 
   const handleSaveEvaluation = async (updatedFiling, opts = {}) => {
@@ -388,7 +435,7 @@ export default function App() {
     if (updatedFiling.estado === 'Aprobado' && !updatedFiling.m365Synced) {
       setTimeout(async () => {
         try {
-          const res = await fetch(`/api/radicacion/${updatedFiling.id}`);
+          const res = await apiFetch(`/api/radicacion/${updatedFiling.id}`);
           if (res.ok) {
             const json = await res.json();
             if (json.data) {
@@ -406,7 +453,7 @@ export default function App() {
     // loop de sincronización a SharePoint.
     if (opts.skipSync) return;
 
-    fetch(`/api/radicacion/${updatedFiling.id}/metadata`, {
+    apiFetch(`/api/radicacion/${updatedFiling.id}/metadata`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ metadata: updatedFiling.metadata })
@@ -417,7 +464,7 @@ export default function App() {
     setSelectedFiling(updatedFiling);
     setFilings(prev => prev.map(f => f.id === updatedFiling.id ? updatedFiling : f));
 
-    fetch(`/api/radicacion/${updatedFiling.id}/metadata`, {
+    apiFetch(`/api/radicacion/${updatedFiling.id}/metadata`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ metadata: updatedFiling.metadata })
@@ -433,7 +480,7 @@ export default function App() {
     if (!confirm(`¿Reintentar la subida de ${record.numeroRadicado} a SharePoint? Puede tardar 1-3 minutos.`)) return;
     setSyncingId(record.id);
     try {
-      const resp = await fetch(`/api/radicacion/${record.id}/sincronizar`, { method: 'POST' });
+      const resp = await apiFetch(`/api/radicacion/${record.id}/sincronizar`, { method: 'POST' });
       const data = await resp.json().catch(() => null);
       if (!resp.ok) throw new Error(data?.detail || `El servidor respondió ${resp.status}`);
       const updated = data.data;
@@ -495,6 +542,9 @@ export default function App() {
                   onSuccess={handleFilingCreated}
                   onCancel={() => {
                     setEditingFiling(null);
+                    if (typeof window !== 'undefined') {
+                      sessionStorage.removeItem('editing_filing_id');
+                    }
                     setActiveTab('lista');
                   }}
                   currentUser={user}
@@ -504,6 +554,8 @@ export default function App() {
               {activeTab === 'lista' && (
                 <RadicacionesList
                   filings={userFilings}
+                  allFilings={filings}
+                  ultimoGlobal={ultimoGlobal}
                   onSelectFiling={(record) => {
                     setSelectedFiling(record);
                     setActiveTab('informe');
@@ -518,16 +570,20 @@ export default function App() {
                   }}
                   onEditFiling={(record) => {
                     setEditingFiling(record);
+                    if (typeof window !== 'undefined') {
+                      sessionStorage.setItem('editing_filing_id', record.id || record.numeroRadicado);
+                    }
                     setActiveTab('nueva');
                   }}
                   onDeleteFiling={async (record) => {
                     if (!confirm(`¿Eliminar el radicado ${record.numeroRadicado}? Esta acción no se puede deshacer.`)) return;
                     try {
-                      const resp = await fetch(`/api/radicacion/${record.identificador}?email=${encodeURIComponent(user.email)}&rol=${user.role}`, { method: 'DELETE' });
+                      const resp = await apiFetch(`/api/radicacion/${record.id}`, { method: 'DELETE' });
                       const data = await resp.json();
                       if (!resp.ok) throw new Error(data.detail || 'Error al eliminar');
                       alert(data.mensaje || 'Radicado eliminado');
                       setFilings(filings.filter(f => f.id !== record.id));
+                      fetchFilings();
                     } catch (err) {
                       alert('Error: ' + err.message);
                     }

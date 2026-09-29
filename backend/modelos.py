@@ -1,7 +1,5 @@
 import uuid
-import math
 from datetime import datetime, timezone, timedelta, date
-from typing import Optional
 
 
 # ---------------------------------------------------------------------------
@@ -10,16 +8,25 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 
 def _solo_fecha(valor):
-    """Acepta ISO str, date o datetime y devuelve date (o None)."""
+    """Acepta ISO str, date o datetime y devuelve date en UTC (o None).
+
+    Siempre en UTC para que backend y frontend calculen idéntico:
+    un ISO de madrugada UTC no debe cambiar de día según la zona local.
+    """
     if not valor:
         return None
     if isinstance(valor, datetime):
+        if valor.tzinfo is not None:
+            return valor.astimezone(timezone.utc).date()
         return valor.date()
     if isinstance(valor, date):
         return valor
     if isinstance(valor, str):
         try:
-            return datetime.fromisoformat(valor.replace("Z", "+00:00")).date()
+            dt = datetime.fromisoformat(valor.replace("Z", "+00:00"))
+            if dt.tzinfo is not None:
+                return dt.astimezone(timezone.utc).date()
+            return dt.date()
         except ValueError:
             pass
         try:
@@ -72,17 +79,26 @@ def fecha_limite_revision(fecha_radicacion_iso):
 
 
 def dias_habiles_restantes(fecha_limite, hoy=None):
-    hoy = hoy or datetime.now().date()
+    """COMPAT: ahora delega en días calendario exactos (ver dias_restantes)."""
+    return dias_restantes(fecha_limite, hoy)
+
+
+def dias_restantes(fecha_limite, hoy=None):
+    """Días CALENDARIO exactos que faltan (negativo si venció).
+
+    El conteo que ve el usuario cuadra con el calendario: hoy 28 sep y
+    límite 12 oct → 14 (no 10 hábiles). El límite sigue siendo
+    +15 días hábiles desde la radicación; solo el conteo es exacto.
+    """
+    hoy = hoy or datetime.now(timezone.utc).date()
     if not fecha_limite:
         return None
-    if hoy <= fecha_limite:
-        return dias_habiles_entre(hoy, fecha_limite)
-    return -dias_habiles_entre(fecha_limite, hoy)
+    return (fecha_limite - hoy).days
 
 
 def fecha_en_que_faltan(fecha_limite, n):
-    """Fecha en la que faltan exactamente n días hábiles para el límite."""
-    return retroceder_dias_habiles(fecha_limite, n)
+    """Fecha calendario en la que faltan exactamente n días para el límite."""
+    return fecha_limite - timedelta(days=n)
 
 
 CATALOGO_21_DOCUMENTOS = [

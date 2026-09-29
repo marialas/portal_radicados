@@ -23,47 +23,39 @@ const C = {
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
-const aMedianoche = (d) => {
+// Todas las fechas se manejan en UTC (medianoche UTC) para que el cálculo
+// sea idéntico al del backend: un ISO de madrugada no cambia de día aquí.
+const aMedianocheUTC = (d) => {
   const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
+  return new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate()));
 };
 const soloFecha = (v) => {
   if (!v) return null;
   const d = new Date(v);
-  return isNaN(d) ? null : aMedianoche(d);
+  return isNaN(d) ? null : new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 };
-const esHabil = (d) => d.getDay() !== 0 && d.getDay() !== 6;
+const esHabil = (d) => {
+  const g = d.getUTCDay();
+  return g !== 0 && g !== 6;
+};
 const sumarHabiles = (fecha, n) => {
-  const d = aMedianoche(fecha);
+  const d = aMedianocheUTC(fecha);
   let c = 0;
   while (c < n) {
-    d.setDate(d.getDate() + 1);
+    d.setUTCDate(d.getUTCDate() + 1);
     if (esHabil(d)) c++;
   }
   return d;
 };
-const retrocederHabiles = (fecha, n) => {
-  const d = aMedianoche(fecha);
-  let c = 0;
-  while (c < n) {
-    d.setDate(d.getDate() - 1);
-    if (esHabil(d)) c++;
-  }
+// Días CALENDARIO exactos entre dos fechas (puede ser negativo)
+const diasExactos = (desde, hasta) =>
+  Math.round((aMedianocheUTC(hasta) - aMedianocheUTC(desde)) / 86400000);
+const restarDias = (fecha, n) => {
+  const d = aMedianocheUTC(fecha);
+  d.setUTCDate(d.getUTCDate() - n);
   return d;
 };
-// Días hábiles en (desde, hasta]
-const habilesEntre = (desde, hasta) => {
-  const d = aMedianoche(desde);
-  const h = aMedianoche(hasta);
-  let c = 0;
-  while (d < h) {
-    d.setDate(d.getDate() + 1);
-    if (esHabil(d)) c++;
-  }
-  return c;
-};
-const clave = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const clave = (d) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 
 const fechaAprobacion = (filing) => {
   const hist = filing.historial || [];
@@ -79,30 +71,32 @@ export const CalendarioRevision = ({
   onSelectFiling,
   userRole = 'interventor'
 }) => {
-  const hoy = useMemo(() => aMedianoche(new Date()), []);
+  const hoy = useMemo(() => {
+    const n = new Date();
+    return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
+  }, []);
   const [mesVisible, setMesVisible] = useState(() => {
     const d = new Date();
     return { anio: d.getFullYear(), mes: d.getMonth() };
   });
   const [diaSeleccionado, setDiaSeleccionado] = useState(null);
 
-  // Por radicado: creación, límite (15 hábiles), restantes, fechas de aviso 8/4, aprobación
+  // Por radicado: creación, límite (15 hábiles), restantes EXACTOS de
+  // calendario, fechas de aviso 8/4 (calendario) y aprobación
   const info = useMemo(() => filings.filter(Boolean).map(f => {
     const creacion = soloFecha(f.fechaRadicacion);
     if (!creacion) return null;
     const limite = sumarHabiles(creacion, 15);
     const aprob = fechaAprobacion(f);
-    const restantes = hoy <= limite
-      ? habilesEntre(hoy, limite)
-      : -habilesEntre(limite, hoy);
+    const restantes = diasExactos(hoy, limite);
     return {
       filing: f,
       creacion,
       limite,
       restantes,
       aprobacion: aprob,
-      fecha8: retrocederHabiles(limite, 8),
-      fecha4: retrocederHabiles(limite, 4)
+      fecha8: restarDias(limite, 8),
+      fecha4: restarDias(limite, 4)
     };
   }).filter(Boolean), [filings, hoy]);
 
@@ -136,27 +130,37 @@ export const CalendarioRevision = ({
   const colorTipo = { creacion: C.azul, aviso8: C.amarillo, aviso4: C.rojo, vencido: C.morado, aprobado: C.verde };
   const etiquetaTipo = {
     creacion: 'Radicado creado',
-    aviso8: 'Faltan 8 días hábiles',
-    aviso4: 'Faltan 4 días hábiles o menos',
+    aviso8: 'Faltan 8 días',
+    aviso4: 'Faltan 4 días o menos',
     vencido: 'Fecha límite vencida',
     aprobado: 'Aprobado'
   };
 
-  // Celdas del mes (lunes primero)
+  // Celdas del mes (lunes primero), en UTC para coincidir con las claves
   const celdas = useMemo(() => {
-    const primero = new Date(mesVisible.anio, mesVisible.mes, 1);
-    const desplazamiento = (primero.getDay() + 6) % 7;
+    const primero = new Date(Date.UTC(mesVisible.anio, mesVisible.mes, 1));
+    const desplazamiento = (primero.getUTCDay() + 6) % 7;
     const inicio = new Date(primero);
-    inicio.setDate(inicio.getDate() - desplazamiento);
+    inicio.setUTCDate(inicio.getUTCDate() - desplazamiento);
     return Array.from({ length: 42 }, (_, k) => {
       const d = new Date(inicio);
-      d.setDate(d.getDate() + k);
+      d.setUTCDate(d.getUTCDate() + k);
       return d;
     });
   }, [mesVisible]);
 
   const eventosDia = diaSeleccionado ? (eventosPorDia[clave(diaSeleccionado)] || []) : [];
-  const fmtCorta = (d) => d ? d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+  const fmtCorta = (d) => d ? d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : '—';
+
+  // Insignia según el ESTADO ACTUAL del radicado (días exactos de calendario)
+  const insigniaEstado = (i) => {
+    if (i.aprobacion) return { texto: `Aprobado el ${fmtCorta(i.aprobacion)}`, color: C.verde };
+    if (i.restantes < 0) return { texto: `Vencido hace ${-i.restantes} días`, color: C.morado };
+    if (i.restantes === 0) return { texto: 'Vence hoy', color: C.rojo };
+    if (i.restantes <= 4) return { texto: `Faltan ${i.restantes} días`, color: C.rojo };
+    if (i.restantes <= 8) return { texto: `Faltan ${i.restantes} días`, color: '#B45309' };
+    return { texto: `Faltan ${i.restantes} días · en término`, color: C.azul };
+  };
 
   const moverMes = (delta) => {
     setMesVisible(prev => {
@@ -188,7 +192,7 @@ export const CalendarioRevision = ({
             <ChevronLeft className="w-4 h-4 text-[#D9CF43]" />
           </button>
           <button
-            onClick={() => { const d = new Date(); setMesVisible({ anio: d.getFullYear(), mes: d.getMonth() }); }}
+            onClick={() => { const d = new Date(); setMesVisible({ anio: d.getUTCFullYear(), mes: d.getUTCMonth() }); }}
             className="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-black px-4 py-2.5 rounded-xl transition-colors cursor-pointer"
           >
             {MESES[mesVisible.mes]} {mesVisible.anio}
@@ -207,7 +211,7 @@ export const CalendarioRevision = ({
           </div>
           <div className="grid grid-cols-7">
             {celdas.map((d, k) => {
-              const esOtroMes = d.getMonth() !== mesVisible.mes;
+              const esOtroMes = d.getUTCMonth() !== mesVisible.mes;
               const esHoy = clave(d) === clave(hoy);
               const evs = eventosPorDia[clave(d)] || [];
               const colores = [...new Set(evs.map(e => colorTipo[e.tipo]))];
@@ -222,7 +226,7 @@ export const CalendarioRevision = ({
                   title={evs.length ? `${evs.length} evento(s) — clic para ver` : ''}
                 >
                   <span className={`text-xs font-black w-6 h-6 flex items-center justify-center rounded-full ${esHoy ? 'bg-[#0D0D0D] text-[#D9CF43]' : ''}`}>
-                    {d.getDate()}
+                    {d.getUTCDate()}
                   </span>
                   {colores.length > 0 && (
                     <span className="flex items-center justify-center gap-1 flex-wrap">
@@ -252,30 +256,47 @@ export const CalendarioRevision = ({
             <h2 className="text-xs font-black uppercase tracking-wider">Próximos a vencer</h2>
           </div>
           <div className="divide-y divide-gray-100 overflow-y-auto max-h-[420px]">
-            {info.filter(i => !i.aprobacion).sort((a, b) => a.restantes - b.restantes).slice(0, 15).map(i => (
-              <button
+            {info.filter(i => !i.aprobacion).sort((a, b) => a.restantes - b.restantes).slice(0, 15).map(i => {
+              const ins = insigniaEstado(i);
+              return (
+              <div
                 key={i.filing.id}
-                type="button"
-                onClick={() => setDiaSeleccionado(i.restantes <= 4 ? i.fecha4 : (i.restantes <= 8 ? i.fecha8 : i.creacion))}
-                className="w-full text-left px-5 py-3 hover:bg-amber-50/50 transition-colors cursor-pointer"
+                className="w-full text-left px-5 py-3"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono font-black text-xs text-gray-900">{i.filing.numeroRadicado}</span>
                   <span
                     className="text-[10px] font-black px-2 py-0.5 rounded-full border"
-                    style={{
-                      color: '#fff',
-                      backgroundColor: i.restantes < 0 ? C.morado : i.restantes <= 4 ? C.rojo : i.restantes <= 8 ? '#B45309' : C.azul,
-                      borderColor: 'transparent'
-                    }}
+                    style={{ color: '#fff', backgroundColor: ins.color, borderColor: 'transparent' }}
                   >
-                    {i.restantes < 0 ? `Vencido ${-i.restantes}d` : i.restantes === 0 ? 'Vence hoy' : `${i.restantes}d hábiles`}
+                    {ins.texto}
                   </span>
                 </div>
                 <p className="text-[11px] text-gray-600 truncate mt-0.5">{i.filing.metadata?.nombreProyecto || ''}</p>
                 <p className="text-[10px] text-gray-400">Límite: {fmtCorta(i.limite)}</p>
-              </button>
-            ))}
+                <div className="flex items-center gap-2 pt-1.5">
+                  {userRole === 'interventor' && onEvaluateFiling && (
+                    <button
+                      type="button"
+                      onClick={() => onEvaluateFiling(i.filing)}
+                      className="bg-amber-100 hover:bg-amber-200 text-amber-900 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 border border-amber-300 cursor-pointer"
+                    >
+                      <Edit3 className="w-3 h-3" /> Evaluar
+                    </button>
+                  )}
+                  {onSelectFiling && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectFiling(i.filing)}
+                      className="bg-[#0D0D0D] hover:bg-gray-800 text-[#D9CF43] font-bold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
+                    >
+                      <Eye className="w-3 h-3" /> Informe
+                    </button>
+                  )}
+                </div>
+              </div>
+              );
+            })}
             {info.filter(i => !i.aprobacion).length === 0 && (
               <p className="text-xs text-gray-500 text-center py-8 font-semibold">Sin radicados pendientes de revisión.</p>
             )}
@@ -289,7 +310,7 @@ export const CalendarioRevision = ({
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="bg-[#0D0D0D] px-6 py-4 flex items-center justify-between shrink-0">
               <h3 className="text-white font-black capitalize">
-                {diaSeleccionado.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                {diaSeleccionado.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}
               </h3>
               <button onClick={() => setDiaSeleccionado(null)} className="text-gray-300 hover:text-white transition-colors cursor-pointer">
                 <X className="w-5 h-5" />
@@ -298,22 +319,29 @@ export const CalendarioRevision = ({
             <div className="p-5 space-y-3 overflow-y-auto">
               {eventosDia.map(({ info: i, tipo }, idx) => {
                 const f = i.filing;
+                const ins = insigniaEstado(i);
+                const icono = i.aprobacion
+                  ? <CheckCircle2 className="w-3.5 h-3.5" />
+                  : i.restantes < 0
+                    ? <AlertTriangle className="w-3.5 h-3.5" />
+                    : <Clock className="w-3.5 h-3.5" />;
                 return (
                   <div key={`${f.id}-${tipo}-${idx}`} className="border border-gray-200 rounded-xl p-4 space-y-2 bg-gray-50/50">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <span className="font-mono font-black text-sm text-gray-900">{f.numeroRadicado}</span>
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-0.5 rounded-full text-white" style={{ backgroundColor: colorTipo[tipo] }}>
-                        {tipo === 'aprobado' ? <CheckCircle2 className="w-3.5 h-3.5" /> : tipo === 'creacion' ? <Clock className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
-                        {etiquetaTipo[tipo]}
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-0.5 rounded-full text-white" style={{ backgroundColor: ins.color }}>
+                        {icono}
+                        {ins.texto}
                       </span>
                     </div>
+                    <p className="text-[11px] text-gray-500 font-semibold">Punto del calendario: {etiquetaTipo[tipo]} · {fmtCorta(tipo === 'creacion' ? i.creacion : tipo === 'aprobado' ? i.aprobacion : tipo === 'aviso8' ? i.fecha8 : tipo === 'aviso4' ? i.fecha4 : i.limite)}</p>
                     <div className="text-xs text-gray-700 space-y-0.5">
                       <p><strong>Proyecto:</strong> {f.metadata?.nombreProyecto || '—'}</p>
                       <p><strong>Municipio:</strong> {f.metadata?.municipio || '—'} · <strong>Contratista:</strong> {f.metadata?.contratista || '—'}</p>
                       <p><strong>Estado:</strong> {f.estado} · <strong>Radicado:</strong> {fmtCorta(i.creacion)}</p>
                       <p>
                         <strong>Límite revisión:</strong> {fmtCorta(i.limite)} ·{' '}
-                        <strong>{i.aprobacion ? `Aprobado el ${fmtCorta(i.aprobacion)}` : i.restantes < 0 ? `Vencido hace ${-i.restantes} día(s) hábiles` : `Faltan ${i.restantes} día(s) hábiles`}</strong>
+                        <strong>{i.aprobacion ? `Aprobado el ${fmtCorta(i.aprobacion)}` : i.restantes < 0 ? `Vencido hace ${-i.restantes} día(s)` : `Faltan ${i.restantes} día(s)`}</strong>
                       </p>
                     </div>
                     <div className="flex items-center gap-2 pt-1">

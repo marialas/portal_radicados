@@ -1,22 +1,20 @@
 import React, { useRef, useState } from 'react';
 import { DOCUMENT_CATALOG } from '../data/documentsCatalog';
-import { 
-  ArrowLeft, 
-  CheckCircle2, 
-  Clock, 
-  AlertTriangle, 
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
   XCircle,
   FileCheck2,
   Building2,
-  MapPin,
   Calendar,
   Layers,
   ShieldCheck,
   Check,
   Edit3,
   PenTool,
-  Phone,
-  Mail,
+  Printer,
   Zap,
   Cpu,
   FileText,
@@ -24,7 +22,7 @@ import {
   CheckCheck,
   Hash
 } from 'lucide-react';
-import { IntecoalLogo } from './IntecoalLogo';
+import { MembreteRecibo, FranjaCorporativa } from './MembreteCorporativo';
 import { FirmaDigitalModal } from './FirmaDigitalModal';
 
 export const InformeRecibidoConformidad = ({ 
@@ -111,10 +109,11 @@ export const InformeRecibidoConformidad = ({
     }
   };
 
-  const cumpleCount = filing.archivos.filter(a => a.status === 'CUMPLE').length;
-  const pendienteCount = filing.archivos.filter(a => a.status === 'PENDIENTE').length;
-  const noCumpleCount = filing.archivos.filter(a => a.status === 'NO CUMPLE').length;
-  const naCount = filing.archivos.filter(a => a.status === 'N/A').length;
+  const archivos = filing.archivos || [];
+  const cumpleCount = archivos.filter(a => a.status === 'CUMPLE').length;
+  const pendienteCount = archivos.filter(a => a.status === 'PENDIENTE').length;
+  const noCumpleCount = archivos.filter(a => a.status === 'NO CUMPLE').length;
+  const naCount = archivos.filter(a => a.status === 'N/A').length;
   const aplicablesCount = DOCUMENT_CATALOG.length - naCount;
 
   const isApproved = (cumpleCount + naCount) === DOCUMENT_CATALOG.length && noCumpleCount === 0;
@@ -163,17 +162,17 @@ export const InformeRecibidoConformidad = ({
   ];
 
   const getDocStatus = (docId) => {
-    const item = filing.archivos.find(a => a.docId === docId);
+    const item = archivos.find(a => a.docId === docId);
     return item ? item.status : 'PENDIENTE';
   };
 
   const getDocNotes = (docId) => {
-    const item = filing.archivos.find(a => a.docId === docId);
+    const item = archivos.find(a => a.docId === docId);
     return item && item.notes ? item.notes : null;
   };
 
   const getDocFileName = (docId) => {
-    const item = filing.archivos.find(a => a.docId === docId);
+    const item = archivos.find(a => a.docId === docId);
     return item && item.fileName ? item.fileName : null;
   };
 
@@ -182,6 +181,10 @@ export const InformeRecibidoConformidad = ({
     month: 'long', 
     day: 'numeric' 
   });
+
+  const handlePrint = () => {
+    window.print();
+  };
 
   const verificationUrl = `${window.location.origin}/verificar?radicado=${encodeURIComponent(filing.numeroRadicado)}`;
 
@@ -268,6 +271,15 @@ export const InformeRecibidoConformidad = ({
           </span>
 
           <button
+            onClick={handlePrint}
+            className="flex items-center space-x-1.5 bg-white hover:bg-gray-100 text-slate-900 font-black text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl border border-gray-300 transition-all cursor-pointer shadow-sm"
+            title="Imprimir el Informe de Recibido a Conformidad"
+          >
+            <Printer className="w-4 h-4" />
+            <span>Imprimir</span>
+          </button>
+
+          <button
             onClick={() => setSigningRole(isRol2Contratista ? 'contratista' : 'interventoria')}
             className="flex items-center space-x-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-950 font-black text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl border border-emerald-300 transition-all cursor-pointer shadow-sm"
             title={isRol2Contratista ? "Gestionar Firma Digital del Contratista" : "Gestionar Firma Digital de Interventoría"}
@@ -310,36 +322,8 @@ export const InformeRecibidoConformidad = ({
         ref={printRef}
         className="print-canvas bg-white p-6 sm:p-10 shadow-2xl rounded-2xl border border-gray-200 text-slate-900 font-sans space-y-7 print:shadow-none print:border-none print:rounded-none"
       >
-        {/* OFFICIAL INTECOAL LETTERHEAD HEADER */}
-        <div className="border-b-2 border-slate-800 pb-5 space-y-4 page-break-avoid">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            {/* Logo */}
-            <div className="flex items-center space-x-3">
-              <IntecoalLogo size="82px" />
-            </div>
-
-            {/* Address & Contact Information from official letterhead */}
-            <div className="text-left sm:text-right text-[11px] text-slate-700 space-y-0.5 font-sans leading-snug">
-              <div className="font-black text-slate-900 text-xs uppercase tracking-wide">INTECOAL S.A.S.</div>
-              <div className="text-[10px] text-slate-500 font-bold uppercase">Interventoría Técnica Especializada</div>
-              <div className="flex items-center sm:justify-end space-x-1.5 pt-0.5">
-                <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                <span>Carrera. 33a #15-49 Conjunto Residencial El Oasis – Casa 23</span>
-              </div>
-              <div className="font-bold text-slate-900 pl-5 sm:pl-0">Villavicencio - Meta</div>
-              <div className="flex items-center sm:justify-end space-x-3">
-                <span className="flex items-center space-x-1">
-                  <Phone className="w-3 h-3 text-slate-500 shrink-0" />
-                  <strong className="text-slate-800">310 355 6449</strong>
-                </span>
-                <span className="flex items-center space-x-1">
-                  <Mail className="w-3 h-3 text-slate-500 shrink-0" />
-                  <strong className="text-slate-800">interventoriaapalborada@intecoalsas.com</strong>
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Membrete corporativo (tal cual Formato y Recibo) */}
+        <MembreteRecibo municipio={filing.metadata?.municipio} />
 
         {/* DOCUMENT HEADER & FORMAL EXECUTIVE HEADING */}
         <div className="space-y-4 page-break-avoid">
@@ -599,225 +583,24 @@ export const InformeRecibidoConformidad = ({
           </div>
         </div>
 
-        {/* SECTION 7: FIRMAS OFICIALES, HASH Y CÓDIGO QR */}
-        <div className="pt-6 border-t-2 border-slate-900 space-y-6 page-break-avoid">
+        {/* SECTION 7: FIRMAS (limpias: firma, nombre, cargo y matrícula) */}
+        <div className="pt-6 space-y-6 page-break-avoid">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
-            {/* Signature Box 1: Interventoría INTECOAL SAS (Exclusiva Rol 1: Revisor / Interventor) */}
-            <div className={`border rounded-xl p-4 flex flex-col justify-between space-y-3 print-border-clean transition-all ${isRol1Revisor ? 'bg-slate-50 border-slate-300' : 'bg-slate-100/70 border-slate-200'}`}>
-              <div className="space-y-0.5 text-center border-b border-slate-200 pb-2">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">ENTIDAD REVISORA Y AUTORIZADORA</span>
-                <span className="font-black text-slate-900 text-sm block">INTECOAL S.A.S.</span>
-                <span className="text-[10px] text-slate-600 font-semibold block">Interventoría Alumbrado Público</span>
-              </div>
-
-              {/* Signature Display Container */}
-              <div className="my-1 text-center min-h-[85px] flex flex-col items-center justify-center">
-                {filing.metadata.firmaInterventoria ? (
-                  <div className="space-y-1.5 w-full">
-                    <img
-                      src={filing.metadata.firmaInterventoria.dataUrl}
-                      alt="Firma Interventoría"
-                      className="max-h-20 mx-auto object-contain"
-                    />
-                    <div className="pt-1 border-t border-slate-300 w-4/5 mx-auto text-center space-y-1">
-                      <span className="inline-flex items-center space-x-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded">
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span>FIRMADO DIGITALMENTE</span>
-                      </span>
-                      <p className="text-[9px] font-mono text-slate-600 block truncate">
-                        HASH: {filing.metadata.firmaInterventoria.hashVerificacion}
-                      </p>
-                      {filing.metadata.firmaInterventoria.tarjetaProfesional && (
-                        <p className="text-[9px] font-bold text-slate-800 block">
-                          T.P.: {filing.metadata.firmaInterventoria.tarjetaProfesional}
-                        </p>
-                      )}
-
-                      {/* Control de Edición/Creación/Subida por Rol 1 */}
-                      {isRol1Revisor && (
-                        <div className="print:hidden pt-1 flex items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setSigningRole('interventoria')}
-                            className="bg-slate-900 hover:bg-slate-800 text-[#D9CF43] font-bold text-[9px] px-2.5 py-1 rounded shadow transition-all inline-flex items-center space-x-1 cursor-pointer"
-                          >
-                            <Edit3 className="w-3 h-3" />
-                            <span>Editar / Cambiar Firma</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveSignature('interventoria')}
-                            className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[9px] px-2 py-1 rounded border border-rose-200 transition-all inline-flex items-center space-x-1 cursor-pointer"
-                            title="Eliminar Firma de Revisor"
-                          >
-                            <span>Eliminar</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {isRol1Revisor ? (
-                      <div className="print:hidden py-3 space-y-1.5 border-2 border-dashed border-slate-300 rounded-xl w-full bg-white/60 p-2 text-center">
-                        <PenTool className="w-4 h-4 text-slate-400 mx-auto" />
-                        <span className="text-[10px] font-extrabold text-slate-600 block">Firma Digital Interventoría Pendiente</span>
-                        <button
-                          type="button"
-                          onClick={() => setSigningRole('interventoria')}
-                          className="bg-slate-900 hover:bg-slate-800 text-[#D9CF43] font-black text-[10px] px-3 py-1.5 rounded-lg shadow transition-all inline-flex items-center space-x-1 cursor-pointer scale-105"
-                        >
-                          <PenTool className="w-3 h-3" />
-                          <span>Crear / Subir Firma Digital</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="print:hidden py-3 space-y-1 border border-slate-200 rounded-xl w-full bg-slate-50/70 p-2 text-center">
-                        <PenTool className="w-4 h-4 text-slate-400 mx-auto" />
-                        <span className="text-[10px] font-bold text-slate-500 block">Firma de Interventoría Pendiente</span>
-                      </div>
-                    )}
-
-                    <div className="hidden print:block w-full text-center py-5">
-                      <div className="border-b-2 border-slate-800 w-48 mx-auto mb-1"></div>
-                      <span className="text-[9px] font-bold text-slate-600 uppercase">Firma Autógrafa / Responsable de Revisión</span>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="text-center pt-1 border-t border-slate-200">
-                <p className="font-extrabold text-slate-900 text-xs">
-                  {filing.metadata.firmaInterventoria?.nombreSignatario || filing.metadata.responsableRevision || 'Responsable de Revisión'}
-                </p>
-                <p className="text-[10px] font-bold text-slate-500 uppercase">
-                  {filing.metadata.firmaInterventoria?.cargo || 'Responsable de Revisión'}
-                </p>
-              </div>
-            </div>
-
-            {/* Signature Box 2: Contratista (Exclusiva Rol 2: Contratista / Operador) */}
-            <div className={`border rounded-xl p-4 flex flex-col justify-between space-y-3 print-border-clean transition-all ${isRol2Contratista ? 'bg-slate-50 border-slate-300' : 'bg-slate-100/70 border-slate-200'}`}>
-              <div className="space-y-0.5 text-center border-b border-slate-200 pb-2">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">CONTRATISTA EMISOR DEL EXPEDIENTE</span>
-                <span className="font-black text-slate-900 text-sm block">{filing.metadata.contratista}</span>
-              </div>
-
-              {/* Signature Display Container */}
-              <div className="my-1 text-center min-h-[85px] flex flex-col items-center justify-center">
-                {filing.metadata.firmaContratista ? (
-                  <div className="space-y-1.5 w-full">
-                    <img
-                      src={filing.metadata.firmaContratista.dataUrl}
-                      alt="Firma Contratista"
-                      className="max-h-20 mx-auto object-contain"
-                    />
-                    <div className="pt-1 border-t border-slate-300 w-4/5 mx-auto text-center space-y-1">
-                      <span className="inline-flex items-center space-x-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded">
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span>FIRMADO DIGITALMENTE</span>
-                      </span>
-                      <p className="text-[9px] font-mono text-slate-600 block truncate">
-                        HASH: {filing.metadata.firmaContratista.hashVerificacion}
-                      </p>
-                      {filing.metadata.firmaContratista.tarjetaProfesional && (
-                        <p className="text-[9px] font-bold text-slate-800 block">
-                          T.P.: {filing.metadata.firmaContratista.tarjetaProfesional}
-                        </p>
-                      )}
-
-                      {/* Control de Edición/Creación/Subida por Rol 2 */}
-                      {isRol2Contratista && (
-                        <div className="print:hidden pt-1 flex items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setSigningRole('contratista')}
-                            className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-[9px] px-2.5 py-1 rounded shadow transition-all inline-flex items-center space-x-1 cursor-pointer"
-                          >
-                            <Edit3 className="w-3 h-3" />
-                            <span>Editar / Cambiar Firma</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveSignature('contratista')}
-                            className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[9px] px-2 py-1 rounded border border-rose-200 transition-all inline-flex items-center space-x-1 cursor-pointer"
-                            title="Eliminar Firma del Contratista"
-                          >
-                            <span>Eliminar</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {isRol2Contratista ? (
-                      <div className="print:hidden py-3 space-y-1.5 border-2 border-dashed border-slate-300 rounded-xl w-full bg-white/60 p-2 text-center">
-                        <PenTool className="w-4 h-4 text-slate-400 mx-auto" />
-                        <span className="text-[10px] font-extrabold text-slate-600 block">Firma Digital Contratista Pendiente</span>
-                        <button
-                          type="button"
-                          onClick={() => setSigningRole('contratista')}
-                          className="bg-slate-800 hover:bg-slate-700 text-white font-black text-[10px] px-3 py-1.5 rounded-lg shadow transition-all inline-flex items-center space-x-1 cursor-pointer scale-105"
-                        >
-                          <PenTool className="w-3 h-3" />
-                          <span>Crear / Subir Firma Digital</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="print:hidden py-3 space-y-1 border border-slate-200 rounded-xl w-full bg-slate-50/70 p-2 text-center">
-                        <PenTool className="w-4 h-4 text-slate-400 mx-auto" />
-                        <span className="text-[10px] font-bold text-slate-500 block">Firma del Contratista Pendiente</span>
-                      </div>
-                    )}
-
-                    <div className="hidden print:block w-full text-center py-5">
-                      <div className="border-b-2 border-slate-800 w-48 mx-auto mb-1"></div>
-                      <span className="text-[9px] font-bold text-slate-600 uppercase">Firma Autógrafa / Representante Contratista</span>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="text-center pt-1 border-t border-slate-200">
-                <p className="font-extrabold text-slate-900 text-xs">
-                  {filing.metadata.firmaContratista?.nombreSignatario || filing.metadata.responsable}
-                </p>
-                <p className="text-[10px] font-bold text-slate-500 uppercase">
-                  {filing.metadata.firmaContratista?.cargo || 'Representante Técnico Contratista'}
-                </p>
-              </div>
-            </div>
+            <FirmaLimpia
+              firma={filing.metadata.firmaInterventoria}
+              nombre={filing.metadata.firmaInterventoria?.nombreSignatario || filing.metadata.responsableRevision || 'Responsable de Revisión'}
+              cargo={filing.metadata.firmaInterventoria?.cargo || 'Responsable de Revisión'}
+            />
+            <FirmaLimpia
+              firma={filing.metadata.firmaContratista}
+              nombre={filing.metadata.firmaContratista?.nombreSignatario || filing.metadata.responsable}
+              cargo={filing.metadata.firmaContratista?.cargo || 'Representante Técnico Contratista'}
+            />
           </div>
         </div>
 
-        {/* OFFICIAL INTECOAL LETTERHEAD FOOTER */}
-        <div className="pt-6 page-break-avoid">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200 pt-3">
-            {/* Geometric Yellow and Dark Gray Ribbon Strip matching official letterhead */}
-            <div className="flex items-center w-full sm:w-auto">
-              <div className="h-4 bg-[#D9CF43] w-28 sm:w-36 transform -skew-x-12 -ml-2 rounded-sm shadow-sm"></div>
-              <div className="h-4 bg-[#383b42] w-10 sm:w-12 transform -skew-x-12 -ml-2 rounded-sm shadow-sm"></div>
-            </div>
-
-            {/* Center Official Web Domain */}
-            <div className="text-center font-bold text-xs text-slate-800 font-mono tracking-wide">
-              www.<span className="text-slate-900 font-extrabold">Intecoalsas</span>.com
-            </div>
-
-            {/* Right Entity Information */}
-            <div className="text-right flex items-center space-x-2">
-              <div className="flex flex-col text-right">
-                <span className="text-xs font-black text-slate-900 tracking-tight leading-none uppercase">
-                  INTECOAL S.A.S.
-                </span>
-                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
-                  Interventoría Técnica de Alumbrado Público
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Pie de página: franja decorativa corporativa (tal cual Formato y Recibo) */}
+        <FranjaCorporativa />
       </div>
 
       {signingRole && (
@@ -846,3 +629,21 @@ export const InformeRecibidoConformidad = ({
     </div>
   );
 };
+
+// Firma limpia: solo imagen, nombre, cargo y matrícula (sin recuadros ni insignias)
+const FirmaLimpia = ({ firma, nombre, cargo }) => (
+  <div className="text-center space-y-1">
+    <div className="min-h-[85px] flex items-center justify-center">
+      {firma?.dataUrl ? (
+        <img src={firma.dataUrl} alt="Firma" className="max-h-20 object-contain" />
+      ) : (
+        <span>&nbsp;</span>
+      )}
+    </div>
+    <p className="font-extrabold text-slate-900 text-xs">{nombre}</p>
+    <p className="text-[10px] font-bold text-slate-500 uppercase">{cargo}</p>
+    {firma?.tarjetaProfesional && (
+      <p className="text-[10px] font-bold text-slate-800">T.P.: {firma.tarjetaProfesional}</p>
+    )}
+  </div>
+);

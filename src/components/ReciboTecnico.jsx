@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Pencil,
@@ -6,10 +6,12 @@ import {
   Upload,
   Printer,
   CheckCircle2,
-  ChevronDown
+  ChevronDown,
+  X
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
+import { apiFetch } from '../lib/api';
 import { MembreteRecibo, FranjaCorporativa } from './MembreteCorporativo';
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -23,22 +25,6 @@ const fechaModelo = () => {
   return `${MESES[hoy.getMonth()]} ${hoy.getDate()} de ${hoy.getFullYear()}.`;
 };
 
-// Texto por defecto siguiendo el patrón del modelo, con datos del radicado
-const defaultsPara = (filing) => {
-  const meta = filing?.metadata || {};
-  const municipio = meta.municipio || 'Andalucía';
-  const proyecto = meta.nombreProyecto || 'Parque Principal Vicente H. Cruz';
-  return {
-    asunto: `Recibo técnico en Terreno del Alumbrado Público del proyecto ${proyecto} del Municipio de ${municipio}.`,
-    cuerpo: [
-      `Realizada la verificación en campo por la Interventoría de Alumbrado Público del Municipio de ${municipio}, se recibe a conformidad 51 luminarias asi:`,
-      `- 33 Luminarias Tospo Venus TYPE II 30 W 54 led`,
-      `- 16 Luminarias Tospo Venus TYPE II 60 W 54 led`,
-      `- 2 Luminarias Tospo Venus TYPE II 100 W 54 led`,
-      `Y se asigna el siguiente código PR -IA-002-26`
-    ].join('\n\n')
-  };
-};
 
 export const ReciboTecnico = ({
   filings = [],
@@ -55,11 +41,20 @@ export const ReciboTecnico = ({
     (f.nombre || '').toLowerCase().includes('recibo t')
   );
 
-  const [asunto, setAsunto] = useState(() => saved.asunto ?? defaultsPara(filing).asunto);
-  const [cuerpo, setCuerpo] = useState(() => saved.cuerpo ?? defaultsPara(filing).cuerpo);
-  const [editing, setEditing] = useState(() => !(saved.asunto || saved.cuerpo));
+  const [asunto, setAsunto] = useState(() => saved.asunto ?? '');
+  const [cuerpo, setCuerpo] = useState(() => saved.cuerpo ?? '');
+  const [titulo, setTitulo] = useState(() => saved.titulo ?? '');
+  const [senor, setSenor] = useState(() => saved.senor ?? '');
+  // Nunca entra en edición solo: siempre se muestra como está guardado
+  // y solo se edita pulsando Editar (igual que el Formato C)
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // Una vez subido, el documento queda bloqueado: no se puede volver a editar
+  useEffect(() => {
+    if (yaSubido) setEditing(false);
+  }, [yaSubido]);
 
   if (!filing) {
     return (
@@ -92,13 +87,29 @@ export const ReciboTecnico = ({
 
   const municipio = meta.municipio || 'Andalucía';
   const proyecto = meta.nombreProyecto || 'Parque Principal Vicente H. Cruz';
-  const constructor = meta.responsable || meta.contratista || 'Elbert Lopez';
+  // Señor y título: automáticos por radicado pero editables
+  const tituloAuto = `RECIBO TÉCNICO PROYECTO DE ILUMINACIÓN ${proyecto.toUpperCase()} DEL MUNICIPIO DE ${municipio.toUpperCase()}.`;
+  const senorAuto = meta.responsable || meta.contratista || 'Elbert Lopez';
+  const tituloVer = titulo || tituloAuto;
+  const senorVer = senor || senorAuto;
   // La fecha se actualiza día a día hasta que se SUBE el recibo; una vez
   // subido se congela (fechaCongelada) y ya no cambia.
   const fechaTexto = `${municipio}, ${saved.fechaCongelada || fechaModelo()}`;
   const cuerpoParrafos = (cuerpo || '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
 
-  const handleSave = async () => {    if (!onUpdateFiling) {
+  const handleCancel = () => {
+    setAsunto(saved.asunto ?? '');
+    setCuerpo(saved.cuerpo ?? '');
+    setTitulo(saved.titulo ?? '');
+    setSenor(saved.senor ?? '');
+    setEditing(false);
+  };
+
+  const handleSave = async () => {
+    if (yaSubido) {
+      setEditing(false);
+      return;
+    }    if (!onUpdateFiling) {
       setEditing(false);
       return;
     }
@@ -111,6 +122,8 @@ export const ReciboTecnico = ({
           reciboTecnico: {
             asunto,
             cuerpo,
+            titulo: titulo || undefined,
+            senor: senor || undefined,
             // Si ya se congeló al subir, se conserva; si no, sigue viva
             fechaCongelada: saved.fechaCongelada || undefined,
             fechaActualizacion: new Date().toISOString(),
@@ -170,7 +183,7 @@ export const ReciboTecnico = ({
       formData.append('nombre', fileName);
       formData.append('archivo', pdfFile);
 
-      const resp = await fetch(`/api/radicacion/${filing.id}/formato`, {
+      const resp = await apiFetch(`/api/radicacion/${filing.id}/formato`, {
         method: 'POST',
         body: formData
       });
@@ -187,6 +200,8 @@ export const ReciboTecnico = ({
             ...(result.data.metadata?.reciboTecnico || {}),
             asunto,
             cuerpo,
+            titulo: titulo || undefined,
+            senor: senor || undefined,
             fechaCongelada: fechaAlSubir,
             fechaActualizacion: new Date().toISOString(),
             actualizadoPor: currentUser?.email || ''
@@ -220,7 +235,7 @@ export const ReciboTecnico = ({
             background-color: #ffffff !important; color: #000000 !important;
           }
           .print-canvas { margin: 0 !important; padding: 0 !important; width: 100% !important; border: none !important; box-shadow: none !important; }
-          table.rt-repeat { border-collapse: collapse !important; width: 100% !important; }
+          table.rt-repeat { border-collapse: collapse !important; width: 100% !important; height: auto !important; }
           thead.rt-head { display: table-header-group !important; }
           tfoot.rt-foot { display: table-footer-group !important; }
           thead.rt-head tr, tfoot.rt-foot tr { break-inside: avoid !important; page-break-inside: avoid !important; }
@@ -270,7 +285,29 @@ export const ReciboTecnico = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {!editing ? (
+          {editing ? (
+            <>
+              <button
+                onClick={handleCancel}
+                className="flex items-center space-x-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-extrabold text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl border border-gray-300 transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+                <span>Cancelar</span>
+              </button>
+              {!yaSubido && (
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="flex items-center space-x-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-[#D9CF43] font-extrabold text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{saving ? 'Guardando…' : 'Guardar'}</span>
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+          {!yaSubido && (
             <button
               onClick={() => setEditing(true)}
               className="flex items-center space-x-1.5 bg-amber-100 hover:bg-amber-200 text-amber-950 font-extrabold text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl border border-amber-300 transition-all cursor-pointer"
@@ -278,15 +315,11 @@ export const ReciboTecnico = ({
               <Pencil className="w-4 h-4 text-amber-800" />
               <span>Editar</span>
             </button>
-          ) : (
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center space-x-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-[#D9CF43] font-extrabold text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl transition-all cursor-pointer"
-            >
-              <Save className="w-4 h-4" />
-              <span>{saving ? 'Guardando…' : 'Guardar'}</span>
-            </button>
+          )}
+          {yaSubido && (
+            <span className="text-[11px] font-bold text-gray-500 bg-gray-100 border border-gray-200 px-3 py-2 rounded-xl">
+              Documento subido: bloqueado contra ediciones
+            </span>
           )}
           <button
             onClick={handlePrint}
@@ -305,6 +338,8 @@ export const ReciboTecnico = ({
             <Upload className="w-4 h-4" />
             <span>{uploading ? 'Subiendo…' : 'Subir'}</span>
           </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -315,7 +350,7 @@ export const ReciboTecnico = ({
         className="print-canvas bg-white shadow-2xl rounded-2xl border border-gray-200 text-black"
         style={{ fontFamily: "'Arial Narrow', Arial, sans-serif" }}
       >
-      <table className="rt-repeat" style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <table className="rt-repeat" style={{ width: '100%', borderCollapse: 'collapse', height: '1000px' }}>
         <thead className="rt-head">
           <tr><td style={{ padding: 0 }}>
             {/* Membrete original del formato (tal cual el Recibo Técnico) */}
@@ -323,22 +358,45 @@ export const ReciboTecnico = ({
           </td></tr>
         </thead>
         <tbody>
-          <tr><td style={{ padding: 0 }}>
+          <tr><td style={{ padding: 0, verticalAlign: 'top' }}>
 
         {/* Contenedor principal del formato (márgenes de hoja) */}
         <div style={{ maxWidth: '1000px', margin: '0 auto', paddingLeft: '40px', paddingRight: '40px', boxSizing: 'border-box' }}>
         {/* Cuerpo del documento (formato del modelo: Arial Narrow 12.5pt, cierre 14pt) */}
-        <div className="pt-4" style={{ fontSize: '17px', lineHeight: 1.35, color: '#000000' }}>
+        <div className="pt-4" style={{ fontSize: '16px', lineHeight: 1.35, color: '#000000' }}>
           <p>{fechaTexto}</p>
           <br />
           <br />
-          <p className="text-center font-bold">
-            RECIBO TÉCNICO PROYECTO DE ILUMINACIÓN {proyecto.toUpperCase()} DEL MUNICIPIO DE {municipio.toUpperCase()}.
-          </p>
+          {!editing ? (
+            <p className="text-center font-bold">{tituloVer}</p>
+          ) : (
+            <div>
+              <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-1">Título</label>
+              <textarea
+                value={tituloVer}
+                onChange={(e) => setTitulo(e.target.value)}
+                rows={2}
+                className="w-full px-1 py-1 bg-transparent border-0 border-b border-slate-800 outline-none focus:border-[#4E3629] text-center font-bold"
+                style={{ fontSize: '16px' }}
+              />
+            </div>
+          )}
           <br />
           <br />
           <p>Señor:</p>
-          <p className="font-bold">{constructor}</p>
+          {!editing ? (
+            <p className="font-bold">{senorVer}</p>
+          ) : (
+            <div>
+              <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-1">Señor (destinatario)</label>
+              <input
+                value={senorVer}
+                onChange={(e) => setSenor(e.target.value)}
+                className="w-full px-1 py-1 bg-transparent border-0 border-b border-slate-800 outline-none focus:border-[#4E3629] font-bold"
+                style={{ fontSize: '16px' }}
+              />
+            </div>
+          )}
           <p className="font-bold">Constructor</p>
           <br />
           <p className="text-justify">
@@ -350,8 +408,8 @@ export const ReciboTecnico = ({
                 value={asunto}
                 onChange={(e) => setAsunto(e.target.value)}
                 rows={2}
-                className="w-full mt-1 px-3 py-2 bg-amber-50 border border-amber-400 rounded-lg outline-none focus:ring-2 focus:ring-[#D9CF43]"
-                style={{ fontSize: '17px' }}
+                className="w-full mt-1 px-1 py-1 bg-transparent border-0 border-b border-slate-800 outline-none focus:border-[#4E3629]"
+                style={{ fontSize: '16px' }}
               />
             )}
           </p>
@@ -365,20 +423,18 @@ export const ReciboTecnico = ({
               value={cuerpo}
               onChange={(e) => setCuerpo(e.target.value)}
               rows={14}
-              className="w-full px-3 py-2 bg-amber-50 border border-amber-400 rounded-lg outline-none focus:ring-2 focus:ring-[#D9CF43]"
-              style={{ fontSize: '17px', lineHeight: 1.4 }}
+              placeholder="CUERPO...."
+              className="w-full px-1 py-1 bg-transparent border-0 border-b border-slate-800 outline-none focus:border-[#4E3629]"
+              style={{ fontSize: '16px', lineHeight: 1.4 }}
             />
           )}
-          <p className="text-justify" style={{ marginBottom: '1em' }}>
-            El registro fotográfico de la evidencia de la verificación en campo reposa en la oficina de la Interventoría de Alumbrado Público.
-          </p>
           <br />
           <p style={{ fontSize: '19px' }}>Atentamente,</p>
           <br />
           {/* Firma permanente del jefe para todos los radicados */}
           <div style={{ minHeight: '70px' }} className="flex items-end">
             <img
-              src="/recibo-tecnico/firma-jefe.jpeg"
+              src="/recibo-tecnico/firma-jefe.png"
               alt="Firma Jefe"
               style={{ maxHeight: '70px', objectFit: 'contain' }}
             />

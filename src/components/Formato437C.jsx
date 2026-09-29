@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, ChevronDown, Edit3, X, Save, Upload, Printer, CheckCircle2 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
+import { apiFetch } from '../lib/api';
 import { MembreteRecibo, FranjaCorporativa } from './MembreteCorporativo';
 
 const F = ({ value }) => (
@@ -100,7 +101,6 @@ const datosIniciales = (filing) => {
 
 export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpdateFiling }) => {
   const m = filing?.metadata || {};
-  const saved = m.formato437c || {};
   const yaSubido = (filing?.formatos || []).some(f =>
     f.nombre?.toLowerCase().includes('formato 4.3.7 c')
   );
@@ -109,10 +109,9 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
   // EMPTY y el efecto solo cargaba al CAMBIAR de radicado, por eso se veía
   // un formato "limpio" aunque hubiera datos guardados.
   const [data, setData] = useState(() => datosIniciales(filing));
-  const [editing, setEditing] = useState(() => {
-    const hasData = Object.values(saved).some(v => v && v.toString().trim() !== '');
-    return !hasData && !yaSubido;
-  });
+  // Nunca entra en edición solo: siempre se muestra como está guardado
+  // y solo se edita pulsando Editar (igual que el Recibo Técnico)
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [currentFilingId, setCurrentFilingId] = useState(filing?.id);
@@ -121,9 +120,8 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
 
   useEffect(() => {
     if (filing?.id && filing.id !== currentFilingId) {
-      const hasData = Object.values(filing?.metadata?.formato437c || {}).some(v => v && v.toString().trim() !== '');
       setData(datosIniciales(filing));
-      setEditing(!hasData && !yaSubido);
+      setEditing(false);
       setCurrentFilingId(filing?.id);
       setShowUploadedMsg(false);
     }
@@ -225,7 +223,7 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
       formData.append('nombre', fileName);
       formData.append('archivo', pdfFile);
 
-      const resp = await fetch(`/api/radicacion/${filing.id}/formato`, {
+      const resp = await apiFetch(`/api/radicacion/${filing.id}/formato`, {
         method: 'POST',
         body: formData
       });
@@ -269,7 +267,7 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
       <style>{`
         @media print {
           @page { size: letter portrait; margin: 0; }
-          table.fc-repeat { border-collapse: collapse !important; width: 100% !important; }
+          table.fc-repeat { border-collapse: collapse !important; width: 100% !important; height: auto !important; }
           thead.fc-head { display: table-header-group !important; }
           tfoot.fc-foot { display: table-footer-group !important; }
           thead.fc-head tr, tfoot.fc-foot tr { break-inside: avoid !important; page-break-inside: avoid !important; }
@@ -379,7 +377,7 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
         className="print-canvas bg-white print:shadow-none print:border-none print:rounded-none print:w-full text-slate-900"
         style={{ fontFamily: "'Arial Narrow', Arial, sans-serif" }}
       >
-      <table className="fc-repeat" style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <table className="fc-repeat" style={{ width: '100%', borderCollapse: 'collapse', height: '1000px' }}>
         <thead className="fc-head">
           <tr><td style={{ padding: 0 }}>
         {/* Membrete corporativo (tal cual el Recibo Técnico) */}
@@ -387,7 +385,7 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
           </td></tr>
         </thead>
         <tbody>
-          <tr><td style={{ padding: 0 }}>
+          <tr><td style={{ padding: 0, verticalAlign: 'top' }}>
           {/* Contenedor principal del formato (márgenes de hoja) */}
           <div style={{ maxWidth: '1000px', margin: '0 auto', paddingLeft: '40px', paddingRight: '40px', boxSizing: 'border-box' }}>
           <div className="space-y-6">
@@ -412,8 +410,8 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
           Formato 4.3.7.c. Declaración de cumplimiento de operación y mantenimiento de instalaciones de sistemas de iluminación.
         </p>
 
-        {/* Cuerpo del formato */}
-        <div className="space-y-4 text-[12px] leading-relaxed">
+        {/* Cuerpo del formato (Arial Narrow 12pt) */}
+        <div className="space-y-4 text-[16px] leading-relaxed">
           <p className="text-justify">
             Yo {V('nombreOperador')}, identificado(a) con la cedula de ciudadanía No.{' '}
             {V('cedulaOperador')} de {V('lugarExpedicionOperador')} en el ejercicio de mi profesión
@@ -464,7 +462,7 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
         </div>
 
         {/* Anexos */}
-        <div className="text-[12px] space-y-1">
+        <div className="text-[16px] space-y-1">
           <p className="font-bold uppercase">Anexos:</p>
           <p className="text-justify">
             - Certificado de formación académica en materia de iluminación, según los requisitos generales para las

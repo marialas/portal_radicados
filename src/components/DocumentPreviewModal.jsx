@@ -1,4 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
+import { apiFetch } from '../lib/api';
 
 const CadViewerLazy = lazy(() => import('./CadViewerLazy'));
 import { 
@@ -32,7 +33,7 @@ export const DocumentPreviewModal = ({ docItem, filing, onClose }) => {
     const src = docItem.fileUrl || docItem.blobUrl;
     setCadLoading(true);
     setCadError(null);
-    fetch(src)
+    apiFetch(src)
       .then(res => {
         if (!res.ok) throw new Error('No disponible en el servidor');
         return res.arrayBuffer();
@@ -61,7 +62,7 @@ export const DocumentPreviewModal = ({ docItem, filing, onClose }) => {
     // Si el archivo está disponible en el servidor, descargarlo real desde el backend
     if (docItem.fileUrl || docItem.blobUrl) {
       const url = docItem.fileUrl || docItem.blobUrl;
-      fetch(url)
+      apiFetch(url)
         .then(res => {
           if (!res.ok) throw new Error('No disponible');
           return res.blob();
