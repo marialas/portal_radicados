@@ -39,9 +39,7 @@ export const EvaluacionRadicacion = ({
   const isRol2Contratista = effectiveRole === 'contratista';
 
   const [archivosState, setArchivosState] = useState(() => {
-    // Preservar TODO lo radicado: base del catálogo + documentos
-    // adicionales (esManual) y sub-archivos. Antes se reconstruía solo
-    // desde DOCUMENT_CATALOG y al guardar se borraban los adicionales.
+    // Preserva adicionales y sub-archivos (no solo el catálogo)
     const existentes = new Map(
       (filing.archivos || []).map(a => [a.docId, a])
     );
@@ -130,7 +128,7 @@ export const EvaluacionRadicacion = ({
     }));
   };
 
-  // Evaluación individual de cada sub-archivo (ej. CEAP 25a-25d y anexos)
+  // Evaluación individual por sub-archivo
   const handleSubStatusChange = (docId, subId, newStatus) => {
     setArchivosState(prev => prev.map(item => {
       if (item.docId !== docId) return item;
@@ -230,8 +228,7 @@ export const EvaluacionRadicacion = ({
       setSaveSuccessMsg('Avance guardado localmente.');
     } finally {
       setIsSaving(false);
-      // El PATCH /metadata con soloAvance ya persistió el borrador en el
-      // backend: solo se actualiza el estado local, sin segundo PATCH.
+      // Borrador ya persistido: solo estado local
       await onSaveEvaluation(updatedFiling, { skipSync: true });
       if (typeof onBack === 'function') onBack();
     }
@@ -240,7 +237,7 @@ export const EvaluacionRadicacion = ({
   const handleFinalizar = async (andGenerateReport = true) => {
     const estadoFinal = estadoGeneral;
 
-    // El dictamen final requiere la firma digital del revisor (INTECOAL).
+    // Dictamen final exige firma del revisor
     if ((estadoFinal === 'Aprobado' || estadoFinal === 'Con Observaciones') && !firmaInterventoria) {
       setSaveErrorMsg('No se puede finalizar el informe: falta la firma digital del revisor (INTECOAL). Estampe la firma antes de guardar.');
       setSaveSuccessMsg('');
@@ -291,17 +288,14 @@ export const EvaluacionRadicacion = ({
         throw new Error(detalle || `El servidor respondió ${res.status}`);
       }
 
-      // Fuente de verdad: el radicado devuelto por el backend (ya incluye
-      // estado, historial, archivos y metadata persistidos).
+      // Fuente de verdad: lo que devuelve el backend
       try {
         const payload = await res.json();
         if (payload?.data) filingFinal = payload.data;
       } catch { filingFinal = updatedFiling; }
 
       if (estadoFinal === 'Aprobado') {
-        // m365Synced lo confirma el backend cuando la subida en segundo
-        // plano termina (no se fuerza aquí: antes se marcaba como subido
-        // sin verificar y SharePoint quedaba vacío).
+        // m365Synced solo lo confirma el backend
         setSaveSuccessMsg(`¡Radicado ${filingFinal.numeroRadicado} APROBADO y notificado! La subida a SharePoint (carpetas + archivos) continúa en segundo plano. Si no aparece en SharePoint, use «Reintentar subida» en el Historial. Volviendo al Historial de Radicaciones…`);
       } else {
         setSaveSuccessMsg(`¡Evaluación de ${filingFinal.numeroRadicado} finalizada y notificada! (A SharePoint solo se sube al aprobar). Volviendo al Historial de Radicaciones…`);
@@ -314,10 +308,7 @@ export const EvaluacionRadicacion = ({
       setIsSaving(false);
     }
 
-    // Solo se sale de la evaluación si el backend confirmó el guardado.
-    // Se navega al HISTORIAL (lista) con el radicado evaluado, nunca al
-    // último creado: se persiste filingFinal (respuesta del backend) y se
-    // espera un momento para que el revisor lea la confirmación.
+    // Sale solo si el backend confirmó; navega al Historial
     if (finalizadoOk) {
       setLastSavedFiling(filingFinal);
       await onSaveEvaluation(filingFinal, { skipSync: true });

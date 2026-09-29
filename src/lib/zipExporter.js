@@ -1,16 +1,12 @@
 import JSZip from 'jszip';
 
-/**
- * Genera y descarga un paquete de archivos ZIP con la estructura completa de carpetas
- * M365 (A_Tecnicos, B_Certificaciones, etc.) listo para arrastrar y soltar en la biblioteca
- * "Documentos" o "Documentos_Radicacion" de SharePoint Online.
- */
+/** ZIP del expediente con estructura M365, listo para SharePoint */
 export async function downloadFilingZip(filing) {
   const zip = new JSZip();
   const rootFolderName = filing.numeroRadicado || 'EXPEDIENTE_RETILAP';
   const projectFolder = zip.folder(rootFolderName);
 
-  // Subcarpetas estándar M365 (A-D + E_Otros + F_Documentos_Adicionales)
+  // Subcarpetas M365
   const folderA = projectFolder.folder('A_Tecnicos');
   const folderB = projectFolder.folder('B_Certificaciones');
   const folderC = projectFolder.folder('C_Contractuales');
@@ -19,7 +15,7 @@ export async function downloadFilingZip(filing) {
   const folderF = projectFolder.folder('F_Documentos_Adicionales');
   const folderCEAP = folderE.folder('Documentos para circuitos exclusivos de AP');
 
-  // Documento de metadatos e instrucciones de carga SharePoint
+  // README con instrucciones SharePoint
   const readmeContent = `EXPEDIENTE TÉCNICO VERIFICACIÓN RETILAP 40150
 ================================================================
 INTERVENTORÍA Y CONSULTORÍA S.A.S. - INTECOAL S.A.S.
@@ -43,12 +39,11 @@ PASOS PARA SUBIR ESTA CARPETA A TU SHAREPOINT ONLINE:
 
   projectFolder.file('README_INSTRUCCIONES_SHAREPOINT.txt', readmeContent);
 
-  // Generar cada archivo PDF del radicado
+  // Un PDF por requisito
   const archivos = filing.archivos || [];
   for (const archivo of archivos) {
     if (archivo.status === 'CUMPLE' || archivo.status === 'N/A' || filing.estado === 'Aprobado') {
-      // #25 CEAP -> subcarpeta anidada dentro de E_Otros (incluye
-      // radicados viejos, cuyo folderPath aún dice A_Tecnicos)
+      // CEAP a su subcarpeta (vale para rutas viejas)
       const esCEAP = archivo.docId === 25 || (archivo.docCode || '').toUpperCase() === 'CEAP';
       let targetSubFolder = projectFolder;
       const path = archivo.folderPath || '';
@@ -64,7 +59,7 @@ PASOS PARA SUBIR ESTA CARPETA A TU SHAREPOINT ONLINE:
       const sanitizeName = (str) => (str || 'documento').replace(/[/\\?%*:|"<>]/g, '_');
       const filename = `${archivo.docCode}_${sanitizeName(archivo.fileName || archivo.docName)}.pdf`;
 
-      // PDF binario válido con marcas de agua de Interventoría RETILAP
+      // PDF de marca de agua
       const pdfBinary = `%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
@@ -121,7 +116,7 @@ startxref
     }
   }
 
-  // Comprimir y forzar descarga
+  // Comprime y descarga
   const zipBlob = await zip.generateAsync({ type: 'blob' });
   const downloadUrl = URL.createObjectURL(zipBlob);
   const anchor = document.createElement('a');
@@ -133,9 +128,7 @@ startxref
   setTimeout(() => URL.revokeObjectURL(downloadUrl), 10000);
 }
 
-/**
- * Genera y descarga un archivo CSV formateado para importar o copiar filas en la Lista SharePoint "Radicaciones_AP"
- */
+/** CSV para la lista Radicaciones_AP de SharePoint */
 export function downloadRadicacionCSV(filing) {
   const headers = ["Title", "NumeroRadicado", "CodigoProyecto", "Municipio", "Operador", "TipoEntrega", "Estado", "PorcentajeCumplimiento", "DocumentosOk", "RutaOneDrive"];
   const values = [
@@ -162,9 +155,7 @@ export function downloadRadicacionCSV(filing) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-/**
- * Copia los datos del radicado al portapapeles formateados para pegar o llenar en SharePoint + Nueva
- */
+/** Copia la fila SharePoint al portapapeles */
 export async function copySharePointRowData(filing) {
   const text = `Title: ${filing.numeroRadicado}
 NumeroRadicado: ${filing.numeroRadicado}

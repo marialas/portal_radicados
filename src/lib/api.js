@@ -1,8 +1,5 @@
 /**
- * Cliente HTTP centralizado del portal.
- * Inyecta el JWT de sesión (emitido por /api/auth/msal-verify tras el
- * login M365) en todas las peticiones a /api. Sin token válido el backend
- * responde 401: en ese caso se limpia la sesión y se vuelve al ingreso.
+ * HTTP centralizado: inyecta el JWT; ante 401 limpia y vuelve al ingreso.
  */
 
 const TOKEN_KEY = 'm365_jwt';
@@ -61,10 +58,7 @@ export async function apiFetch(path, options = {}) {
   return resp;
 }
 
-/**
- * Obtiene el JWT del backend para el usuario autenticado en M365.
- * El backend valida el rol (interventor exige dominio INTECOAL).
- */
+/** JWT del backend para el usuario M365 (valida el rol). */
 export async function obtenerJwt(email, role) {
   const resp = await fetch('/api/auth/msal-verify', {
     method: 'POST',

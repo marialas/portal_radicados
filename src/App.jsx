@@ -26,29 +26,25 @@ import { logoutM365User, ensureMsalInit, extractCompanyFromEmail, formatNameFrom
 import { apiFetch, getToken, setToken as guardarToken, obtenerJwt } from './lib/api';
 
 export default function App() {
-  // Pestaña activa del sistema: lista, nueva, informe o evaluacion
+  // Pestaña activa
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window === 'undefined') return 'lista';
     return sessionStorage.getItem('active_tab') || 'lista';
   });
   
-  // Lista de radicaciones cargadas en memoria o backend
+  // Radicaciones en memoria
   const [filings, setFilings] = useState([]);
-  // Último consecutivo global (lo informa el backend aunque el contratista
-  // solo reciba lo suyo): único con opción Eliminar
+  // Último consecutivo global (viene del backend)
   const [ultimoGlobal, setUltimoGlobal] = useState(null);
   const [selectedFiling, setSelectedFiling] = useState(null);
   const [editingFiling, setEditingFiling] = useState(null);
 
-  // Estado de sesión del usuario SENA / INTECOAL.
-  // Se restaura desde sessionStorage/localStorage para que al recargar o volver
-  // del redirect de Microsoft 365 el usuario NO sea sacado de su sesión.
+  // Sesión: se restaura de session/localStorage para no sacarla al recargar
   const [user, setUser] = useState(() => {
     const emptyUser = { isAuthenticated: false, name: '', email: '', role: 'interventor', company: '' };
     if (typeof window === 'undefined') return emptyUser;
 
-    // Si hay hash de redirect de MSAL activo, NO restaurar sesión previa:
-    // deja que el proceso de redirect decida el usuario real.
+    // Con hash de redirect MSAL no se restaura sesión previa
     if (window.location.hash && (window.location.hash.includes('code=') || window.location.hash.includes('id_token=') || window.location.hash.includes('error='))) {
       return emptyUser;
     }
@@ -66,10 +62,10 @@ export default function App() {
     return emptyUser;
   });
 
-  // Estado para mensajes de error de autenticación MSAL/Azure AD
+  // Error de autenticación MSAL
   const [msalAuthError, setMsalAuthError] = useState(null);
 
-  // Estado para indicar si se está procesando la redirección de M365 en la URL
+  // Redirección M365 en curso
   const [isProcessingMsal, setIsProcessingMsal] = useState(() => {
     if (typeof window !== 'undefined' && window.location.hash && (window.location.hash.includes('code=') || window.location.hash.includes('id_token=') || window.location.hash.includes('error='))) {
       return true;
@@ -77,7 +73,7 @@ export default function App() {
     return false;
   });
 
-  // M365 Config state (loaded from backend /api/m365/status)
+  // Config M365 del backend
   const [m365Config, setM365Config] = useState({
     azureClientId: import.meta.env.VITE_MSAL_CLIENT_ID || '',
     azureTenantId: '',
@@ -110,8 +106,7 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  // Filtrar radicados por la cuenta del Contratista (solo los creados por ese usuario).
-  // El Responsable de Revisión ve todos los radicados.
+  // Contratista ve lo suyo; revisor ve todo
   const userFilings = React.useMemo(() => {
     if (user.role === 'contratista' && user.isAuthenticated) {
       const userEmailClean = (user.email || '').toLowerCase().trim();
@@ -126,11 +121,7 @@ export default function App() {
     return filings;
   }, [filings, user]);
 
-  // Keep selectedFiling valid for the active user context.
-  // Debe re-ejecutarse cuando llegan los filings del backend: si la app
-  // se recarga con una pestaña guardada (evaluacion/informe/formato) y
-  // selectedFiling es null, sin esto la pantalla queda en blanco.
-  // Solo rellena cuando NO hay selección válida; nunca roba la selección actual.
+  // Mantiene selección válida al recargar (evita pantalla en blanco)
   useEffect(() => {
     if (user.role === 'contratista') {
       if (userFilings.length > 0) {
@@ -141,16 +132,14 @@ export default function App() {
         setSelectedFiling(null);
       }
     } else {
-      // Only set default if no filing is selected yet
+      // Default solo si no hay selección
       if (filings.length > 0 && !selectedFiling) {
         setSelectedFiling(filings[0]);
       }
     }
   }, [user.role, filings, userFilings, selectedFiling]);
 
-  // Si se recarga en plena edición, se pierde qué radicado se editaba y el
-  // formulario se abría como "nuevo" (creando otro en vez de subsanar).
-  // Se persiste el id y se restaura al cargar la lista.
+  // Persiste el id en edición para restaurarlo al recargar
   useEffect(() => {
     if (activeTab === 'nueva' && !editingFiling && filings.length > 0 && typeof window !== 'undefined') {
       const editId = sessionStorage.getItem('editing_filing_id');
@@ -162,7 +151,7 @@ export default function App() {
     }
   }, [activeTab, filings, editingFiling]);
 
-  // Enforce role restrictions on activeTab
+  // Restricciones de rol por pestaña
   useEffect(() => {
     if (user.role === 'interventor' && activeTab === 'nueva') {
       setActiveTab('lista');
@@ -175,18 +164,17 @@ export default function App() {
     }
   }, [user.role, activeTab]);
 
-  // JWT de sesión (emitido por el backend tras validar M365). Sin él,
-  // la API responde 401 y apiFetch devuelve al ingreso automáticamente.
+  // JWT de sesión (sin él la API responde 401)
   const [jwt, setJwt] = useState(() => getToken());
 
-  // Pide el JWT al backend y lo guarda. Lanza si el rol no es válido.
+  // Pide y guarda el JWT
   const asegurarJwt = async (email, role) => {
     if (getToken()) return getToken();
     await obtenerJwt(email, role);
     setJwt(getToken());
   };
 
-  // Fetch filings from backend API on mount & process MSAL redirect response
+  // Carga inicial + redirect MSAL
   useEffect(() => {
     fetchFilings();
 
@@ -204,8 +192,7 @@ export default function App() {
       const redirectResponse = res?.redirectResponse;
       const msalError = res?.error;
 
-      // Read active MSAL attempt flags BEFORE cleaning. Solo desde sessionStorage
-      // (el localStorage fue eliminado para evitar que el rol quede "pegado" como caché).
+      // Lee flags MSAL (solo sessionStorage, sin caché pegada)
       const wasAttemptingMsal = typeof window !== 'undefined' && (
         sessionStorage.getItem('is_msal_login_attempt') === 'true'
       );
@@ -229,12 +216,12 @@ export default function App() {
         }
       };
 
-      // Limpiar fragmentos de código o tokens en la URL para dejar la dirección limpia
+      // Limpia tokens de la URL
       if (hasMsalHash && typeof window !== 'undefined') {
         window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
       }
 
-      // Determinar si realmente se completó un redirect desde Microsoft 365 con tokens o respuesta válida
+      // Detecta redirect real de Microsoft 365
       const isCompletedRedirect = Boolean(redirectResponse || (hasMsalHash && !urlHash.includes('error=')));
 
       if (isCompletedRedirect) {
@@ -255,8 +242,7 @@ export default function App() {
           const nameFormatted = formatNameFromEmail(email, account?.name);
           const company = extractCompanyFromEmail(email);
 
-          // Rol final: respeta el elegido en la UI (savedRole) si llegó; si no,
-          // lo deriva del dominio de la cuenta autenticada (intecoal => revisor).
+          // Rol: respeta el de la UI o deriva del dominio
           const roleToAssign = savedRole || (isRevisorAllowedEmail(email) ? 'interventor' : 'contratista');
 
           if (roleToAssign === 'interventor' && !isRevisorAllowedEmail(email)) {
@@ -318,7 +304,7 @@ export default function App() {
           cleanPendingMsalStorage();
         }
       } else {
-        // Si el usuario se devolvió en el navegador o canceló en Microsoft, NO iniciar sesión.
+        // Si canceló en Microsoft, no inicia sesión
         if (wasAttemptingMsal) {
           cleanPendingMsalStorage();
         }
@@ -338,10 +324,10 @@ export default function App() {
     };
   }, []);
 
-  // Re-fetch filings when user authenticates (MSAL redirect completes after mount)
+  // Recarga al autenticar (redirect llega después del montaje)
   useEffect(() => {
     if (user.isAuthenticated && user.email) {
-      // Sin JWT no hay acceso a la API: se obtiene y luego se lista
+      // Sin JWT se obtiene y luego se lista
       if (!getToken()) {
         asegurarJwt(user.email, user.role).then(() => fetchFilings()).catch(() => {});
       } else {
@@ -408,6 +394,16 @@ export default function App() {
     });
   };
 
+  // Nueva radicación limpia: cierra cualquier edición en curso (estado y
+  // persistencia) para que el formulario arranque vacío y no restaure nada
+  const irNuevaRadicacion = () => {
+    setEditingFiling(null);
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('editing_filing_id');
+    }
+    setActiveTab('nueva');
+  };
+
   const handleFilingCreated = (newRecord) => {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('editing_filing_id');
@@ -429,9 +425,7 @@ export default function App() {
     setFilings(prev => prev.map(f => f.id === updatedFiling.id ? updatedFiling : f));
     setSelectedFiling(updatedFiling);
 
-    // Refresco diferido: la subida a SharePoint corre en background y el
-    // backend marca m365Synced al terminar. Sin esto, el Historial quedaba
-    // mostrando "Pendiente de subida" aunque la subida hubiera funcionado.
+    // Refresco diferido del estado m365Synced (background)
     if (updatedFiling.estado === 'Aprobado' && !updatedFiling.m365Synced) {
       setTimeout(async () => {
         try {
@@ -447,10 +441,7 @@ export default function App() {
       }, 15000);
     }
 
-    // skipSync: el llamador ya persistió todo en el backend (ej. /estado
-    // en handleFinalizar, o /metadata con soloAvance en Guardar Avance).
-    // Sin esto se duplica el PATCH y, peor, el borrador caería en el
-    // loop de sincronización a SharePoint.
+    // skipSync: evita PATCH duplicado y sync de borradores
     if (opts.skipSync) return;
 
     apiFetch(`/api/radicacion/${updatedFiling.id}/metadata`, {
@@ -473,8 +464,7 @@ export default function App() {
 
   const [syncingId, setSyncingId] = useState(null);
 
-  // Reintento manual de subida a SharePoint (sincrónico: devuelve el
-  // motivo real si falla, en vez del silencio del background).
+  // Reintento manual de subida (muestra el motivo si falla)
   const handleRetrySync = async (record) => {
     if (!record || syncingId) return;
     if (!confirm(`¿Reintentar la subida de ${record.numeroRadicado} a SharePoint? Puede tardar 1-3 minutos.`)) return;
@@ -528,7 +518,7 @@ export default function App() {
             {/* Left Vertical Navigation Sidebar */}
             <Sidebar
               activeTab={activeTab}
-              setActiveTab={(tab) => setActiveTab(tab)}
+              setActiveTab={(tab) => (tab === 'nueva' ? irNuevaRadicacion() : setActiveTab(tab))}
               filingCount={userFilings.length}
               userRole={user.role}
             />
@@ -564,10 +554,7 @@ export default function App() {
                     setSelectedFiling(record);
                     setActiveTab('evaluacion');
                   }}
-                  onNewFiling={() => {
-                    setEditingFiling(null);
-                    setActiveTab('nueva');
-                  }}
+                  onNewFiling={irNuevaRadicacion}
                   onEditFiling={(record) => {
                     setEditingFiling(record);
                     if (typeof window !== 'undefined') {

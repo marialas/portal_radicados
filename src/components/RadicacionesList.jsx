@@ -104,7 +104,7 @@ export const RadicacionesList = ({
             <CheckCircle2 className="w-6 h-6" />
           </div>
         </div>
-
+        
         <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block">

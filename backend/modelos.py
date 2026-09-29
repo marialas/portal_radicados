@@ -2,17 +2,10 @@ import uuid
 from datetime import datetime, timezone, timedelta, date
 
 
-# ---------------------------------------------------------------------------
-# Días hábiles para el calendario de revisión (lunes a viernes).
-# El revisor tiene 15 días hábiles desde la radicación para evaluar.
-# ---------------------------------------------------------------------------
+# Días hábiles (lun-vie) para el plazo de 15 días del revisor
 
 def _solo_fecha(valor):
-    """Acepta ISO str, date o datetime y devuelve date en UTC (o None).
-
-    Siempre en UTC para que backend y frontend calculen idéntico:
-    un ISO de madrugada UTC no debe cambiar de día según la zona local.
-    """
+    """ISO/date/datetime a date UTC (o None)."""
     if not valor:
         return None
     if isinstance(valor, datetime):
@@ -61,7 +54,7 @@ def retroceder_dias_habiles(fecha, n):
 
 
 def dias_habiles_entre(desde, hasta):
-    """Días hábiles en (desde, hasta]: cuántos faltan desde `desde` hasta `hasta`."""
+    """Hábiles en (desde, hasta]."""
     c = 0
     d = desde
     while d < hasta:
@@ -79,17 +72,12 @@ def fecha_limite_revision(fecha_radicacion_iso):
 
 
 def dias_habiles_restantes(fecha_limite, hoy=None):
-    """COMPAT: ahora delega en días calendario exactos (ver dias_restantes)."""
+    """Compat: delega en dias_restantes."""
     return dias_restantes(fecha_limite, hoy)
 
 
 def dias_restantes(fecha_limite, hoy=None):
-    """Días CALENDARIO exactos que faltan (negativo si venció).
-
-    El conteo que ve el usuario cuadra con el calendario: hoy 28 sep y
-    límite 12 oct → 14 (no 10 hábiles). El límite sigue siendo
-    +15 días hábiles desde la radicación; solo el conteo es exacto.
-    """
+    """Días calendario exactos restantes (negativo si venció)."""
     hoy = hoy or datetime.now(timezone.utc).date()
     if not fecha_limite:
         return None
@@ -97,12 +85,12 @@ def dias_restantes(fecha_limite, hoy=None):
 
 
 def fecha_en_que_faltan(fecha_limite, n):
-    """Fecha calendario en la que faltan exactamente n días para el límite."""
+    """Fecha en que faltan n días para el límite."""
     return fecha_limite - timedelta(days=n)
 
 
 CATALOGO_21_DOCUMENTOS = [
-    # 1. Documentos de Diseño (A)
+    # A. Diseño
     {
         "id": 1, "code": "A1", "name": "Diseño fotométrico aprobado",
         "category": "diseno", "categoryName": "Documentos de Diseño",
@@ -145,7 +133,7 @@ CATALOGO_21_DOCUMENTOS = [
         "required": True, "folderGroup": "B_Certificaciones",
         "description": "Conforme al formato 4.3.7.A del RETILAP. Formato oficial de declaración firmada por el diseñador eléctrico."
     },
-    # 2. Luminarias y Materiales (B)
+    # B. Luminarias
     {
         "id": 8, "code": "B8", "name": "Carta de garantía de luminarias",
         "category": "luminarias", "categoryName": "Luminarias y Materiales",
@@ -188,7 +176,7 @@ CATALOGO_21_DOCUMENTOS = [
         "required": True, "folderGroup": "B_Certificaciones",
         "description": "Certificación de postes de concreto o metálicos (si aplica en el alcance)."
     },
-    # 3. Documentos del Constructor (C)
+    # C. Constructor
     {
         "id": 15, "code": "C15", "name": "Cédula de ciudadanía del constructor",
         "category": "constructor", "categoryName": "Documentos del Constructor",
@@ -213,7 +201,7 @@ CATALOGO_21_DOCUMENTOS = [
         "required": True, "folderGroup": "B_Certificaciones",
         "description": "Conforme al formato 4.3.7.B del RETILAP y formato 4.3.6.2 del RETIE. Formato de declaración juramentada de la correcta ejecución de la obra."
     },
-    # 4. Dictámenes y Permisos (D)
+    # D. Dictámenes
     {
         "id": 19, "code": "D19", "name": "Dictamen RETIE",
         "category": "dictamenes", "categoryName": "Dictámenes y Permisos",
@@ -234,7 +222,7 @@ CATALOGO_21_DOCUMENTOS = [
         "required": True, "folderGroup": "D_Inventario",
         "description": "Paz y salvo o recibo oficial de intervención de espacio público emitido por la alcaldía."
     },
-    # 5. Otros
+    # Otros
     {
         "id": 22, "code": "CAUE", "name": "CAUE — Costo Anual Uniforme Equivalente",
         "category": "otros", "categoryName": "Otros",

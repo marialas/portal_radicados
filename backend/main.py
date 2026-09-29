@@ -62,9 +62,7 @@ MIME_PERMITIDOS = {
 }
 MAX_TAMANIO_BYTES = 50 * 1024 * 1024
 
-# Extensiones aceptadas (el navegador no siempre reporta el MIME correcto:
-# los .dwg/.dxf llegan como "" u "application/octet-stream" según el equipo,
-# y antes eso tumbaba la radicación con 400 aunque el archivo fuera válido).
+# Extensiones válidas (respaldo al MIME que el navegador a veces no reporta)
 EXTENSIONES_PERMITIDAS = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".dwg", ".dxf"}
 
 
@@ -164,7 +162,7 @@ async def revisar_vencimientos():
         return notificados
     ahora = datetime.now(timezone.utc)
     hoy = ahora.date()
-    # 8:00 a.m. hora Colombia (UTC-5) para el recordatorio diario
+    # 8 a.m. Colombia (UTC-5) para el recordatorio diario
     hora_colombia = ahora.astimezone(timezone(timedelta(hours=-5))).hour
     for r in radicaciones_db:
         if r.get("estado") == "Aprobado":
@@ -190,7 +188,7 @@ async def revisar_vencimientos():
                 if ok:
                     flags["8"] = datetime.now(timezone.utc).isoformat()
                     notificados.append({"numeroRadicado": numero, "diasRestantes": rest, "aviso": "8 dias"})
-            # Vencido sin aprobar: una vez al día a las 8 a.m. hasta aprobar
+            # Vencido: un aviso diario a las 8 a.m. hasta aprobar
             if rest < 0 and ya_avisado_4:
                 ultima = _solo_fecha(flags.get("diaria"))
                 if hora_colombia >= 8 and (ultima is None or ultima < hoy):
@@ -251,7 +249,7 @@ async def lifespan(app: FastAPI):
             print(f"[STARTUP] DB local tiene {len(radicaciones_db)} radicaciones, omitiendo carga SP")
     else:
         print("[STARTUP] GraphService NO DISPONIBLE - grafos.py no importado")
-    # Vigilancia de vencimientos (15 días hábiles): avisa a los 8 y 4 días
+    # Vigilancia de vencimientos: avisa a los 8 y 4 días
     asyncio.create_task(vigilar_vencimientos())
     yield
 
@@ -259,8 +257,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Portal INTECOAL - Radicación Técnica", lifespan=lifespan)
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
-# SEGURIDAD: orígenes explícitos (nunca "*" salvo opt-in). En local se
-# permiten los puertos de desarrollo; en producción los define el entorno.
+# SEGURIDAD: orígenes explícitos (nunca "*" salvo opt-in)
 cors_origins = ["http://localhost:5173", "http://localhost:8000"]
 if FRONTEND_URL and FRONTEND_URL not in cors_origins:
     cors_origins.append(FRONTEND_URL)
@@ -280,12 +277,8 @@ app.add_middleware(
 )
 
 
-# ---------------------------------------------------------------------------
-# Autenticación: todos los endpoints de negocio exigen JWT (emitido por
-# /api/auth/msal-verify tras login M365). El email/rol NUNCA se aceptan
-# del cliente sin verificar: antes viajaban como query params falsificables.
-# Para <img>/<iframe> (visor) se acepta ?token= como alternativa al header.
-# ---------------------------------------------------------------------------
+# Auth: endpoints de negocio exigen JWT; email/rol salen del token.
+# El visor (<img>/<iframe>) acepta ?token= como alternativa.
 
 def _extraer_token(request: Request) -> Optional[str]:
     auth = request.headers.get("Authorization", "")
@@ -409,9 +402,7 @@ async def listar_radicaciones(
     if tipo and tipo != "TODOS":
         resultados = [r for r in resultados if (r.get("metadata") or {}).get("tipoEntrega") == tipo]
 
-    # Último número del consecutivo GLOBAL (todas las cuentas, sin filtrar):
-    # el contratista solo recibe sus radicados en `data`, pero necesita saber
-    # cuál es el último global para mostrar/ocultar "Eliminar" correctamente.
+    # Último consecutivo global (para mostrar/ocultar "Eliminar")
     ultimo = max(radicaciones_db, key=lambda r: r.get("numeroRadicado", ""), default=None)
     return {
         "data": resultados,
@@ -465,10 +456,7 @@ async def eliminar_radicacion(identificador: str, usuario: dict = Depends(requer
     if not email:
         raise HTTPException(status_code=403, detail="Falta el correo del solicitante.")
 
-    # Buscar el radicado por id o por número (el frontend envía `identificador`,
-    # que puede ser cualquiera de los dos; antes se buscaba por una clave
-    # "identificador" inexistente y se llamaba a guardar_radicaciones() que
-    # no existe -> siempre 500).
+    # Busca por id o por número de radicado
     radicacion = next(
         (
             r for r in radicaciones_db
@@ -481,14 +469,12 @@ async def eliminar_radicacion(identificador: str, usuario: dict = Depends(requer
     if not radicacion:
         raise HTTPException(status_code=404, detail="Radicado no encontrado.")
 
-    # Verificar que el contratista sea el creador
+    # Solo el creador puede eliminar
     creador = (radicacion.get("creadorEmail", "") or radicacion.get("metadata", {}).get("creadorEmail", "") or "")
     if creador.lower().strip() != email.lower().strip():
         raise HTTPException(status_code=403, detail="Solo el contratista que creó el radicado puede eliminarlo.")
 
-    # Verificar que sea el ÚLTIMO número del consecutivo a nivel global
-    # (de todas las cuentas). Si existe un número mayor, los anteriores
-    # dejan de ser eliminables automáticamente.
+    # Solo el último consecutivo global es eliminable
     ultimo_global = max(radicaciones_db, key=lambda r: r.get("numeroRadicado", ""), default=None)
 
     if ultimo_global is None or ultimo_global.get("id") != radicacion.get("id"):
@@ -497,11 +483,11 @@ async def eliminar_radicacion(identificador: str, usuario: dict = Depends(requer
             detail="Solo se puede eliminar el último radicado creado. Ya existe un radicado más reciente."
         )
 
-    # No se pueden eliminar radicados aprobados
+    # No se eliminan aprobados
     if radicacion.get("estado") == "Aprobado":
         raise HTTPException(status_code=403, detail="No se puede eliminar un radicado ya aprobado.")
 
-    # Eliminar
+    # Elimina registro, archivos y SharePoint
     radicaciones_db.remove(radicacion)
     guardar_db()
 
@@ -509,7 +495,7 @@ async def eliminar_radicacion(identificador: str, usuario: dict = Depends(requer
     rid = radicacion.get("id", "")
 
     async def _limpieza():
-        # Borrar archivos locales
+        # Borra carpeta local y SharePoint en background
         try:
             shutil.rmtree(UPLOADS_DIR / rid, ignore_errors=True)
         except Exception as e:
@@ -528,10 +514,7 @@ async def eliminar_radicacion(identificador: str, usuario: dict = Depends(requer
 
 @app.post("/api/radicacion/nueva")
 async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_usuario)):
-    # OJO: Starlette limita cada parte del multipart a 1024KB por defecto
-    # (max_part_size). Sin estos parámetros, cualquier PDF real (>1MB)
-    # moría aquí con "Part exceeded maximum size of 1024KB" antes de que
-    # nuestro código pudiera validarlo contra los 50MB permitidos.
+    # Starlette limita cada parte a 1MB: se amplía a 50MB
     form = await request.form(max_files=5000, max_fields=5000, max_part_size=MAX_TAMANIO_BYTES)
 
     text_fields = {}
@@ -568,9 +551,7 @@ async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_us
     slot_sub_files = {}
     for field_name, upload_file in uploaded_files.items():
         if field_name.startswith('subFile_'):
-            # Sub-archivo predefinido (ej. CEAP 25a-25d): subFile_{docId}_{subId}
-            # ANTES no se recibían: el frontend los seleccionaba pero nunca los
-            # enviaba, así que el #25 CEAP llegaba vacío a evaluación y a SP.
+            # Sub-archivo predefinido: subFile_{docId}_{subId} (ej. CEAP)
             try:
                 _, doc_id_s, sub_id = field_name.split('_', 2)
                 doc_id = int(doc_id_s)
@@ -723,7 +704,7 @@ async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_us
 
     documentos_ok = sum(1 for a in archivos_estado if a["status"] in ("CUMPLE", "N/A"))
 
-    # SEGURIDAD: la identidad del creador la impone el JWT, no el formulario
+    # Creador según JWT (no se acepta del formulario)
     meta["creadorEmail"] = (usuario.get("email") or "").lower().strip()
     meta["creadorName"] = usuario.get("name") or meta.get("creadorName", "") or meta.get("responsable", "")
 
@@ -735,8 +716,7 @@ async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_us
                 archivo["subFiles"].extend(subs)
                 break
 
-    # Sub-archivos predefinidos (ej. CEAP 25a-25d): con archivos reales el
-    # documento queda CUMPLE (salvo N/A) para que cuente en el cumplimiento
+    # Con archivos reales queda CUMPLE (salvo N/A)
     for doc_id, subs in slot_sub_files.items():
         for archivo in archivos_estado:
             if archivo["docId"] == doc_id:
@@ -785,9 +765,7 @@ async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_us
 
     print(f"[MAIN] graph_service={'DISPONIBLE' if graph_service else 'NULL'}")
 
-    # Correos en BACKGROUND para no bloquear la respuesta.
-    # A SharePoint NO se sube nada al radicar: la subida (fila +
-    # carpetas + archivos) ocurre únicamente cuando el revisor APRUEBA.
+    # Correos en background; a SharePoint solo sube lo APROBADO
     if graph_service:
         async def _post_creacion(rad):
             try:
@@ -808,10 +786,7 @@ async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_us
 
 @app.post("/api/radicacion/{identificador}/archivo")
 async def subir_archivo(request: Request, identificador: str, usuario: dict = Depends(requerir_usuario)):
-    # Se parsea el multipart manualmente con límites ampliados: los
-    # parámetros FastAPI (UploadFile = File(...)) usan el límite interno
-    # de 1024KB por parte y rechazaban archivos reales con
-    # "Part exceeded maximum size of 1024KB".
+    # Multipart manual con límite 50MB por parte
     form = await request.form(max_files=100, max_fields=100, max_part_size=MAX_TAMANIO_BYTES)
     doc_id_raw = form.get("docId")
     archivo = form.get("archivo")
@@ -878,8 +853,7 @@ async def subir_archivo(request: Request, identificador: str, usuario: dict = De
                 if "subFiles" not in doc:
                     doc["subFiles"] = []
                 if sub_id:
-                    # Ranura predefinida (ej. CEAP 25a-25d): se actualiza en
-                    # su sitio para poder verla y evaluarla por separado
+                # Ranura predefinida: se actualiza en su sitio
                     slot = next((s for s in doc["subFiles"] if str(s.get("subId")) == sub_id), None)
                     datos_slot = {
                         "subId": sub_id,
@@ -926,7 +900,7 @@ async def subir_archivo(request: Request, identificador: str, usuario: dict = De
     radicacion["fechaActualizacion"] = datetime.now(timezone.utc).isoformat()
     guardar_db()
 
-    # Sin sincronización a SharePoint: solo se sube al APROBAR.
+    # Sin sync a SharePoint (solo al APROBAR)
     return {"ok": True, "data": radicacion}
 
 
@@ -976,8 +950,7 @@ async def subir_formato(request: Request, identificador: str, usuario: dict = De
     radicacion["fechaActualizacion"] = datetime.now(timezone.utc).isoformat()
     guardar_db()
 
-    # El formato se sube a SharePoint SOLO desde su botón "Subir" (este
-    # endpoint), suelto en la raíz de la carpeta del radicado.
+    # El formato sube a SharePoint solo con su botón "Subir"
     if graph_service:
         numero = radicacion.get("numeroRadicado", "")
         formato_guardado = radicacion["formatos"][-1]
@@ -1005,8 +978,7 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado, usuar
     if not radicacion:
         raise HTTPException(status_code=404, detail="Radicación no encontrada")
 
-    # SEGURIDAD: el dictamen final solo lo emite el revisor; el contratista
-    # solo puede devolver a revisión. La identidad del historial es del JWT.
+    # Dictamen final: solo revisor. Identidad del historial: JWT.
     if body.estado in ("Aprobado", "Con Observaciones") and usuario.get("role") != "interventor":
         raise HTTPException(status_code=403, detail="Solo el Responsable de Revisión puede emitir este dictamen.")
     body.usuarioEmail = (usuario.get("email") or "").lower().strip()
@@ -1017,10 +989,7 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado, usuar
     radicacion["observacionesGenerales"] = body.observaciones or ""
 
     if body.archivos:
-        # SEGURIDAD: el localPath SIEMPRE lo impone el servidor. Aceptar el
-        # que envía el cliente permitiría leer archivos arbitrarios del
-        # servidor (LFI) y subirlos a SharePoint. Los docId desconocidos
-        # quedan sin ruta local (se omiten al subir).
+        # LocalPath siempre del servidor (nunca del cliente: LFI)
         local_paths = {a.get("docId"): a.get("localPath", "") for a in (radicacion.get("archivos") or [])}
         for a in body.archivos:
             a["localPath"] = local_paths.get(a.get("docId"), "")
@@ -1045,9 +1014,7 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado, usuar
         "observaciones": body.observaciones or "",
     })
 
-    # Se persiste PRIMERO y se responde de inmediato. Todo lo de red
-    # (SharePoint + correos) va en background para no dejar el botón
-    # "Generar Informe" cargando eternamente.
+    # Persiste primero, responde ya; red en background
     radicacion["m365Synced"] = False
     guardar_db()
     respuesta = {"ok": True, "data": radicacion}
@@ -1057,15 +1024,14 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado, usuar
         obs = body.observaciones or ""
 
         async def _post_estado(numero, estado_ant):
-            # Releer el radicado actualizado (referencia viva de la DB)
+            # Relee el radicado actualizado
             rad = next(
                 (r for r in radicaciones_db if r.get("numeroRadicado") == numero),
                 None,
             )
             if not rad:
                 return
-            # 1) A SharePoint SOLO se sube al APROBAR (fila + carpetas +
-            # archivos). Con Observaciones / En Revisión solo notifican.
+            # 1) SharePoint solo al APROBAR; otros estados solo notifican
             if estado_final == "Aprobado":
                 try:
                     await graph_service.guardar_radicacion_en_sharepoint(rad)
@@ -1079,7 +1045,7 @@ async def actualizar_estado(identificador: str, body: ActualizacionEstado, usuar
                     traceback.print_exc()
             else:
                 print(f"[MAIN] Sin subida a SharePoint para {numero} ({estado_final}): solo se sube al aprobar")
-            # 2) Notificaciones por correo (con timeout, sin bloquear)
+            # 2) Correos con timeout, sin bloquear
             if estado_final != estado_ant:
                 if estado_final in ("Aprobado", "Con Observaciones"):
                     try:
@@ -1168,7 +1134,7 @@ async def actualizar_metadata(identificador: str, body: ActualizacionMetadata, u
     if body.metadata:
         radicacion["metadata"].update(body.metadata)
     if body.archivos:
-        # SEGURIDAD: igual que en /estado, el localPath lo impone el servidor.
+        # LocalPath siempre del servidor (igual que /estado)
         local_paths = {a.get("docId"): a.get("localPath", "") for a in (radicacion.get("archivos") or [])}
         for a in body.archivos:
             a["localPath"] = local_paths.get(a.get("docId"), "")
@@ -1187,12 +1153,11 @@ async def actualizar_metadata(identificador: str, body: ActualizacionMetadata, u
     radicacion["fechaActualizacion"] = datetime.now(timezone.utc).isoformat()
     guardar_db()
 
-    # En modo "solo avance" (borrador del revisor) NO se sincroniza a SharePoint,
-    # NO se registra historial y NO se envían notificaciones: el estado aún no cambia.
+    # Borrador: sin SharePoint, historial ni notificaciones
     if body.soloAvance:
         return {"ok": True, "data": radicacion, "soloAvance": True}
 
-    # Sin sincronización a SharePoint: solo se sube al APROBAR.
+    # Sin sync a SharePoint (solo al APROBAR)
     return {"ok": True, "data": radicacion}
 
 
@@ -1288,7 +1253,7 @@ async def verificar_msal(request: Request):
     dominio = email.split("@")[-1]
     es_interventor = dominio in ("intecoalsas.com", "intecoal.com", "intecoal.com.co")
 
-    # SEGURIDAD: el rol interventor exige dominio INTECOAL aunque se solicite.
+    # Rol interventor exige dominio INTECOAL
     if rol_solicitado == "interventor":
         if not es_interventor:
             raise HTTPException(
@@ -1344,7 +1309,7 @@ async def ver_archivo(
                 if a.get("docId") != doc_id:
                     continue
                 if subId is not None:
-                    # Sub-archivo (ej. CEAP 25a-25d o anexos)
+                    # Sub-archivo (CEAP o anexo) por subId
                     sf = next((s for s in (a.get("subFiles") or []) if str(s.get("subId")) == str(subId)), None)
                     if not sf or not sf.get("localPath"):
                         raise HTTPException(status_code=404, detail="Sub-archivo no encontrado")

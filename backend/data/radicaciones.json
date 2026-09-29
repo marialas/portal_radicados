@@ -36,25 +36,25 @@
       }
     },
     "estado": "Con Observaciones",
-    "documentosOk": 5,
+    "documentosOk": 9,
     "totalDocumentos": 25,
     "fechaRadicacion": "2026-09-28T19:41:59.205464+00:00",
-    "fechaActualizacion": "2026-09-28T19:45:57.043550+00:00",
-    "porcentajeCumplimiento": 20,
+    "fechaActualizacion": "2026-09-29T15:50:57.100790+00:00",
+    "porcentajeCumplimiento": 36,
     "archivos": [
       {
         "docId": 1,
         "docCode": "A1",
         "docName": "Diseño fotométrico aprobado",
-        "fileName": "",
-        "fileSize": 0,
+        "fileName": "01_a1.pdf",
+        "fileSize": 13,
         "fileType": "application/pdf",
-        "uploadDate": "",
-        "status": "PENDIENTE",
+        "uploadDate": "2026-09-29T15:50:57.100731+00:00",
+        "status": "CUMPLE",
         "folderPath": "/Documentos_Radicacion/RAD-2026-022/A_Tecnicos/",
         "notes": "",
         "esManual": false,
-        "localPath": ""
+        "localPath": "C:\\Users\\ASUS\\Documents\\portal_intecoal\\backend\\uploads\\09f7eb1e\\01_a1.pdf"
       },
       {
         "docId": 2,
@@ -102,15 +102,15 @@
         "docId": 5,
         "docCode": "A5",
         "docName": "Plano Asbuilt georreferenciado y firmado",
-        "fileName": "",
-        "fileSize": 0,
-        "fileType": "application/pdf",
-        "uploadDate": "",
-        "status": "PENDIENTE",
+        "fileName": "image.jpg",
+        "fileSize": 43495,
+        "fileType": "image/jpeg",
+        "uploadDate": "2026-09-29T15:48:02.253282+00:00",
+        "status": "CUMPLE",
         "folderPath": "/Documentos_Radicacion/RAD-2026-022/A_Tecnicos/",
         "notes": "",
         "esManual": false,
-        "localPath": ""
+        "localPath": "C:\\Users\\ASUS\\Documents\\portal_intecoal\\backend\\uploads\\09f7eb1e\\image.jpg"
       },
       {
         "docId": 6,
@@ -130,15 +130,15 @@
         "docId": 7,
         "docCode": "A7",
         "docName": "Declaración de cumplimiento RETILAP del diseñador",
-        "fileName": "",
-        "fileSize": 0,
-        "fileType": "application/pdf",
-        "uploadDate": "",
-        "status": "PENDIENTE",
+        "fileName": "VT APTL-1727 V3 modificado.dwg",
+        "fileSize": 30534423,
+        "fileType": "application/octet-stream",
+        "uploadDate": "2026-09-29T15:29:38.450968+00:00",
+        "status": "CUMPLE",
         "folderPath": "/Documentos_Radicacion/RAD-2026-022/B_Certificaciones/",
         "notes": "",
         "esManual": false,
-        "localPath": ""
+        "localPath": "C:\\Users\\ASUS\\Documents\\portal_intecoal\\backend\\uploads\\09f7eb1e\\VT APTL-1727 V3 modificado.dwg"
       },
       {
         "docId": 8,
@@ -214,15 +214,15 @@
         "docId": 13,
         "docCode": "B13",
         "docName": "Certificado de producto — Conectores",
-        "fileName": "",
-        "fileSize": 0,
-        "fileType": "application/pdf",
-        "uploadDate": "",
-        "status": "PENDIENTE",
+        "fileName": "VT APTL-1727 V3 modificado.dwg",
+        "fileSize": 30534423,
+        "fileType": "application/octet-stream",
+        "uploadDate": "2026-09-29T15:41:35.199619+00:00",
+        "status": "CUMPLE",
         "folderPath": "/Documentos_Radicacion/RAD-2026-022/B_Certificaciones/",
         "notes": "",
         "esManual": false,
-        "localPath": ""
+        "localPath": "C:\\Users\\ASUS\\Documents\\portal_intecoal\\backend\\uploads\\09f7eb1e\\VT APTL-1727 V3 modificado.dwg"
       },
       {
         "docId": 14,
@@ -5296,7 +5296,7 @@
     "notifVencimiento": {
       "4": "2026-09-23T21:53:52.821290+00:00",
       "8": "2026-09-23T21:53:52.821290+00:00",
-      "diaria": "2026-09-28T13:21:02.234067+00:00"
+      "diaria": "2026-09-29T14:38:34.848339+00:00"
     }
   },
   {

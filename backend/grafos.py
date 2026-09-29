@@ -95,10 +95,10 @@ class GraphService:
         "D_Inventario", "E_Otros", "F_Documentos_Adicionales",
     ]
 
-    # Subcarpeta dentro de E_Otros para el documento #25 CEAP.
+    # Subcarpeta del #25 CEAP dentro de E_Otros
     CEAP_SUBCARPETA = "Documentos para circuitos exclusivos de AP"
 
-    # Documentos "otros" (CAUE/CANT/CVP) que viven directamente en E_Otros.
+    # Otros directos en E_Otros: CAUE/CANT/CVP
     OTROS_IDS = {22, 23, 24}
     OTROS_CODES = {"CAUE", "CANT", "CVP"}
 
@@ -118,14 +118,12 @@ class GraphService:
         ordenado y trazable.
         """
         original = archivo.get("fileName") or archivo.get("docName") or "documento.pdf"
-        # Si fileName viene sin extensión, conservar el tipo conocido
         code = archivo.get("docCode") or str(archivo.get("docId", "X"))
         try:
             orden = int(archivo.get("docId", 0))
         except Exception:
             orden = 0
         base = self._sanitizar_nombre(original)
-        # Evitar duplicar el código si el original ya lo trae al inicio
         if not base.upper().startswith(str(code).upper()):
             base = f"{code}_{base}"
         return f"{orden:02d}_{base}"
@@ -139,9 +137,7 @@ class GraphService:
         return doc_id == 25 or code == "CEAP"
 
     def _carpeta_destino(self, archivo):
-        # Mapeo por documento (no por folderPath guardado): así los
-        # radicados viejos —con E_SST_Ambiental, Documentos_Adicionales o
-        # CAUE/CANT/CEAP en A_Tecnicos— suben a la estructura nueva.
+        # Por documento (no por ruta guardada): incluye radicados viejos
         try:
             doc_id = int(archivo.get("docId", 0))
         except (TypeError, ValueError):
@@ -150,7 +146,7 @@ class GraphService:
         if self._es_ceap(archivo) or doc_id in self.OTROS_IDS or code in self.OTROS_CODES:
             return "E_Otros"
         if doc_id == 21 or code == "D21":
-            # Recibo de vías: categoría D (dictámenes), junto a D19/D20
+            # D21 va con D19/D20
             return "D_Inventario"
         if archivo.get("esManual"):
             return "F_Documentos_Adicionales"
@@ -164,9 +160,8 @@ class GraphService:
             if candidato in self.SUBCARPETAS:
                 return candidato
             if candidato == "E_SST_Ambiental":
-                return "E_Otros"
-        # Fallback por código: A*->A_Tecnicos ... (la mayoría ya viene
-        # bien en folderPath, esto solo evita que algo caiga a la raíz)
+                return "E_Otros"  # ruta vieja
+        # Fallback por código para no dejar nada en la raíz
         if code.startswith("A"):
             return "A_Tecnicos"
         if code.startswith("B"):
@@ -180,9 +175,7 @@ class GraphService:
         return "F_Documentos_Adicionales"
 
     async def sincronizar_a_sharepoint(self, radicacion):
-        # Compatibilidad: antes existían dos métodos que creaban filas
-        # duplicadas (uno subía archivos y otro no). Ahora hay un único
-        # flujo que crea la fila + carpetas + archivos.
+        # Flujo único (antes duplicaba filas): fila + carpetas + archivos
         return await self.guardar_radicacion_en_sharepoint(radicacion)
 
     @staticmethod
@@ -250,16 +243,13 @@ class GraphService:
         base = await self._drive_url()
 
         async with httpx.AsyncClient(timeout=30.0) as cliente:
-            # Cadena completa: Documentos_Radicacion / {codigo} / {sub}
-            # Antes solo se intentaba crear {codigo}/{sub} sin crear el
-            # padre, por lo que Graph respondía 404 y nunca quedaba la
-            # estructura de categorías.
+            # Crea padre e hijas (sin padre Graph responde 404)
             await self._asegurar_carpeta(cliente, headers, base, "", self.RAIZ)
             await self._asegurar_carpeta(cliente, headers, base, self.RAIZ, codigo)
             padre = f"{self.RAIZ}/{codigo}"
             for sub in self.SUBCARPETAS:
                 await self._asegurar_carpeta(cliente, headers, base, padre, sub)
-            # Subcarpeta anidada del #25 CEAP dentro de E_Otros
+            # Subcarpeta anidada del #25 CEAP
             await self._asegurar_carpeta(
                 cliente, headers, base,
                 f"{padre}/E_Otros", self.CEAP_SUBCARPETA,
@@ -276,7 +266,7 @@ class GraphService:
                 return True
             print(f"[GRAPH] Error subiendo {rel_path}: {resp.status_code} {resp.text[:200]}")
             return False
-        # Sesión de subida por fragmentos de 5MB
+        # Archivos >4MB: subida por fragmentos de 5MB
         url_sesion = f"{base}/root:/{rel_path}:/createUploadSession"
         resp = await cliente.post(url_sesion, headers={**headers_auth, "Content-Type": "application/json"}, json={})
         if resp.status_code != 200:
@@ -315,10 +305,7 @@ class GraphService:
         subidos = 0
         omitidos = 0
         async with httpx.AsyncClient(timeout=120.0) as cliente:
-            # 1) Documentos del expediente (con nombre ordenado + carpeta
-            # de su categoría). Se sube todo lo que tenga archivo local,
-            # sin importar si el revisor lo marcó CUMPLE o no: lo que
-            # importa es custodiar lo radicado.
+            # 1) Documentos con archivo local (se custodian todos)
             for a in radicacion.get("archivos", []):
                 local_path = (a.get("localPath") or "").strip()
                 file_name = (a.get("fileName") or "").strip()
@@ -345,7 +332,7 @@ class GraphService:
                 subcarpeta = self._carpeta_destino(a)
                 destino = self._nombre_ordenado(a)
                 if self._es_ceap(a):
-                    # #25 CEAP -> E_Otros/Documentos para circuitos exclusivos de AP/
+                    # CEAP a su subcarpeta anidada
                     rel = f"{self.RAIZ}/{codigo}/{subcarpeta}/{self.CEAP_SUBCARPETA}/{destino}"
                 else:
                     rel = f"{self.RAIZ}/{codigo}/{subcarpeta}/{destino}"
@@ -357,7 +344,7 @@ class GraphService:
                     print(f"[GRAPH] Excepcion subiendo {rel}: {e}")
                     omitidos += 1
 
-                # Anexos / sub-archivos (CEAP y extras del contratista)
+                # Anexos y sub-archivos
                 for sf in a.get("subFiles", []) or []:
                     sf_local = (sf.get("localPath") or "").strip()
                     if not sf_local:
@@ -386,17 +373,13 @@ class GraphService:
                     except Exception as e:
                         print(f"[GRAPH] Excepcion subiendo {rel_sf}: {e}")
 
-            # NOTA: los formatos (4.3.7 C) NO se incluyen en la subida por
-            # APROBACIÓN: solo se suben con su botón Subir
-            # (subir_formato_a_sharepoint), sueltos en la raíz del radicado.
+            # Formatos no incluidos: solo suben con su botón Subir
 
         print(f"[GRAPH] Subida {codigo}: {subidos} archivos OK, {omitidos} omitidos")
         return {"subidos": subidos, "omitidos": omitidos}
 
     def _nombre_seguro_raiz(self, nombre):
-        # Para archivos sueltos en la raíz del radicado (Formato 4.3.7 C):
-        # solo se quitan caracteres ilegales en SharePoint, se conservan
-        # espacios, puntos y paréntesis del nombre original.
+        # Nombre seguro para raíz: conserva espacios y puntos
         seguro = "".join(c for c in str(nombre or "") if c not in '/\\?%*:|"<>').strip() or "formato.pdf"
         if not seguro.lower().endswith(".pdf"):
             seguro += ".pdf"
@@ -933,9 +916,7 @@ class GraphService:
                     f"SharePoint rechazó la fila de la lista ({resp.status_code}): {resp.text[:300]}"
                 )
 
-        # Flujo único: fila + estructura de carpetas por categorías +
-        # archivos con nombre ordenado. Antes este método SOLO creaba la
-        # fila y nunca subía carpetas/archivos.
+        # Fila + carpetas + archivos en un solo flujo
         resumen = {"fila": f"{numero} ({estado_sp})", "carpetas": "ok", "archivos": {}}
         try:
             await self._crear_carpeta_proyecto(numero)

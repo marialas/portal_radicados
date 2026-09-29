@@ -16,7 +16,7 @@ import { MembreteRecibo, FranjaCorporativa } from './MembreteCorporativo';
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
-// Firma fija del modelo (tal cual el documento original)
+// Firma fija del modelo
 const FIRMA_NOMBRE = 'VICTOR JAIME CASTAÑO ACOSTA';
 const FIRMA_CARGO = 'Director de Interventoría.';
 
@@ -45,13 +45,12 @@ export const ReciboTecnico = ({
   const [cuerpo, setCuerpo] = useState(() => saved.cuerpo ?? '');
   const [titulo, setTitulo] = useState(() => saved.titulo ?? '');
   const [senor, setSenor] = useState(() => saved.senor ?? '');
-  // Nunca entra en edición solo: siempre se muestra como está guardado
-  // y solo se edita pulsando Editar (igual que el Formato C)
+  // Sin auto-edición: solo con el botón Editar
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // Una vez subido, el documento queda bloqueado: no se puede volver a editar
+  // Subido = bloqueado contra edición
   useEffect(() => {
     if (yaSubido) setEditing(false);
   }, [yaSubido]);
@@ -87,13 +86,12 @@ export const ReciboTecnico = ({
 
   const municipio = meta.municipio || 'Andalucía';
   const proyecto = meta.nombreProyecto || 'Parque Principal Vicente H. Cruz';
-  // Señor y título: automáticos por radicado pero editables
+  // Señor y título: auto pero editables
   const tituloAuto = `RECIBO TÉCNICO PROYECTO DE ILUMINACIÓN ${proyecto.toUpperCase()} DEL MUNICIPIO DE ${municipio.toUpperCase()}.`;
   const senorAuto = meta.responsable || meta.contratista || 'Elbert Lopez';
   const tituloVer = titulo || tituloAuto;
   const senorVer = senor || senorAuto;
-  // La fecha se actualiza día a día hasta que se SUBE el recibo; una vez
-  // subido se congela (fechaCongelada) y ya no cambia.
+  // Fecha viva hasta subir; luego se congela
   const fechaTexto = `${municipio}, ${saved.fechaCongelada || fechaModelo()}`;
   const cuerpoParrafos = (cuerpo || '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
 
@@ -124,7 +122,7 @@ export const ReciboTecnico = ({
             cuerpo,
             titulo: titulo || undefined,
             senor: senor || undefined,
-            // Si ya se congeló al subir, se conserva; si no, sigue viva
+            // Conserva fecha congelada si existe
             fechaCongelada: saved.fechaCongelada || undefined,
             fechaActualizacion: new Date().toISOString(),
             actualizadoPor: currentUser?.email || ''
@@ -145,8 +143,7 @@ export const ReciboTecnico = ({
   const handleUpload = async () => {
     if (!canvasRef.current || !filing) return;
     setUploading(true);
-    // Se congela la fecha visible en este momento: desde ahora el
-    // documento muestra siempre esta fecha aunque pasen los días
+    // Congela la fecha visible al subir
     const fechaAlSubir = saved.fechaCongelada || fechaModelo();
     const origGetCS = window.CSSStyleDeclaration.prototype.getPropertyValue;
     try {
@@ -209,9 +206,7 @@ export const ReciboTecnico = ({
         }
       };
       if (onUpdateFiling) {
-        // Persiste la fecha congelada y refresca formatos del radicado
-        // (el endpoint /formato ya guardó el PDF: skipSync no aplica aquí
-        // porque onUpdateFiling de este módulo solo toca metadata local)
+        // Persiste fecha congelada y refresca formatos
         await onUpdateFiling(conFechaCongelada);
       }
       alert(`Recibo Técnico subido a SharePoint como "${fileName}" (suelto en la carpeta del radicado)`);
