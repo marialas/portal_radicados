@@ -18,6 +18,7 @@ import { InformeRecibidoConformidad } from './components/InformeRecibidoConformi
 import { Formato437C } from './components/Formato437C';
 import { ReciboTecnico } from './components/ReciboTecnico';
 import { CalendarioRevision } from './components/CalendarioRevision';
+import { ManualUsuario } from './components/ManualUsuario';
 import { EvaluacionRadicacion } from './components/EvaluacionRadicacion';
 import { LoginForm } from './components/LoginForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -153,6 +154,11 @@ export default function App() {
 
   // Restricciones de rol por pestaña
   useEffect(() => {
+    // El manual ahora es ventana emergente: redirige la pestaña vieja guardada
+    if (activeTab === 'manual') {
+      setActiveTab('lista');
+      return;
+    }
     if (user.role === 'interventor' && activeTab === 'nueva') {
       setActiveTab('lista');
     }
@@ -346,7 +352,8 @@ export default function App() {
           setFilings(json.data);
         }
         setUltimoGlobal(json.ultimoGlobal || null);
-      } else if (retryCount < 3) {
+      } else if (res.status !== 401 && retryCount < 3) {
+        // 401 = sin sesión: apiFetch ya limpió y redirige; no reintentar
         await new Promise(r => setTimeout(r, 3000));
         fetchFilings(retryCount + 1);
       }
@@ -464,6 +471,9 @@ export default function App() {
 
   const [syncingId, setSyncingId] = useState(null);
 
+  // Manual de usuario como ventana emergente (disponible en ambos roles)
+  const [manualOpen, setManualOpen] = useState(false);
+
   // Reintento manual de subida (muestra el motivo si falla)
   const handleRetrySync = async (record) => {
     if (!record || syncingId) return;
@@ -499,7 +509,7 @@ export default function App() {
         </main>
       ) : !user.isAuthenticated ? (
         /* Formulario de Autenticación Principal (Sin Header Superior) */
-        <main className="flex-1 min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-[#1A1D24] sm:bg-[#EAEAEA]">
+        <main className="flex-1 h-screen overflow-hidden flex items-center justify-center p-3 sm:p-4 bg-[#1A1D24] sm:bg-[#EAEAEA]">
           <LoginForm onLoginSuccess={handleLoginSuccess} externalError={msalAuthError} />
         </main>
       ) : (
@@ -511,6 +521,7 @@ export default function App() {
             m365Config={m365Config}
             onOpenLogin={() => {}}
             onLogout={handleLogout}
+            onOpenManual={() => setManualOpen(true)}
             filingCount={userFilings.length}
           />
 
@@ -679,6 +690,13 @@ export default function App() {
             </ErrorBoundary>
           </main>
         </div>
+
+        {manualOpen && (
+          <ManualUsuario
+            userRole={user.role}
+            onClose={() => setManualOpen(false)}
+          />
+        )}
       </>
       )}
     </div>

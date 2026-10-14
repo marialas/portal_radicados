@@ -470,33 +470,70 @@ class GraphService:
 <p style="font-size:11px;color:#999;">INTECOAL SAS — Interventoría Técnica</p>
 </body></html>"""
 
-    async def _enviar_correo(self, destino, asunto, cuerpo, adjuntos=None):
+    def _remitente_municipio(self, municipio):
+        """Remitente según municipio (respaldo: correo general).
+
+        OJO: el buzón debe existir en el tenant; si no, Graph rechaza
+        el envío y se registra en logs (el flujo no se interrumpe).
+        """
+        return self._correo_municipio(municipio) or self.sender_email
+
+    def _copia_municipio(self, municipio, destino):
+        """Lista con el correo municipal (sin duplicar al destinatario)."""
+        correo = self._correo_municipio(municipio)
+        if correo and destino and correo.lower() == destino.lower():
+            return []
+        return [correo] if correo else []
+
+    async def _enviar_correo(self, destino, asunto, cuerpo, adjuntos=None, para_extra=None, remitente=None):
         if not destino:
             return False
         token = await self._obtener_token()
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        remitente = remitente or self.sender_email
+        destinatarios = [{"emailAddress": {"address": destino}}]
+        for extra in para_extra or []:
+            if extra and extra.lower() != destino.lower():
+                destinatarios.append({"emailAddress": {"address": extra}})
         mensaje = {
             "message": {
                 "subject": asunto,
                 "body": {"contentType": "HTML", "content": cuerpo},
-                "from": {"emailAddress": {"address": self.sender_email}},
-                "toRecipients": [{"emailAddress": {"address": destino}}],
+                "from": {"emailAddress": {"address": remitente}},
+                "toRecipients": destinatarios,
             }
         }
         if adjuntos:
             mensaje["message"]["attachments"] = adjuntos
-        url = f"https://graph.microsoft.com/v1.0/users/{self.sender_email}/sendMail"
+        url = f"https://graph.microsoft.com/v1.0/users/{remitente}/sendMail"
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=30.0)) as cliente:
             try:
                 resp = await cliente.post(url, headers=headers, json=mensaje)
-                print(f"[GRAPH] Correo enviado a {destino} | status={resp.status_code}")
-                return resp.status_code == 202
+                print(f"[GRAPH] Correo de {remitente} a {destino} | status={resp.status_code}")
+                if resp.status_code not in (200, 202):
+                    print(f"[GRAPH] Detalle: {resp.text[:300]}")
+                return resp.status_code in (200, 202)
             except Exception as e:
                 print(f"[GRAPH] Error enviando correo a {destino}: {e}")
                 return False
 
     def _revisor_email(self):
         return self.notification_recipient
+
+    def _correo_municipio(self, municipio):
+        """Correo del municipio (para segunda notificación del calendario)."""
+        m = self._normalizar_municipio(municipio)
+        if "tulua" in m:
+            return "tulua@intecoalsas.com"
+        if "andalucia" in m:
+            return "andalucia@intecoalsas.com"
+        if "san pedro" in m:
+            return "sanpedro@intecoalsas.com"
+        if "calima" in m:
+            return "calima@intecoalsas.com"
+        if "villavicencio" in m:
+            return "villavicencio@intecoalsas.com"
+        return None
 
     def _contratista_email(self, radicacion):
         meta = radicacion.get("metadata", {})
@@ -528,7 +565,8 @@ class GraphService:
         """
         cuerpo = self._plantilla_correo("INTECOAL SAS — Nuevo Radicado para Revisar", interno, municipio)
         adj = self._adjunto_logo(municipio)
-        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None)
+        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None,
+                                  self._copia_municipio(municipio, destino))
 
     async def enviar_correo_nuevo_radicado_contratista(self, radicacion):
         """Notifica al contratista que su radicado fue creado y quedó en revisión."""
@@ -549,7 +587,9 @@ class GraphService:
         """
         cuerpo = self._plantilla_correo("INTECOAL SAS — Radicado Registrado", interno, municipio)
         adj = self._adjunto_logo(municipio)
-        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None)
+        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None,
+                                  self._copia_municipio(municipio, destino),
+                                  self._remitente_municipio(municipio))
 
     async def enviar_correo_estado(self, radicacion, estado_anterior, observaciones):
         """Notifica al contratista el resultado de la evaluación (Aprobado / Con Observaciones)."""
@@ -573,7 +613,9 @@ class GraphService:
         """
         cuerpo = self._plantilla_correo("INTECOAL SAS — Resultado de Evaluación", interno, municipio)
         adj = self._adjunto_logo(municipio)
-        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None)
+        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None,
+                                  self._copia_municipio(municipio, destino),
+                                  self._remitente_municipio(municipio))
 
     async def enviar_correo_reesubido_revisor(self, radicacion):
         """Notifica al revisor que el contratista reenvió/actualizó el radicado y hay trabajo pendiente por revisar."""
@@ -594,7 +636,8 @@ class GraphService:
         """
         cuerpo = self._plantilla_correo("INTECOAL SAS — Radicado pendiente de Revisión", interno, municipio)
         adj = self._adjunto_logo(municipio)
-        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None)
+        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None,
+                                  self._copia_municipio(municipio, destino))
 
     async def enviar_correo_reenvio_contratista(self, radicacion):
         """Notifica al contratista que su radicado editado fue subido correctamente y quedó en revisión."""
@@ -615,15 +658,24 @@ class GraphService:
         """
         cuerpo = self._plantilla_correo("INTECOAL SAS — Radicado Actualizado", interno, municipio)
         adj = self._adjunto_logo(municipio)
-        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None)
+        await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None,
+                                  self._copia_municipio(municipio, destino),
+                                  self._remitente_municipio(municipio))
 
     async def enviar_correo_vencimiento(self, radicacion, dias_restantes, fecha_limite):
-        """Avisa al revisor que un radicado está por vencer (8 / 4 días hábiles)."""
+        """Avisa al revisor que un radicado está por vencer (8 / 4 días hábiles).
+
+        Doble envío simultáneo: correo general (revisor) + correo del
+        municipio del radicado, ambos con el número de radicado.
+        """
         destino = self._revisor_email()
         if not destino:
             print("[GRAPH] Sin destinatario revisor (M365_NOTIFICATION_RECIPIENT), no se envía aviso de vencimiento")
             return False
         meta = radicacion.get("metadata", {})
+        municipio = meta.get("municipio", "")
+        copia_municipio = self._correo_municipio(municipio)
+        extras = [copia_municipio] if copia_municipio else []
         numero = radicacion.get("numeroRadicado", "?")
         municipio = meta.get("municipio", "")
         if dias_restantes is not None and dias_restantes < 0:
@@ -646,7 +698,7 @@ class GraphService:
         """
         cuerpo = self._plantilla_correo("INTECOAL SAS — Alerta de vencimiento de revisión", interno, municipio)
         adj = self._adjunto_logo(municipio)
-        return await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None)
+        return await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None, extras)
 
     def obtener_config(self):
         return {

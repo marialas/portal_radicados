@@ -21,7 +21,7 @@ copy .env.example .env          # Windows (Linux/Mac: cp .env.example .env)
 uvicorn backend.main:app --reload --port 8000
 ```
 
-> **Importante:** el backend lee el archivo `.env` en la **raíz** del proyecto (no dentro de `backend/`), mediante `load_dotenv(Path(...).parent.parent / ".env")`. Ver [SECURITY.md](SECURITY.md) para la lista completa de variables.
+> **Importante:** el backend lee el archivo `.env` en la **raíz** del proyecto (no dentro de `backend/`), mediante `load_dotenv(Path(...).parent.parent / ".env")`. Ver [08_SECURITY.md](08_SECURITY.md) para la lista completa de variables.
 
 ## 2. Frontend
 
@@ -54,8 +54,8 @@ npm run dev        # http://localhost:5173
 
 1. Backend arriba en `http://localhost:8000` → `GET /api/health` responde `{"status":"ok"}`.
 2. Abre `http://localhost:5173`, inicia sesión con una cuenta M365.
-3. Los roles se asignan automáticamente según el dominio del correo (ver [FLUJO.md](FLUJO.md)).
+3. Los roles se asignan automáticamente según el dominio del correo (ver [03_FLUJO.md](03_FLUJO.md)).
 
 ---
 
-Siguiente: [FLUJO.md](FLUJO.md) — cómo se trabaja con el sistema.
+Siguiente: [03_FLUJO.md](03_FLUJO.md) — cómo se trabaja con el sistema.

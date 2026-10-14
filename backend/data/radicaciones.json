@@ -36,11 +36,11 @@
       }
     },
     "estado": "Con Observaciones",
-    "documentosOk": 9,
+    "documentosOk": 11,
     "totalDocumentos": 25,
     "fechaRadicacion": "2026-09-28T19:41:59.205464+00:00",
-    "fechaActualizacion": "2026-09-29T15:50:57.100790+00:00",
-    "porcentajeCumplimiento": 36,
+    "fechaActualizacion": "2026-09-29T22:18:32.138591+00:00",
+    "porcentajeCumplimiento": 44,
     "archivos": [
       {
         "docId": 1,
@@ -259,8 +259,8 @@
         "fileName": "formato 4.3.7 C RAD-2026-017.pdf",
         "fileSize": 11691861,
         "fileType": "application/pdf",
-        "uploadDate": "2026-09-28T19:41:59.204689+00:00",
-        "status": "NO CUMPLE",
+        "uploadDate": "2026-09-29T22:18:31.328603+00:00",
+        "status": "CUMPLE",
         "folderPath": "/Documentos_Radicacion/RAD-2026-022/C_Contractuales/",
         "notes": "3 mas",
         "esManual": false,
@@ -399,7 +399,7 @@
         "fileSize": 0,
         "fileType": "application/pdf",
         "uploadDate": "2026-09-28T19:41:59.205191+00:00",
-        "status": "PENDIENTE",
+        "status": "CUMPLE",
         "folderPath": "/Documentos_Radicacion/RAD-2026-022/E_Otros/",
         "notes": "flata un sub archivooo",
         "esManual": false,
@@ -437,6 +437,17 @@
             "uploadDate": "2026-09-28T19:41:59.200611+00:00",
             "localPath": "C:\\Users\\ASUS\\Documents\\portal_intecoal\\backend\\uploads\\09f7eb1e\\CEAP\\CV-Mariana-Cabezas.pdf",
             "status": "CUMPLE"
+          },
+          {
+            "subId": "25c",
+            "subCode": "CEAP-C",
+            "subName": "Memoria de cálculo",
+            "fileName": "WhatsApp Image 2026-09-25 at 10.50.53 AM.jpeg",
+            "fileSize": 20943,
+            "fileType": "image/jpeg",
+            "uploadDate": "2026-09-29T22:18:32.138519+00:00",
+            "localPath": "C:\\Users\\ASUS\\Documents\\portal_intecoal\\backend\\uploads\\09f7eb1e\\CEAP\\Memoria de cálculo",
+            "status": "CUMPLE"
           }
         ]
       }
@@ -469,7 +480,9 @@
       }
     ],
     "m365Synced": false,
-    "notifVencimiento": {}
+    "notifVencimiento": {
+      "8": "2026-10-14T21:11:27.309649+00:00"
+    }
   },
   {
     "id": "846dd29a",
@@ -971,7 +984,10 @@
         "observaciones": ""
       }
     ],
-    "notifVencimiento": {},
+    "notifVencimiento": {
+      "4": "2026-10-14T21:11:28.438883+00:00",
+      "8": "2026-10-14T21:11:28.438883+00:00"
+    },
     "m365Synced": false
   },
   {
@@ -1420,7 +1436,10 @@
         "observaciones": ""
       }
     ],
-    "notifVencimiento": {}
+    "notifVencimiento": {
+      "4": "2026-10-14T21:11:29.252389+00:00",
+      "8": "2026-10-14T21:11:29.252389+00:00"
+    }
   },
   {
     "id": "3d73491c",
@@ -3333,7 +3352,11 @@
       }
     ],
     "m365Synced": false,
-    "notifVencimiento": {}
+    "notifVencimiento": {
+      "4": "2026-10-14T21:11:30.334450+00:00",
+      "8": "2026-10-14T21:11:30.334450+00:00",
+      "diaria": "2026-10-14T22:11:39.331878+00:00"
+    }
   },
   {
     "id": "b2f60092",
@@ -3767,7 +3790,11 @@
         "observaciones": ""
       }
     ],
-    "notifVencimiento": {}
+    "notifVencimiento": {
+      "4": "2026-10-14T21:11:31.438369+00:00",
+      "8": "2026-10-14T21:11:31.438369+00:00",
+      "diaria": "2026-10-14T22:11:41.500329+00:00"
+    }
   },
   {
     "id": "fa7c1a2f",
@@ -5296,7 +5323,7 @@
     "notifVencimiento": {
       "4": "2026-09-23T21:53:52.821290+00:00",
       "8": "2026-09-23T21:53:52.821290+00:00",
-      "diaria": "2026-09-29T14:38:34.848339+00:00"
+      "diaria": "2026-10-14T21:11:32.455752+00:00"
     }
   },
   {
@@ -5678,7 +5705,7 @@
     "notifVencimiento": {
       "4": "2026-09-23T21:53:53.626161+00:00",
       "8": "2026-09-23T21:53:53.626161+00:00",
-      "diaria": "2026-09-29T01:06:36.565714+00:00"
+      "diaria": "2026-10-14T21:11:33.493636+00:00"
     }
   },
   {
@@ -6984,7 +7011,7 @@
     "notifVencimiento": {
       "4": "2026-09-23T21:53:54.398469+00:00",
       "8": "2026-09-23T21:53:54.398469+00:00",
-      "diaria": "2026-09-29T01:06:39.882375+00:00"
+      "diaria": "2026-10-14T21:11:34.622066+00:00"
     }
   },
   {

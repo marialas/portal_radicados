@@ -147,7 +147,7 @@ Se puede añadir en un archivo `public/_redirects` o como redirect en Netlify.
 
 ---
 
-> Para el desarrollo **local**, ver [INICIO-RAPIDO.md](INICIO-RAPIDO.md). Este documento cubre únicamente el despliegue en **producción**.
+> Para el desarrollo **local**, ver [02_INICIO-RAPIDO.md](02_INICIO-RAPIDO.md). Este documento cubre únicamente el despliegue en **producción**.
 
 ## Troubleshooting
 

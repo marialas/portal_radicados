@@ -15,6 +15,7 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
   const [activeRole, setActiveRole] = useState('creador');
   const [errorMsg, setErrorMsg] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showAyuda, setShowAyuda] = useState(false);
 
   const displayError = errorMsg || externalError;
 
@@ -39,11 +40,11 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center p-4 sm:p-6 lg:p-8 font-sans">
+    <div className="w-full flex items-center justify-center font-sans">
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
         
         {/* Encabezado Corporativo */}
-        <div className="bg-[#1E222A] text-white p-6 sm:p-8 border-b-4 border-[#D9CF43] relative overflow-hidden">
+        <div className="bg-[#1E222A] text-white px-5 py-4 border-b-4 border-[#D9CF43] relative overflow-hidden">
           <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-[#D9CF43]/10 rounded-full blur-2xl pointer-events-none" />
           
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -55,7 +56,7 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
                     INTECOAL SAS
                   </span>
                 </div>
-                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight mt-1">
+                <h1 className="text-lg sm:text-xl font-black text-white tracking-tight mt-1">
                   Portal de Autenticación M365
                 </h1>
                 <p className="text-xs text-gray-300 mt-0.5">
@@ -73,7 +74,7 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
           </div>
         </div>
 
-        <div className="p-6 sm:p-8 space-y-6">
+        <div className="px-5 py-4 space-y-4">
           {/* Selección de Perfil Corporativo */}
           <div className="space-y-2">
             <label className="text-xs font-black uppercase tracking-wider text-gray-500 block">
@@ -141,9 +142,9 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
           </div>
 
           {/* Opción A: Autenticación con Microsoft 365 (MSAL SSO) */}
-          <div className="bg-gradient-to-r from-blue-900/10 via-sky-800/10 to-indigo-900/10 border-2 border-blue-500/30 rounded-2xl p-5 space-y-3 relative overflow-hidden shadow-sm">
+          <div className="bg-gradient-to-r from-blue-900/10 via-sky-800/10 to-indigo-900/10 border-2 border-blue-500/30 rounded-2xl p-4 space-y-3 relative overflow-hidden shadow-sm">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center space-x-3.5">
+            <div className="flex items-center space-x-5">
                 <div className="w-10 h-10 bg-white rounded-xl shadow-md border border-gray-200 flex items-center justify-center shrink-0">
                   <svg className="w-6 h-6" viewBox="0 0 23 23" fill="none">
                     <path fill="#f35325" d="M1 1h10v10H1z"/>
@@ -193,6 +194,60 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
                 <div>
                   <span className="font-bold block">Notificación de Autenticación:</span>
                   <span>{displayError}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Mini manual: qué necesita para iniciar (ventana emergente) */}
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={() => setShowAyuda(true)}
+              className="flex items-center space-x-1.5 text-xs font-extrabold text-[#0D0D0D] bg-[#D9CF43]/20 hover:bg-[#D9CF43]/40 border border-[#D9CF43] px-4 py-2 rounded-xl transition-all cursor-pointer"
+            >
+              <HelpCircle className="w-4 h-4" />
+              <span>¿Qué necesito para entrar?</span>
+            </button>
+          </div>
+
+          {showAyuda && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setShowAyuda(false)}>
+              <div
+                className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="bg-[#1E222A] px-5 py-4 flex items-center justify-between shrink-0">
+                  <h3 className="text-white font-black text-sm">Para entrar necesita</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowAyuda(false)}
+                    className="text-gray-300 hover:text-white transition-colors cursor-pointer text-xl leading-none px-1"
+                    title="Cerrar"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="p-5 space-y-4 overflow-y-auto text-xs text-gray-700 leading-relaxed">
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 space-y-1.5">
+                    <p className="font-black text-gray-900 text-sm">Si es Contratista</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>Su correo personal o de empresa.</li>
+                      <li>Si es Gmail, regístrelo gratis como cuenta Microsoft una sola vez.</li>
+                      <li>Elija el perfil Contratista e ingrese con su clave de Microsoft.</li>
+                    </ul>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 space-y-1.5">
+                    <p className="font-black text-gray-900 text-sm">Si es Responsable de Revisión</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>Obligatorio: su correo de la empresa <strong>@intecoalsas.com</strong>.</li>
+                      <li>Elija el perfil Responsable de Revisión e ingrese con su clave.</li>
+                    </ul>
+                  </div>
+                  <div className="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-r-xl">
+                    <strong>Ojo con el correo: </strong>
+                    todo lo que usted suba se guarda con ese correo. Si otro día entra con un correo distinto, sus radicados no le van a aparecer. Entre siempre con el mismo.
+                  </div>
                 </div>
               </div>
             </div>

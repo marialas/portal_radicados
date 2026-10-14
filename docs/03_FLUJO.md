@@ -70,6 +70,8 @@ Contratista            Revisor (Interventoría)
 
 Plantilla plana (sin marco): título, contenido y al final el **logo del municipio** como imagen inline (`backend/assets/correos/logo-{tulua,andalucia,sanpedro,calima,villavicencio,general}`), elegido por el municipio del radicado.
 
+**Remitente y copias por municipio:** las notificaciones al contratista (registrado, resultado, actualizado) salen **desde** el correo municipal; todas las notificaciones de estados agregan en copia al correo municipal con el número de radicado; los avisos del calendario van al general + municipal en simultáneo. Respaldo automático al correo general si el municipio no está en la tabla.
+
 | Evento | Destinatario | Función backend |
 |--------|--------------|-----------------|
 | Nuevo radicado | Revisor | `enviar_correo_nuevo_radicado_revisor` |
@@ -77,8 +79,8 @@ Plantilla plana (sin marco): título, contenido y al final el **logo del municip
 | Resultado de evaluación (Aprobado/Con Observaciones) | Contratista | `enviar_correo_estado` |
 | Radicado reenviado/editado | Revisor | `enviar_correo_reesubido_revisor` |
 | Confirmación de reenvío | Contratista | `enviar_correo_reenvio_contratista` |
-| Faltan 8 / 4 días (una sola vez c/u) | Revisor | `enviar_correo_vencimiento` (vigilancia cada 1 h) |
-| Vencido sin aprobar (diario 8:00 a.m. hasta aprobar) | Revisor | `enviar_correo_vencimiento` (bandera `diaria`) |
+| Faltan 8 / 4 días (una sola vez c/u) | Revisor (general) + correo del municipio en simultáneo | `enviar_correo_vencimiento` (vigilancia cada 1 h) |
+| Vencido sin aprobar (diario 8:00 a.m. hasta aprobar) | Revisor (general) + correo del municipio en simultáneo | `enviar_correo_vencimiento` (bandera `diaria`) |
 
 > Los avisos del calendario son **solo para el revisor**; el contratista no recibe nada de esto. Al aprobarse el radicado se desactivan automáticamente (los aprobados se omiten).
 
@@ -102,4 +104,4 @@ Documentos_Radicacion/{RAD-XXXX-XXX}/
 
 ---
 
-Documentación relacionada: [API.md](API.md) · [SECURITY.md](SECURITY.md)
+Documentación relacionada: [06_API.md](06_API.md) · [08_SECURITY.md](08_SECURITY.md)

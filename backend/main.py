@@ -183,7 +183,7 @@ async def revisar_vencimientos():
                     flags["4"] = marca
                     flags["8"] = flags.get("8") or marca
                     notificados.append({"numeroRadicado": numero, "diasRestantes": rest, "aviso": "4 dias"})
-            elif rest <= 8 and not flags.get("8"):
+            elif rest <= 8 and rest >= 0 and not flags.get("8"):
                 ok = await graph_service.enviar_correo_vencimiento(r, rest, limite.isoformat())
                 if ok:
                     flags["8"] = datetime.now(timezone.utc).isoformat()

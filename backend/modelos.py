@@ -89,6 +89,25 @@ def fecha_en_que_faltan(fecha_limite, n):
     return fecha_limite - timedelta(days=n)
 
 
+def estado_semaforo(restantes, aprobado=False):
+    """Color del semáforo del calendario (misma regla que el frontend).
+
+    verde = aprobado | morado = vencido | rojo = vence hoy o faltan <=4 |
+    amarillo = faltan <=8 | azul = en término | gris = sin fecha.
+    """
+    if aprobado:
+        return "verde"
+    if restantes is None:
+        return "gris"
+    if restantes < 0:
+        return "morado"
+    if restantes <= 4:
+        return "rojo"
+    if restantes <= 8:
+        return "amarillo"
+    return "azul"
+
+
 CATALOGO_21_DOCUMENTOS = [
     # A. Diseño
     {

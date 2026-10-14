@@ -86,4 +86,4 @@ portal_intecoal/
 
 ---
 
-Siguiente: [INICIO-RAPIDO.md](INICIO-RAPIDO.md) — puesta en marcha local.
+Siguiente: [02_INICIO-RAPIDO.md](02_INICIO-RAPIDO.md) — puesta en marcha local.

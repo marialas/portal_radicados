@@ -14,17 +14,19 @@ Módulos del revisor: **Evaluación**, **Formato 4.3.7 C**, **Recibo Técnico** 
 
 ## 📚 Documentación
 
-Todo el detalle está organizado por tema en la carpeta [`docs/`](docs/README.md):
+Todo el detalle está organizado y numerado en orden de lectura en la carpeta [`docs/`](docs/README.md):
 
-| Documento | Contenido |
-|-----------|-----------|
-| [docs/README.md](docs/README.md) | Índice central de la documentación |
-| [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | Arquitectura, estructura y stack técnico |
-| [docs/INICIO-RAPIDO.md](docs/INICIO-RAPIDO.md) | Requisitos y puesta en marcha local |
-| [docs/FLUJO.md](docs/FLUJO.md) | Roles, flujo de trabajo, estados y notificaciones |
-| [docs/API.md](docs/API.md) | Referencia de endpoints REST |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Despliegue en Netlify y Render.com |
-| [docs/SECURITY.md](docs/SECURITY.md) | Seguridad y autenticación |
+| # | Documento | Contenido |
+|---|-----------|-----------|
+| 01 | [01_ARQUITECTURA.md](docs/01_ARQUITECTURA.md) | Arquitectura, estructura y stack técnico |
+| 02 | [02_INICIO-RAPIDO.md](docs/02_INICIO-RAPIDO.md) | Requisitos y puesta en marcha local |
+| 03 | [03_FLUJO.md](docs/03_FLUJO.md) | Roles, flujo de trabajo, estados y notificaciones |
+| 04 | [04_MANUAL-CONTRATISTA.md](docs/04_MANUAL-CONTRATISTA.md) | Manual del Contratista |
+| 05 | [05_MANUAL-REVISOR.md](docs/05_MANUAL-REVISOR.md) | Manual del Revisor |
+| 06 | [06_API.md](docs/06_API.md) | Referencia de endpoints REST |
+| 07 | [07_DEPLOYMENT.md](docs/07_DEPLOYMENT.md) | Despliegue en Netlify y Render.com |
+| 08 | [08_SECURITY.md](docs/08_SECURITY.md) | Seguridad y autenticación |
+| 09 | [09_GUION-VIDEO-CONTRATISTA.md](docs/09_GUION-VIDEO-CONTRATISTA.md) | Guion del video instructivo |
 
 ## Instalación rápida
 
@@ -39,7 +41,7 @@ npm install
 npm run dev                     # http://localhost:5173
 ```
 
-Para el detalle completo, ver [docs/INICIO-RAPIDO.md](docs/INICIO-RAPIDO.md).
+Para el detalle completo, ver [docs/02_INICIO-RAPIDO.md](docs/02_INICIO-RAPIDO.md).
 
 ---
 Proyecto privado — INTECOAL S.A.S. / SENA

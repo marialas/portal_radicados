@@ -781,41 +781,41 @@ export const EvaluacionRadicacion = ({
                         </div>
                       )}
 
-                      {/* Evaluación individual de sub-archivos */}
+                      {/* Evaluación individual de sub-archivos (en horizontal, igual que los normales) */}
                       {(item.subFiles || []).filter(sf => sf.fileName).length > 0 && (
                         <div className="w-full mt-2 pt-2 border-t border-dashed border-gray-300 space-y-2">
                           <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 block">
                             Evaluar sub-archivos ({(item.subFiles || []).filter(sf => sf.fileName).length})
                           </span>
                           {(item.subFiles || []).filter(sf => sf.fileName).map((sf) => (
-                            <div key={`ev-${sf.subId}`} className="bg-white border border-gray-200 rounded-xl p-2.5 space-y-2">
-                              <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <span className="text-[11px] font-extrabold text-gray-800 truncate">
+                            <div key={`ev-${sf.subId}`} className="bg-white border border-gray-200 rounded-xl p-2.5 grid grid-cols-1 lg:grid-cols-12 gap-2 items-start">
+                              <div className="lg:col-span-4 min-w-0">
+                                <span className="text-[11px] font-extrabold text-gray-800 break-words">
                                   {sf.subCode ? `${sf.subCode} · ` : ''}{sf.subName || sf.fileName}
                                 </span>
-                                <div className="flex items-center gap-1">
-                                  {[
-                                    { v: 'CUMPLE', cls: sf.status === 'CUMPLE' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-white text-emerald-800 border-gray-300' },
-                                    { v: 'PENDIENTE', cls: sf.status === 'PENDIENTE' || !sf.status ? 'bg-amber-500 text-slate-950 border-amber-600' : 'bg-white text-amber-800 border-gray-300' },
-                                    { v: 'NO CUMPLE', cls: sf.status === 'NO CUMPLE' ? 'bg-red-600 text-white border-red-700' : 'bg-white text-red-800 border-gray-300' }
-                                  ].map(o => (
-                                    <button
-                                      key={o.v}
-                                      type="button"
-                                      onClick={() => handleSubStatusChange(item.docId, sf.subId, o.v)}
-                                      className={`px-2 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${o.cls}`}
-                                    >
-                                      {o.v === 'CUMPLE' ? 'Cumple' : o.v === 'PENDIENTE' ? 'Pendiente' : 'No cumple'}
-                                    </button>
-                                  ))}
-                                </div>
                               </div>
-                              <div className="relative">
+                              <div className="lg:col-span-3 flex items-center gap-1 flex-wrap">
+                                {[
+                                  { v: 'CUMPLE', txt: 'Cumple', cls: sf.status === 'CUMPLE' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-white text-emerald-800 border-gray-300' },
+                                  { v: 'PENDIENTE', txt: 'Pendiente', cls: sf.status === 'PENDIENTE' || !sf.status ? 'bg-amber-500 text-slate-950 border-amber-600' : 'bg-white text-amber-800 border-gray-300' },
+                                  { v: 'NO CUMPLE', txt: 'No cumple', cls: sf.status === 'NO CUMPLE' ? 'bg-red-600 text-white border-red-700' : 'bg-white text-red-800 border-gray-300' }
+                                ].map(o => (
+                                  <button
+                                    key={o.v}
+                                    type="button"
+                                    onClick={() => handleSubStatusChange(item.docId, sf.subId, o.v)}
+                                    className={`px-2 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${o.cls}`}
+                                  >
+                                    {o.txt}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="lg:col-span-5 relative">
                                 <MessageSquare className="w-3 h-3 text-gray-400 absolute left-2.5 top-2.5" />
                                 <textarea
                                   value={sf.notes || ''}
                                   onChange={(e) => handleSubNotesChange(item.docId, sf.subId, e.target.value)}
-                                  placeholder="Observación del revisor para este sub-archivo (por qué no pasó / qué debe re-subir)…"
+                                  placeholder="Observación del revisor…"
                                   rows={1}
                                   className="w-full pl-8 pr-2 py-1.5 bg-white border border-gray-300 rounded-lg text-[11px] text-gray-900 focus:ring-2 focus:ring-[#D9CF43] placeholder-gray-400"
                                 />
