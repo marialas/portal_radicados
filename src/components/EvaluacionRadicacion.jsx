@@ -10,8 +10,7 @@ import {
   FileCheck, 
   ArrowLeft, 
   ExternalLink, 
-  Sparkles, 
-  CheckCheck,
+  Sparkles,
   Search,
   FileText,
   PenTool,
@@ -173,16 +172,6 @@ export const EvaluacionRadicacion = ({
       previewItem.blobUrl = undefined;
     }
     setPreviewingDocItem(previewItem);
-  };
-
-  const handleBulkSetStatus = (newStatus) => {
-    const idsToUpdate = new Set(filteredArchivos.map(a => a.docId));
-    setArchivosState(prev => prev.map(item => {
-      if (idsToUpdate.has(item.docId)) {
-        return { ...item, status: newStatus };
-      }
-      return item;
-    }));
   };
 
   const handleSaveAvance = async () => {
@@ -565,9 +554,11 @@ export const EvaluacionRadicacion = ({
                       alt="Firma Interventoria"
                       className="max-h-14 mx-auto object-contain"
                     />
-                    <p className="text-[9px] font-mono text-slate-500 text-center truncate">
-                      HASH: {firmaInterventoria.hashVerificacion}
-                    </p>
+                    {firmaInterventoria.tarjetaProfesional && (
+                      <p className="text-[9px] font-bold text-slate-800 text-center">
+                        T.P.: {firmaInterventoria.tarjetaProfesional}
+                      </p>
+                    )}
                     {isRol1Revisor && (
                       <div className="flex items-center justify-center gap-2 pt-1 border-t border-slate-100">
                         <button
@@ -635,19 +626,6 @@ export const EvaluacionRadicacion = ({
               <h2 className="text-lg font-black text-white mt-0.5">
                 Evaluación Item por Item ({DOCUMENT_CATALOG.length} Requisitos RETILAP / RETIE)
               </h2>
-            </div>
-
-            <div className="flex items-center space-x-2 shrink-0">
-              <span className="text-xs text-gray-400 font-bold mr-1 hidden sm:inline">Acciones Rápidas:</span>
-              <button
-                type="button"
-                onClick={() => handleBulkSetStatus('CUMPLE')}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg shadow transition-colors flex items-center space-x-1"
-                title="Aprobar todos los items mostrados"
-              >
-                <CheckCheck className="w-3.5 h-3.5" />
-                <span>Marcar Filtrados como CUMPLE</span>
-              </button>
             </div>
           </div>
 
@@ -914,28 +892,8 @@ export const EvaluacionRadicacion = ({
           <div className="flex items-center space-x-2 text-xs text-gray-300 font-medium">
             <Info className="w-4 h-4 text-[#D9CF43]" />
             <span>
-              Use "Guardar Avance" para guardar el borrador sin notificar (el expediente sigue "En Revisión"). Use "Generar Informe" para finalizar la evaluación y notificar al contratista (a SharePoint solo se sube al aprobar).
+              Use los botones de arriba ("Guardar Avance" o "Generar Informe") para guardar el borrador o finalizar la evaluación y notificar al contratista (a SharePoint solo se sube al aprobar).
             </span>
-          </div>
-
-          <div className="flex items-center space-x-3 shrink-0">
-            <button
-              type="button"
-              onClick={() => handleSaveAvance()}
-              disabled={isSaving}
-              className="bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl border border-slate-700 cursor-pointer"
-            >
-              Guardar Avance
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleFinalizar(true)}
-              disabled={isSaving}
-              className="bg-[#D9CF43] hover:bg-[#c4ba3c] text-[#1E222A] font-black text-xs px-5 py-2.5 rounded-xl shadow-lg cursor-pointer"
-            >
-              Generar e Inspeccionar Informe Oficial
-            </button>
           </div>
         </div>
       </div>

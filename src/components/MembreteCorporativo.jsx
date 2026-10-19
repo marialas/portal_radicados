@@ -1,4 +1,10 @@
 import React from 'react';
+import {
+  LOGO_MEMBRETE,
+  ICONO_DIRECCION,
+  ICONO_CORREO,
+  ICONO_TELEFONO
+} from '../lib/imagenesMembrete';
 
 /**
  * Membrete y franja corporativos del Recibo Técnico
@@ -14,6 +20,10 @@ const printExact = {
   WebkitPrintColorAdjust: 'exact',
   printColorAdjust: 'exact'
 };
+
+// Firma fija del Director de Interventoría (Recibo Técnico e Informe)
+export const FIRMA_NOMBRE_JEFE = 'VICTOR JAIME CASTAÑO ACOSTA';
+export const FIRMA_CARGO_JEFE = 'Director de Interventoría.';
 
 // Dirección y teléfono del encabezado según municipio
 const datosPorMunicipio = (municipio) => {
@@ -54,7 +64,7 @@ export const MembreteRecibo = ({ municipio }) => {
     <div className="flex items-center justify-start gap-4">
       <div className="flex flex-col items-start">
         <img
-          src="/recibo-tecnico/logo.png"
+          src={LOGO_MEMBRETE}
           alt="INTECOAL S.A.S. Interventoría Alumbrado Público"
           style={{ width: '111px', height: '80px', objectFit: 'contain' }}
         />
@@ -62,18 +72,18 @@ export const MembreteRecibo = ({ municipio }) => {
       </div>
       <div className="text-left space-y-1 pt-1" style={{ fontSize: '11px', color: '#595959' }}>
         <div className="flex items-center justify-start" style={{ gap: '4px' }}>
-          <img src="/recibo-tecnico/dir.png" alt="" style={{ width: '13px', height: '13px' }} />
+          <img src={ICONO_DIRECCION} alt="" style={{ width: '13px', height: '13px' }} />
           <span>{datos.direccion}</span>
         </div>
         {datos.ciudad && (
           <div className="font-bold" style={{ color: '#000000', paddingLeft: '17px' }}>{datos.ciudad}</div>
         )}
         <div className="flex items-center justify-start" style={{ gap: '4px' }}>
-          <img src="/recibo-tecnico/mail.png" alt="" style={{ width: '13px', height: '13px' }} />
+          <img src={ICONO_CORREO} alt="" style={{ width: '13px', height: '13px' }} />
           <span>{correoPorMunicipio(municipio)}</span>
         </div>
         <div className="flex items-center justify-start" style={{ gap: '4px' }}>
-          <img src="/recibo-tecnico/tel.png" alt="" style={{ width: '13px', height: '13px' }} />
+          <img src={ICONO_TELEFONO} alt="" style={{ width: '13px', height: '13px' }} />
           <span>{datos.telefono}</span>
         </div>
       </div>

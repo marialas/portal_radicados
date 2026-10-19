@@ -22,14 +22,12 @@ try:
     from backend.modelos import (
         CATALOGO_21_DOCUMENTOS, ESTADOS, GRUPOS_CARPETA,
         generar_numero_radicado, generar_id, calcular_porcentaje,
-        inicializar_archivos_desde_catalogo,
         fecha_limite_revision, dias_restantes, _solo_fecha,
     )
 except ImportError:
     from modelos import (
         CATALOGO_21_DOCUMENTOS, ESTADOS, GRUPOS_CARPETA,
         generar_numero_radicado, generar_id, calcular_porcentaje,
-        inicializar_archivos_desde_catalogo,
         fecha_limite_revision, dias_restantes, _solo_fecha,
     )
 

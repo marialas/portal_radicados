@@ -1463,9 +1463,6 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                               <span className="text-[11px] text-emerald-800 font-semibold block">
                                 {firmaContratista.cargo || 'Representante Técnico Contratista'}
                               </span>
-                              <span className="text-[10px] text-gray-500 font-mono block">
-                                Hash: {(firmaContratista.hashIntegridad || 'CERT-OK').slice(0, 18)}...
-                              </span>
                             </div>
                           </div>
 

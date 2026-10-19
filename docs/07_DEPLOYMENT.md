@@ -55,7 +55,7 @@ SHAREPOINT_SITE_ID=<site-id>
 SHAREPOINT_LIST_ID=<list-id>
 SHAREPOINT_LIBRARY_ID=Documents   # nombre de la librería (se resuelve por nombre; si no existe usa la primera)
 
-M365_SENDER_EMAIL=interventoriaapalborada@intecoalsas.com
+M365_SENDER_EMAIL=coord.tecnico@intecoalsas.com
 M365_NOTIFICATION_RECIPIENT=<correo-del-revisor>
 
 POWER_AUTOMATE_WEBHOOK_URL=   # opcional

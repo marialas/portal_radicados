@@ -12,13 +12,10 @@ import {
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { apiFetch } from '../lib/api';
-import { MembreteRecibo, FranjaCorporativa } from './MembreteCorporativo';
+import { MembreteRecibo, FranjaCorporativa, FIRMA_NOMBRE_JEFE, FIRMA_CARGO_JEFE } from './MembreteCorporativo';
+import { FIRMA_JEFE } from '../lib/imagenesMembrete';
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-
-// Firma fija del modelo
-const FIRMA_NOMBRE = 'VICTOR JAIME CASTAÑO ACOSTA';
-const FIRMA_CARGO = 'Director de Interventoría.';
 
 const fechaModelo = () => {
   const hoy = new Date();
@@ -429,13 +426,13 @@ export const ReciboTecnico = ({
           {/* Firma permanente del jefe para todos los radicados */}
           <div style={{ minHeight: '70px' }} className="flex items-end">
             <img
-              src="/recibo-tecnico/firma-jefe.png"
+              src={FIRMA_JEFE}
               alt="Firma Jefe"
               style={{ maxHeight: '70px', objectFit: 'contain' }}
             />
           </div>
-          <p className="font-bold" style={{ fontSize: '19px' }}>{FIRMA_NOMBRE}</p>
-          <p style={{ fontSize: '19px' }}>{FIRMA_CARGO}</p>
+          <p className="font-bold" style={{ fontSize: '19px' }}>{FIRMA_NOMBRE_JEFE}</p>
+          <p style={{ fontSize: '19px' }}>{FIRMA_CARGO_JEFE}</p>
         </div>
         </div>
           </td></tr>

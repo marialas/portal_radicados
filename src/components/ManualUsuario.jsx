@@ -24,12 +24,6 @@ const Bloque = ({ tipo, children }) => {
   );
 };
 
-const Dibujo = ({ texto }) => (
-  <div className="border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 px-4 py-5 text-center my-2">
-    <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Imagen: {texto}</p>
-  </div>
-);
-
 export const ManualUsuario = ({ userRole = 'contratista', onClose }) => {
   const esRevisor = userRole === 'interventor';
   const manual = esRevisor ? MANUAL_REVISOR : MANUAL_CONTRATISTA;
@@ -145,7 +139,6 @@ export const ManualUsuario = ({ userRole = 'contratista', onClose }) => {
                   <li key={t} className="text-xs"><strong>{t}: </strong>{d}</li>
                 ))}
               </ul>
-              <Dibujo texto="pantalla principal de su perfil" />
             </section>
 
             {manual.procedimientos.map((p, i) => (
@@ -154,7 +147,6 @@ export const ManualUsuario = ({ userRole = 'contratista', onClose }) => {
                 <ol className="list-decimal pl-5 space-y-1">{p.pasos.map((t, j) => <li key={j}>{t}</li>)}</ol>
                 {p.nota && <Bloque>{p.nota}</Bloque>}
                 {p.alerta && <Bloque tipo="alerta">{p.alerta}</Bloque>}
-                <Dibujo texto={p.titulo.toLowerCase()} />
               </section>
             ))}
 

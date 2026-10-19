@@ -17,7 +17,7 @@ class GraphService:
         self.site_id = os.getenv("SHAREPOINT_SITE_ID", "")
         self.list_id = os.getenv("SHAREPOINT_LIST_ID", "")
         self.library_name = os.getenv("SHAREPOINT_LIBRARY_ID", "Documents")
-        self.sender_email = os.getenv("M365_SENDER_EMAIL", "interventoriaapalborada@intecoalsas.com")
+        self.sender_email = os.getenv("M365_SENDER_EMAIL", "coord.tecnico@intecoalsas.com")
         self.notification_recipient = os.getenv("M365_NOTIFICATION_RECIPIENT", "")
         self._token = None
         self._token_expiry = 0
@@ -186,26 +186,6 @@ class GraphService:
         o permitiría inyección de filtro (OData injection).
         """
         return str(valor or "").replace("'", "''")
-
-    async def _buscar_por_titulo(self, titulo):
-        token = await self._obtener_token()
-        headers = {"Authorization": f"Bearer {token}"}
-
-        url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/lists/{self.list_id}/items"
-        params = {
-            "$filter": f"fields/Title eq '{self._filtro_seguro(titulo)}'",
-            "$top": 1,
-            "$expand": "fields",
-            "$select": "id",
-        }
-
-        async with httpx.AsyncClient() as cliente:
-            resp = await cliente.get(url, headers=headers, params=params)
-            if resp.status_code == 200:
-                items = resp.json().get("value", [])
-                if items:
-                    return items[0]
-        return None
 
     async def _asegurar_carpeta(self, cliente, headers, base, parent_rel, nombre):
         """Crea parent_rel/nombre si no existe. parent_rel='' = raíz."""

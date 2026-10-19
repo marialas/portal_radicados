@@ -307,7 +307,7 @@ Prueba la conexión con Microsoft Graph.
 
 ```jsonc
 // 200
-{ "ok": true, "conexion": "Exitosa", "usuario": "interventoriaapalborada@intecoalsas.com" }
+{ "ok": true, "conexion": "Exitosa", "usuario": "coord.tecnico@intecoalsas.com" }
 ```
 
 ### POST /api/m365/revisar-vencimientos

@@ -2,12 +2,12 @@ import React from 'react';
 import {
   PlusCircle,
   ListFilter,
-  Settings,
   ShieldCheck,
   ChevronRight,
   FileText,
   ReceiptText,
-  CalendarDays
+  CalendarDays,
+  BookOpenText
 } from 'lucide-react';
 
 export const Sidebar = ({

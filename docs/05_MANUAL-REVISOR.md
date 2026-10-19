@@ -50,7 +50,8 @@ Este manual le enseña a revisar expedientes, emitir dictámenes y generar los f
 1. Abra el portal en su navegador.
 2. Elija el perfil **Responsable de Revisión**.
 3. Pulse Ingresar y autentíquese con su correo @intecoalsas.com.
-4. Si lo devuelve al inicio, su permiso venció: entre de nuevo.
+4. Con otro correo el sistema no le da este perfil.
+5. Si lo devuelve al inicio, su permiso venció: entre de nuevo.
 
 ## 5. Conozca la pantalla
 
@@ -58,49 +59,48 @@ Este manual le enseña a revisar expedientes, emitir dictámenes y generar los f
 - **Menú lateral:** Revisión Radicaciones, Formato 4.3.7.C, Recibo Técnico, Calendario y Manual.
 - **Revisión Radicaciones:** todos los expedientes con estados y acciones (Evaluar, Informe, Formato C, Recibo Técnico, Reintentar subida).
 
-*[Captura: menú y revisión de radicaciones]*
-
 ## 6. Evaluar un radicado
 
 1. En Revisión Radicaciones pulse **Evaluar** en el expediente pendiente.
-2. Abra cada documento con **Ver** y califique: Cumple, Pendiente, No cumple o N/A.
-3. Califique también cada sub-archivo (ej. CEAP) uno por uno con su nota.
-4. Escriba en observaciones qué debe corregir el contratista, con palabras claras.
-5. Para un borrador use **Guardar Avance** (no notifica a nadie).
-6. Elija el dictamen final y pulse **Generar Informe Recibido a Conformidad**.
-7. Espere el mensaje de confirmación antes de salir: el sistema vuelve al Historial solo.
+2. Abra cada documento con **Ver** y léalo completo antes de calificar.
+3. Califique uno por uno: Cumple (está bien), Pendiente (falta o no se entiende), No cumple (está mal) o N/A (no aplica).
+4. Califique también cada archivo pequeño (anexos y CEAP) uno por uno con su nota.
+5. En cada observación escriba qué está mal y qué debe volver a subir el contratista, con palabras claras.
+6. Si no termina hoy, use **Guardar Avance**: guarda el borrador sin avisar a nadie.
+7. Para terminar, elija el dictamen (Aprobado o Con Observaciones) y pulse **Generar Informe**.
+8. Espere el aviso de confirmación antes de salir: el sistema vuelve solo al Historial.
 
-> **Advertencia:** Aprobado o Con Observaciones exigen su firma digital estampada.
-
-*[Captura: evaluación item por item]*
+> Aprobado o Con Observaciones exigen su firma digital estampada. Sin firma no lo deja terminar.
 
 ## 7. Generar Formato 4.3.7 C
 
-1. En un radicado Aprobado pulse **Formato C** (o abra el módulo y elija el radicado).
-2. Pulse **Editar** y complete los campos (número, municipio, ciudad y fecha salen solos y la fecha se actualiza a diario hasta subirlo).
-3. Pulse **Guardar** y luego **Subir** para custodiarlo en SharePoint, suelto en la carpeta del radicado.
-4. Use **Imprimir** si necesita el papel.
+1. En un radicado Aprobado pulse **Formato C** (o abra el módulo y elija el radicado en la lista).
+2. Pulse **Editar** y complete los datos. El número, el municipio, la ciudad y la fecha salen solos (la fecha se actualiza cada día hasta subirlo).
+3. Pulse **Guardar** para dejarlo listo.
+4. Pulse **Subir** para guardarlo en SharePoint, suelto en la carpeta del radicado.
+5. Use **Imprimir** si necesita el papel. Ya subido no se puede cambiar.
 
 ## 8. Generar Recibo Técnico
 
-1. En un radicado Aprobado pulse **Recibo Técnico** (o abra el módulo y elija el radicado).
-2. Pulse **Editar** y escriba título, destinatario, asunto y cuerpo (el correo del membrete y la fecha salen solos).
-3. Pulse **Guardar** y luego **Subir** para custodiarlo en SharePoint.
-4. Ya subido queda bloqueado y no se puede cambiar.
+1. En un radicado Aprobado pulse **Recibo Técnico** (o abra el módulo y elija el radicado en la lista).
+2. Pulse **Editar** y escriba título, persona, asunto y cuerpo (el correo del membrete y la fecha salen solos según el municipio).
+3. Pulse **Guardar** y luego **Subir** para guardarlo en SharePoint.
+4. Use **Imprimir** si necesita el papel. Ya subido se bloquea y no se puede cambiar.
 
 ## 9. Usar el Calendario
 
-1. Abra **Calendario** en el menú.
-2. Cada radicado tiene 15 días hábiles desde su creación; cada bolita es una fecha clave: azul radicación, amarilla 8 días, roja 4 días, morada vencido, verde aprobado.
-3. Pulse una fecha para ver el detalle y saltar a Evaluar o Informe.
-4. Revise la lista **Próximos a vencer**, ordenada por urgencia.
-5. Los avisos por correo (8 y 4 días, más diario 8 a.m. si vence) le llegan solo a usted.
+1. Abra **Calendario** en el menú de la izquierda.
+2. Cada radicado tiene 15 días hábiles desde que se creó; el calendario los cuenta solo.
+3. Cada bolita es una fecha clave: azul se creó, amarilla faltan 8 días, roja faltan 4, morada se venció, verde se aprobó.
+4. Pulse una fecha para ver el radicado completo y saltar a Evaluar o al Informe.
+5. A la derecha tiene la lista de próximos a vencer, del más urgente al menos urgente.
+6. Los avisos por correo (8 y 4 días, más diario 8 a.m. si vence) le llegan solo a usted.
 
 ## 10. Reintentar subida a SharePoint
 
 1. En un Aprobado con insignia **Pendiente de subida** pulse **Reintentar subida**.
-2. Espere de 1 a 3 minutos y lea el resultado.
-3. Si falla, el mensaje indica el motivo (permisos, conexión). Recuerde: solo sube lo aprobado.
+2. Confirme y espere de 1 a 3 minutos sin cerrar.
+3. Lea el resultado: si dice OK quedó arriba; si falla, el mensaje le dice el motivo (permisos o conexión).
 
 ## 11. Preguntas frecuentes
 
@@ -111,22 +111,28 @@ Solo al aprobar (carpetas + archivos) y los formatos con su botón Subir.
 La subida automática falló. Use Reintentar subida para ver el motivo exacto.
 
 **¿Cómo sabe el contratista qué corregir?**
-Con las notas que usted escriba en cada documento y sub-archivo; las ve al subsanar.
+Con las notas que usted escriba en cada documento y sub-archivo; las ve al corregir.
 
 **¿A quién llegan los avisos de fechas?**
 Solo a usted, más copia al correo del municipio en el calendario.
+
+**Guardé avance, ¿ya le avisó al contratista?**
+No. El borrador no avisa ni cambia el estado. Solo avisa al dar el resultado final.
+
+**Aprobé pero no aparece en SharePoint, ¿qué hago?**
+Espere unos segundos (sube en segundo plano) y recargue. Si sigue pendiente, use Reintentar subida.
 
 ## 12. Solución de problemas
 
 | Mensaje o síntoma | Qué hacer |
 |---|---|
-| "Falta la firma digital del revisor" | Estampe su firma antes de finalizar el dictamen. |
+| "Falta la firma del revisor" | Estampe su firma antes de finalizar el dictamen. |
 | "No se pudo subir a SharePoint" | Lea el motivo, revise conexión o permisos Azure, y reintente. |
 | "Sesión expirada / vuelve al ingreso" | Su permiso venció (24 h). Ingrese de nuevo. |
-| No veo un radicado | Verifique filtros y buscador del Historial. |
+| "No veo un radicado" | Quite los filtros y el texto del buscador del Historial. |
 
 ## 13. Soporte y contacto
 
-- Correo: interventoriaapalborada@intecoalsas.com
+- Correo: coord.tecnico@intecoalsas.com
 - Teléfonos: 310 355 6449 / (602) 224 8763
 - Indique siempre el número de radicado y el mensaje exacto en pantalla.
