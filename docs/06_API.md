@@ -165,7 +165,7 @@ Devuelve el historial de cambios de estado de una radicación.
 
 ### POST /api/radicacion/nueva
 
-Crea una nueva radicación (**multipart/form-data**, parseo manual con límite de 200 MB por parte).
+Crea una nueva radicación (**multipart/form-data**, parseo manual de los campos).
 
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
@@ -182,7 +182,7 @@ La radicación se crea con estado `Radicado`. **No sube nada a SharePoint** (sol
 
 ### POST /api/radicacion/{identificador}/archivo
 
-Sube/reemplaza el archivo de un documento, o agrega un anexo (`subFileName`). Parseo manual con límite de 200 MB por parte.
+Sube/reemplaza el archivo de un documento, o agrega un anexo (`subFileName`). Parseo manual de los campos.
 
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
@@ -355,8 +355,7 @@ Devuelve el esquema/catálogo documental usado para SharePoint.
 | 400 | Solicitud inválida (datos faltantes, MIME/extensión no permitida, no aprobado para sincronizar) |
 | 403 | Prohibido (eliminar sin ser último global/creador/aprobado; rol insuficiente) |
 | 404 | Recurso no encontrado |
-| 413 | Archivo supera el límite de 200 MB (`MAX_TAMANIO_MB`) |
-| 500 | Error interno del servidor (incluye motivo de fallo de SharePoint) |
+| 500 | Error interno del servidor (incluye motivo de fallo de SharePoint; el detalle identifica la causa) |
 | 503 | Servicio no disponible (GraphService offline / M365 sin configurar) |
 | 504 | Subida a SharePoint excedió 3 minutos |
 
@@ -364,7 +363,7 @@ Devuelve el esquema/catálogo documental usado para SharePoint.
 
 ## Validación de Archivos (Backend)
 
-- **Límite Starlette:** `max_part_size` = `MAX_TAMANIO_BYTES` (200 MB) en los 3 endpoints multipart (el valor interno de 1 MB rechazaba PDFs reales con *"Part exceeded maximum size"*).
+- **Parseo multipart completo** en los 3 endpoints multipart.
 - **MIME permitidos + respaldo por extensión** (`.pdf .jpg .jpeg .png .tif .tiff .bmp .gif .dwg .dxf`): si el navegador no reporta MIME (típico en DWG/DXF), se valida por extensión y se infiere el tipo.
-- **Límite:** 200 MB por archivo (`MAX_TAMANIO_MB` / `MAX_TAMANIO_BYTES`, configurable por variable de entorno).
-- **Producción:** el frontend envía los `FormData` de **≥ 4 MB** directo a Render (`VITE_API_DIRECT_URL`) para saltarse el proxy de Netlify; el resto va por `/api/*` relativo.
+- **Escritura por bloques:** los archivos se escriben en disco sin cargarlos completos en memoria; los errores de disco se devuelven como `500` con el motivo.
+- **Producción:** el frontend envía directo a Render (`VITE_API_DIRECT_URL`) las subidas más pesadas para saltarse el proxy de Netlify; el resto va por `/api/*` relativo.

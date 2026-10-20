@@ -58,12 +58,6 @@ MIME_PERMITIDOS = {
     "application/acad",
     "application/octet-stream",
 }
-try:
-    MAX_TAMANIO_MB = int(os.getenv("MAX_TAMANIO_MB", "200"))
-except ValueError:
-    MAX_TAMANIO_MB = 200
-MAX_TAMANIO_BYTES = MAX_TAMANIO_MB * 1024 * 1024
-
 EXTENSIONES_PERMITIDAS = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".dwg", ".dxf"}
 
 
@@ -100,6 +94,22 @@ def mime_efectivo(nombre_archivo: str, mime: str) -> str:
 
 UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
+
+
+async def guardar_archivo(destino: Path, upload_file, nombre: str) -> int:
+    try:
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        total = 0
+        with destino.open("wb") as salida:
+            while True:
+                bloque = await upload_file.read(1024 * 1024)
+                if not bloque:
+                    break
+                salida.write(bloque)
+                total += len(bloque)
+        return total
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"No se pudo guardar '{nombre}' en disco: {e}")
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -257,6 +267,15 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def _error_interno(request: Request, exc: Exception):
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Error interno del servidor: {type(exc).__name__}: {exc}"},
+    )
 
 
 
@@ -486,7 +505,7 @@ async def eliminar_radicacion(identificador: str, usuario: dict = Depends(requer
 
 @app.post("/api/radicacion/nueva")
 async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_usuario)):
-    form = await request.form(max_files=5000, max_fields=5000, max_part_size=MAX_TAMANIO_BYTES)
+    form = await request.form(max_files=5000, max_fields=5000, max_part_size=2**31 - 1)
 
     text_fields = {}
     uploaded_files = {}
@@ -535,25 +554,21 @@ async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_us
             mime = upload_file.content_type or ""
             if not archivo_permitido(upload_file.filename or "", mime):
                 continue
-            contenido = await upload_file.read()
-            if len(contenido) > MAX_TAMANIO_BYTES:
-                continue
             doc_code = str(doc_id)
             for doc in CATALOGO_21_DOCUMENTOS:
                 if doc["id"] == doc_id:
                     doc_code = doc["code"]
                     break
             sub_dir = upload_dir / doc_code
-            sub_dir.mkdir(parents=True, exist_ok=True)
             safe_name = (upload_file.filename or f"{sub_id}.pdf").replace("/", "_").replace("\\", "_")
             file_path = sub_dir / safe_name
-            file_path.write_bytes(contenido)
+            bytes_guardados = await guardar_archivo(file_path, upload_file, safe_name)
             slot_sub_files.setdefault(doc_id, []).append({
                 "subId": sub_id,
                 "subCode": meta_info.get('subCode', sub_id),
                 "subName": meta_info.get('subName', safe_name),
                 "fileName": upload_file.filename,
-                "fileSize": len(contenido),
+                "fileSize": bytes_guardados,
                 "fileType": mime_efectivo(upload_file.filename or "", mime),
                 "uploadDate": datetime.now(timezone.utc).isoformat(),
                 "localPath": str(file_path),
@@ -570,9 +585,6 @@ async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_us
             mime = upload_file.content_type or ""
             if not archivo_permitido(upload_file.filename or "", mime):
                 continue
-            contenido = await upload_file.read()
-            if len(contenido) > MAX_TAMANIO_BYTES:
-                continue
             sub_name = meta_info.get('subFileName', f'Anexo {idx + 1}')
             safe_sub_name = sub_name.replace("/", "_").replace("\\", "_")
             doc_code = str(doc_id)
@@ -581,9 +593,8 @@ async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_us
                     doc_code = doc["code"]
                     break
             sub_dir = upload_dir / doc_code
-            sub_dir.mkdir(parents=True, exist_ok=True)
             file_path = sub_dir / safe_sub_name
-            file_path.write_bytes(contenido)
+            bytes_guardados = await guardar_archivo(file_path, upload_file, safe_sub_name)
             if doc_id not in extra_sub_files:
                 extra_sub_files[doc_id] = []
             extra_sub_files[doc_id].append({
@@ -591,7 +602,7 @@ async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_us
                 "subCode": f"ANEXO-{idx + 1}",
                 "subName": sub_name,
                 "fileName": upload_file.filename,
-                "fileSize": len(contenido),
+                "fileSize": bytes_guardados,
                 "fileType": mime_efectivo(upload_file.filename or "", mime),
                 "uploadDate": datetime.now(timezone.utc).isoformat(),
                 "localPath": str(file_path),
@@ -603,18 +614,14 @@ async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_us
         if not archivo_permitido(upload_file.filename or "", mime):
             raise HTTPException(status_code=400, detail=detalle_archivo_no_permitido(upload_file.filename, mime))
 
-        contenido = await upload_file.read()
-        if len(contenido) > MAX_TAMANIO_BYTES:
-            raise HTTPException(status_code=413, detail=f"Archivo supera el limite de {MAX_TAMANIO_MB} MB.")
-
         safe_name = (upload_file.filename or "file.pdf").replace("/", "_").replace("\\", "_")
         file_path = upload_dir / safe_name
-        file_path.write_bytes(contenido)
+        bytes_guardados = await guardar_archivo(file_path, upload_file, safe_name)
 
         saved_files[field_name] = {
             "filename": safe_name,
             "originalName": upload_file.filename,
-            "size": len(contenido),
+            "size": bytes_guardados,
             "mimeType": mime_efectivo(upload_file.filename or "", mime),
         }
 
@@ -753,7 +760,7 @@ async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_us
 
 @app.post("/api/radicacion/{identificador}/archivo")
 async def subir_archivo(request: Request, identificador: str, usuario: dict = Depends(requerir_usuario)):
-    form = await request.form(max_files=100, max_fields=100, max_part_size=MAX_TAMANIO_BYTES)
+    form = await request.form(max_files=100, max_fields=100, max_part_size=2**31 - 1)
     doc_id_raw = form.get("docId")
     archivo = form.get("archivo")
     sub_file_name = form.get("subFileName")
@@ -787,31 +794,22 @@ async def subir_archivo(request: Request, identificador: str, usuario: dict = De
             detail=detalle_archivo_no_permitido(archivo.filename, mime),
         )
 
-    contenido = await archivo.read()
-    if len(contenido) > MAX_TAMANIO_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"El archivo supera el limite de {MAX_TAMANIO_MB} MB.",
-        )
-
     upload_dir = UPLOADS_DIR / radicacion["id"]
-    upload_dir.mkdir(parents=True, exist_ok=True)
 
     if subFileName:
         doc_code = ""
         for doc in (radicacion.get("archivos") or []):
             if doc.get("docId") == docId:
-                doc_code = doc.get("docCode", str(docId))
+                doc_code = doc.get("docCode") or str(docId)
                 break
         sub_dir = upload_dir / doc_code
-        sub_dir.mkdir(parents=True, exist_ok=True)
         safe_name = subFileName.replace("/", "_").replace("\\", "_")
         file_path = sub_dir / safe_name
     else:
-        safe_name = archivo.filename.replace("/", "_").replace("\\", "_")
+        safe_name = (archivo.filename or "file.pdf").replace("/", "_").replace("\\", "_")
         file_path = upload_dir / safe_name
 
-    file_path.write_bytes(contenido)
+    bytes_guardados = await guardar_archivo(file_path, archivo, safe_name)
 
     for doc in (radicacion.get("archivos") or []):
         if doc.get("docId") == docId:
@@ -825,7 +823,7 @@ async def subir_archivo(request: Request, identificador: str, usuario: dict = De
                         "subCode": sub_code or (slot.get("subCode") if slot else sub_id),
                         "subName": subFileName,
                         "fileName": archivo.filename,
-                        "fileSize": len(contenido),
+                        "fileSize": bytes_guardados,
                         "fileType": mime_efectivo(archivo.filename or "", mime),
                         "uploadDate": datetime.now(timezone.utc).isoformat(),
                         "localPath": str(file_path),
@@ -841,7 +839,7 @@ async def subir_archivo(request: Request, identificador: str, usuario: dict = De
                         "subCode": f"ANEXO-{len(doc['subFiles']) + 1}",
                         "subName": subFileName,
                         "fileName": archivo.filename,
-                        "fileSize": len(contenido),
+                        "fileSize": bytes_guardados,
                         "fileType": mime_efectivo(archivo.filename or "", mime),
                         "uploadDate": datetime.now(timezone.utc).isoformat(),
                         "localPath": str(file_path),
@@ -851,7 +849,7 @@ async def subir_archivo(request: Request, identificador: str, usuario: dict = De
                     doc["status"] = "CUMPLE"
             else:
                 doc["fileName"] = archivo.filename
-                doc["fileSize"] = len(contenido)
+                doc["fileSize"] = bytes_guardados
                 doc["fileType"] = mime_efectivo(archivo.filename or "", mime)
                 doc["uploadDate"] = datetime.now(timezone.utc).isoformat()
                 doc["status"] = "CUMPLE"
@@ -870,7 +868,7 @@ async def subir_archivo(request: Request, identificador: str, usuario: dict = De
 
 @app.post("/api/radicacion/{identificador}/formato")
 async def subir_formato(request: Request, identificador: str, usuario: dict = Depends(requerir_usuario)):
-    form = await request.form(max_files=100, max_fields=100, max_part_size=MAX_TAMANIO_BYTES)
+    form = await request.form(max_files=100, max_fields=100, max_part_size=2**31 - 1)
     nombre = form.get("nombre")
     archivo = form.get("archivo")
 
@@ -886,16 +884,12 @@ async def subir_formato(request: Request, identificador: str, usuario: dict = De
     if not radicacion:
         raise HTTPException(status_code=404, detail="Radicación no encontrada")
 
-    contenido = await archivo.read()
-    if len(contenido) > MAX_TAMANIO_BYTES:
-        raise HTTPException(status_code=413, detail=f"El archivo supera el límite de {MAX_TAMANIO_MB} MB.")
-
     upload_dir = UPLOADS_DIR / radicacion["id"]
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     safe_name = nombre.replace("/", "_").replace("\\", "_")
     file_path = upload_dir / safe_name
-    file_path.write_bytes(contenido)
+    bytes_guardados = await guardar_archivo(file_path, archivo, safe_name)
 
     if "formatos" not in radicacion:
         radicacion["formatos"] = []
@@ -903,7 +897,7 @@ async def subir_formato(request: Request, identificador: str, usuario: dict = De
     radicacion["formatos"].append({
         "nombre": nombre,
         "fileName": archivo.filename,
-        "fileSize": len(contenido),
+        "fileSize": bytes_guardados,
         "fileType": archivo.content_type or "application/pdf",
         "uploadDate": datetime.now(timezone.utc).isoformat(),
         "localPath": str(file_path),

@@ -16,7 +16,7 @@ export const MANUAL_COMUN = {
     'Un computador con internet.',
     'Navegador Chrome o Edge actualizado.',
     'Su correo de Microsoft (si usa Gmail, regístrelo gratis como cuenta Microsoft).',
-    'Sus documentos en PDF, foto o plano (cada uno de máximo 200 MB).',
+    'Sus documentos en PDF, foto o plano.',
   ],
   glosario: [
     ['Radicado', 'Su expediente subido al portal. Recibe un número único.'],
@@ -90,7 +90,7 @@ export const MANUAL_CONTRATISTA = {
     ['Me pide confirmar con documentos pendientes, ¿qué hago?', 'Es un aviso, no un error. Si le faltan archivos, súbalos; si no los tiene, acepte y continúe: quedarán para revisión.'],
     ['¿Por qué no veo el botón Borrar?', 'Solo sale en el último número, si es suyo y no está aprobado. Si otro radicó después, se quita solo.'],
     ['Un documento dice VERIFICADO y no me deja tocarlo, ¿por qué?', 'Porque ya pasó la revisión. Solo corrija los que dicen Pendiente o No cumple.'],
-    ['Sale un mensaje rojo al enviar, ¿qué hago?', 'Lea qué archivo nombra y por qué (tamaño, tipo o conexión). Corríjalo e intente de nuevo sin salir de la pantalla.'],
+    ['Sale un mensaje rojo al enviar, ¿qué hago?', 'Lea qué archivo nombra y por qué (tipo o conexión). Corríjalo e intente de nuevo sin salir de la pantalla.'],
     ['Envié y no pasó nada, ¿se guardó?', 'Si no salió el aviso verde, no se envió. Revise si hay un aviso rojo arriba del formulario (la pantalla sube sola hasta él).'],
     ['¿Puedo cambiar mi correo después?', 'No lo haga: todo se guarda con el correo con el que entró. Si entra con otro, sus radicados no aparecen.'],
   ],
@@ -98,7 +98,7 @@ export const MANUAL_CONTRATISTA = {
     ['"La firma es obligatoria"', 'Ponga su firma en el Paso 3 antes de radicar.'],
     ['"No se pudo conectar"', 'Revise su internet o espere un minuto si la página está despertando.'],
     ['"Me devolvió al inicio"', 'Se venció el permiso (dura 24 horas). Entre de nuevo.'],
-    ['"Me rechaza el archivo"', 'Use PDF, foto o plano de máximo 200 MB.'],
+    ['"Me rechaza el archivo"', 'Use PDF, foto o plano.'],
     ['"No veo mis radicados"', 'Verifique que entró con el mismo correo de siempre y quite los filtros de búsqueda.'],
   ],
 };

@@ -69,7 +69,6 @@ M365_SENDER_EMAIL=coord.tecnico@intecoalsas.com
 M365_NOTIFICATION_RECIPIENT=coord.tecnico@intecoalsas.com  # revisor: avisos de nuevo radicado y vencimientos
 
 POWER_AUTOMATE_WEBHOOK_URL=   # opcional
-MAX_TAMANIO_MB=200   # límite por archivo en MB (subidas multipart; por defecto 200)
 ```
 
 > `SECRET_KEY` se genera automáticamente si usas el Blueprint (`generateValue: true`).
@@ -133,7 +132,7 @@ El `netlify.toml` ya define el build y el proxy de la API. La URL de producción
 VITE_MSAL_CLIENT_ID=<client-id-de-azure-ad>
 VITE_MSAL_TENANT_ID=common
 VITE_MSAL_REDIRECT_URI=https://<tu-sitio>.netlify.app
-VITE_API_DIRECT_URL=https://radicados-intecoal-sas.onrender.com   # opcional: subidas ≥ 4 MB directas al backend (se usa esta URL por defecto)
+VITE_API_DIRECT_URL=https://radicados-intecoal-sas.onrender.com   # opcional: subidas pesadas directas al backend (se usa esta URL por defecto)
 ```
 
 > `VITE_MSAL_REDIRECT_URI` en producción debe coincidir exactamente con la URI de redirección registrada en la app de Azure AD.
@@ -187,8 +186,8 @@ Se puede añadir en un archivo `public/_redirects` o como redirect en Netlify. S
 **Solución:** Verificar `SECRET_KEY` configurado y consistente entre instancias.
 
 ### Archivos no suben
-**Síntoma:** 413/400 al subir.
-**Solución:** Tamaño ≤ 200 MB (`MAX_TAMANIO_MB`, por defecto 200) y extensión permitida (PDF, imágenes, DWG/DXF; la validación acepta por MIME o por extensión).
+**Síntoma:** error al subir (el mensaje trae el detalle exacto).
+**Solución:** extensión permitida (PDF, imágenes, DWG/DXF; la validación acepta por MIME o por extensión). El detalle del error dice el motivo exacto (por ejemplo, permisos o disco del servidor).
 
 ### Render en frío (plan gratuito)
 **Síntoma:** la primera petición tras inactividad falla o tarda ~1 min.
@@ -214,7 +213,7 @@ Comprobación rápida de CORS desde la consola del navegador: si `lista` está b
 **Causa:** Render (plan gratuito) **no tiene disco persistente** — `render.yaml` no declara `disks`, así que el archivo `backend/data/radicaciones.json` vuelve al estado del repositorio en **cada redespliegue o reinicio**.
 **Solución:** respaldar/crear los radicados donde sí persisten (SharePoint, que es la fuente oficial al aprobar), o montar un disco persistente en Render y mover `DATA_FILE` ahí.
 
-### Subidas grandes fallan (DWG/DXF de varios MB)
-**Síntoma:** la subida se corta sin mensaje claro.
-**Causas reales:** en producción el proxy de Netlify corta peticiones **> 26 s** y limita el tamaño del POST que lo atraviesa; el backend acepta **≤ 200 MB** por archivo (`MAX_TAMANIO_MB`).
-**Solución:** el frontend ya detecta subidas **≥ 4 MB** y las envía **directo a Render** (`VITE_API_DIRECT_URL`, por defecto `https://radicados-intecoal-sas.onrender.com`) saltándose el proxy; solo en producción. Si falla, verifique que `FRONTEND_URL`/`ALLOWED_ORIGINS` en Render incluyan la URL del sitio (CORS) y que la conexión sea estable.
+### Subidas grandes fallan (DWG/DXF pesados)
+**Síntoma:** la subida se corta sin mensaje claro o responde `500`.
+**Causas reales:** en producción el proxy de Netlify corta peticiones **> 26 s** y limita el POST que lo atraviesa; el backend escribe por bloques pero puede agotar memoria o disco en Render (plan gratuito).
+**Solución:** el frontend envía **directo a Render** (`VITE_API_DIRECT_URL`, por defecto `https://radicados-intecoal-sas.onrender.com`) las subidas pesadas, saltándose el proxy; solo en producción. Si un archivo igual falla con `500`, el cuerpo de la respuesta trae el motivo exacto (p. ej. `OSError: No space left on device`) y el traceback aparece en **Render → Logs**. Verifique también que `FRONTEND_URL`/`ALLOWED_ORIGINS` en Render incluyan la URL del sitio (CORS).

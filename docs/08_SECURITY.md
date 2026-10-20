@@ -92,7 +92,6 @@ application/acad, application/octet-stream
 
 | Parámetro | Valor |
 |-----------|-------|
-| Tamaño máximo | 200 MB (`MAX_TAMANIO_MB`, por archivo) |
 | Validación | Server-side en `POST /api/radicacion/nueva` y `POST /api/radicacion/{id}/archivo` |
 
 > En el visor, DWG/DXF/DWF no se renderizan en el navegador; DXF se previsualiza (`@cadview/react`) y otros CAD se ofrecen para descargar.
@@ -156,7 +155,6 @@ M365_SENDER_EMAIL=coord.tecnico@intecoalsas.com
 M365_NOTIFICATION_RECIPIENT=coord.tecnico@intecoalsas.com  # revisor: avisos de nuevo radicado y vencimientos
 
 POWER_AUTOMATE_WEBHOOK_URL=<webhook-url>   # opcional
-MAX_TAMANIO_MB=200   # límite por archivo en MB (subidas multipart)
 ```
 
 ### Frontend (`.env.local`, gitignored)
@@ -165,7 +163,7 @@ MAX_TAMANIO_MB=200   # límite por archivo en MB (subidas multipart)
 VITE_MSAL_CLIENT_ID=<client-id>
 VITE_MSAL_TENANT_ID=common
 VITE_MSAL_REDIRECT_URI=https://<tu-sitio>.netlify.app
-VITE_API_DIRECT_URL=https://radicados-intecoal-sas.onrender.com   # opcional: subidas ≥ 4 MB directas al backend
+VITE_API_DIRECT_URL=https://radicados-intecoal-sas.onrender.com   # opcional: subidas pesadas directas al backend
 ```
 
 ---

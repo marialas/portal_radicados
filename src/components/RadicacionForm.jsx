@@ -564,14 +564,12 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
         onSuccess(result.data);
       } else {
         const detalle = result?.detail || result?.error || result?.mensaje;
-        if (response.status === 413) {
-          alert('Uno de los archivos supera el límite de 200 MB permitidos. Reduzca el tamaño e intente de nuevo.');
-        } else if (response.status === 400 && detalle) {
+        if (response.status === 400 && detalle) {
           alert(`No se pudo radicar: ${typeof detalle === 'string' ? detalle : JSON.stringify(detalle)}`);
         } else if (response.status === 409 && detalle) {
           alert(`${typeof detalle === 'string' ? detalle : JSON.stringify(detalle)} Intente de nuevo.`);
         } else if (response.status >= 500) {
-          alert('El servidor falló al guardar (error 500). Si es el servidor en la nube, puede estar arrancando: espere 1 minuto y reintente. Si persiste, revise los logs del backend.');
+          alert(`El servidor falló al guardar (error 500)${detalle ? `: ${typeof detalle === 'string' ? detalle : JSON.stringify(detalle)}` : ''}. Si es el servidor en la nube, puede estar arrancando: espere 1 minuto y reintente. Si persiste, revise los logs del backend.`);
         } else if (detalle) {
           alert(`No se pudo radicar: ${typeof detalle === 'string' ? detalle : JSON.stringify(detalle)}`);
         } else {
@@ -984,9 +982,6 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                                     <div className="flex items-center space-x-2 truncate">
                                       <Check className="w-4 h-4 text-emerald-700 shrink-0" />
                                       <span className="font-bold truncate">{file.name}</span>
-                                      <span className="text-gray-500 font-medium">
-                                        ({(file.size / (1024 * 1024)).toFixed(2)} MB)
-                                      </span>
                                     </div>
                                     <button
                                       type="button"
@@ -1027,9 +1022,6 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
                                           <div className="flex items-center space-x-2 truncate min-w-0">
                                             <Check className="w-3 h-3 text-amber-600 shrink-0" />
                                             <span className="font-semibold text-amber-900 truncate">Anexo {idx + 1}: {sf.name}</span>
-                                            <span className="text-amber-600 font-medium shrink-0">
-                                              ({(sf.size / (1024 * 1024)).toFixed(2)} MB)
-                                            </span>
                                           </div>
                                           <button
                                             type="button"

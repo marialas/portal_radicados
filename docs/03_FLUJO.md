@@ -42,7 +42,7 @@ Contratista            Revisor (Interventoría)
 
 ### Contratista
 - Crear nueva radicación con los 25 requisitos RETILAP + documentos adicionales manuales.
-- Subir archivos (PDF, imágenes y planos DXF/DWG) — máx. 200 MB por archivo (configurable con `MAX_TAMANIO_MB`).
+- Subir archivos (PDF, imágenes y planos DXF/DWG).
 - **Firma electrónica obligatoria al radicar** (no se permite crear sin firmar).
 - Marcar documentos como N/A.
 - Ver solo sus propias radicaciones.

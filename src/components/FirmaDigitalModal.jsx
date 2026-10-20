@@ -170,7 +170,7 @@ export const FirmaDigitalModal = ({
                   <p className="text-xs font-bold text-gray-700">
                     Haga clic o arrastre aquí su archivo de firma
                   </p>
-                  <p className="text-[11px] text-gray-400">Archivos permitidos: PNG, JPG (Máx 5MB)</p>
+                  <p className="text-[11px] text-gray-400">Archivos permitidos: PNG, JPG</p>
                 </div>
               )}
             </div>
