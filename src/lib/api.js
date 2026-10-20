@@ -39,13 +39,39 @@ function sesionExpirada() {
   }
 }
 
+const API_DIRECTA = (import.meta.env.VITE_API_DIRECT_URL || 'https://radicados-intecoal-sas.onrender.com').replace(/\/+$/, '');
+const SUBIDA_DIRECTA_DESDE = 4 * 1024 * 1024;
+
+function bytesFormData(body) {
+  if (!body || typeof FormData === 'undefined' || !(body instanceof FormData)) {
+    return 0;
+  }
+  let total = 0;
+  body.forEach((valor) => {
+    if (valor && typeof valor === 'object' && typeof valor.size === 'number') {
+      total += valor.size;
+    }
+  });
+  return total;
+}
+
+export function urlDeApi(path, options, produccion = import.meta.env.PROD) {
+  if (!produccion || !path.startsWith('/api/')) {
+    return path;
+  }
+  if (bytesFormData(options.body) < SUBIDA_DIRECTA_DESDE) {
+    return path;
+  }
+  return `${API_DIRECTA}${path}`;
+}
+
 export async function apiFetch(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   const token = getToken();
   if (token && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const resp = await fetch(path, { ...options, headers });
+  const resp = await fetch(urlDeApi(path, options), { ...options, headers });
   if (resp.status === 401) {
     sesionExpirada();
   }

@@ -69,6 +69,7 @@ M365_SENDER_EMAIL=coord.tecnico@intecoalsas.com
 M365_NOTIFICATION_RECIPIENT=coord.tecnico@intecoalsas.com  # revisor: avisos de nuevo radicado y vencimientos
 
 POWER_AUTOMATE_WEBHOOK_URL=   # opcional
+MAX_TAMANIO_MB=200   # límite por archivo en MB (subidas multipart; por defecto 200)
 ```
 
 > `SECRET_KEY` se genera automáticamente si usas el Blueprint (`generateValue: true`).
@@ -132,6 +133,7 @@ El `netlify.toml` ya define el build y el proxy de la API. La URL de producción
 VITE_MSAL_CLIENT_ID=<client-id-de-azure-ad>
 VITE_MSAL_TENANT_ID=common
 VITE_MSAL_REDIRECT_URI=https://<tu-sitio>.netlify.app
+VITE_API_DIRECT_URL=https://radicados-intecoal-sas.onrender.com   # opcional: subidas ≥ 4 MB directas al backend (se usa esta URL por defecto)
 ```
 
 > `VITE_MSAL_REDIRECT_URI` en producción debe coincidir exactamente con la URI de redirección registrada en la app de Azure AD.
@@ -186,7 +188,7 @@ Se puede añadir en un archivo `public/_redirects` o como redirect en Netlify. S
 
 ### Archivos no suben
 **Síntoma:** 413/400 al subir.
-**Solución:** Tamaño ≤ 50 MB y extensión permitida (PDF, imágenes, DWG/DXF; la validación acepta por MIME o por extensión).
+**Solución:** Tamaño ≤ 200 MB (`MAX_TAMANIO_MB`, por defecto 200) y extensión permitida (PDF, imágenes, DWG/DXF; la validación acepta por MIME o por extensión).
 
 ### Render en frío (plan gratuito)
 **Síntoma:** la primera petición tras inactividad falla o tarda ~1 min.
@@ -214,5 +216,5 @@ Comprobación rápida de CORS desde la consola del navegador: si `lista` está b
 
 ### Subidas grandes fallan (DWG/DXF de varios MB)
 **Síntoma:** la subida se corta sin mensaje claro.
-**Causas reales:** el proxy de Netlify corta peticiones **> 26 s** y hay un límite de tamaño en el POST que atraviesa el proxy; el backend acepta **≤ 50 MB** (PDF, imágenes, DWG/DXF).
-**Solución:** no reducir `MAX_TAMANIO_BYTES`; si el archivo es muy grande, subirlo con la conexión estable o servir la subida directa contra Render para diagnóstico.
+**Causas reales:** en producción el proxy de Netlify corta peticiones **> 26 s** y limita el tamaño del POST que lo atraviesa; el backend acepta **≤ 200 MB** por archivo (`MAX_TAMANIO_MB`).
+**Solución:** el frontend ya detecta subidas **≥ 4 MB** y las envía **directo a Render** (`VITE_API_DIRECT_URL`, por defecto `https://radicados-intecoal-sas.onrender.com`) saltándose el proxy; solo en producción. Si falla, verifique que `FRONTEND_URL`/`ALLOWED_ORIGINS` en Render incluyan la URL del sitio (CORS) y que la conexión sea estable.

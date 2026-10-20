@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, obtenerJwt, getToken, setToken } from '../api';
+import { apiFetch, obtenerJwt, getToken, setToken, urlDeApi } from '../api';
 
 function respuesta(status, cuerpo = {}) {
   return { ok: status >= 200 && status < 300, status, json: async () => cuerpo };
@@ -49,5 +49,33 @@ describe('apiFetch — JWT y expiración (caja blanca)', () => {
     expect(getToken()).toBe('JWT-N');
     fetch.mockResolvedValueOnce(respuesta(403, { detail: 'Solo INTECOAL' }));
     await expect(obtenerJwt('x@gmail.com', 'interventor')).rejects.toThrow('Solo INTECOAL');
+  });
+});
+
+describe('urlDeApi — subida directa al backend para archivos pesados', () => {
+  const API = 'https://radicados-intecoal-sas.onrender.com';
+
+  function formDataCon(bytes) {
+    const fd = new FormData();
+    fd.append('archivo_A1', new Blob([new Uint8Array(bytes)], { type: 'application/octet-stream' }), 'plano.dwg');
+    return fd;
+  }
+
+  it('en producción, FormData ≥ 4 MB se envía directo al backend', () => {
+    const url = urlDeApi('/api/radicacion/nueva', { body: formDataCon(4 * 1024 * 1024) }, true);
+    expect(url).toBe(`${API}/api/radicacion/nueva`);
+  });
+
+  it('en producción, FormData pequeño sigue por el proxy (/api relativo)', () => {
+    expect(urlDeApi('/api/radicacion/nueva', { body: formDataCon(1024) }, true)).toBe('/api/radicacion/nueva');
+  });
+
+  it('en desarrollo jamás usa la URL directa', () => {
+    expect(urlDeApi('/api/radicacion/nueva', { body: formDataCon(8 * 1024 * 1024) }, false)).toBe('/api/radicacion/nueva');
+  });
+
+  it('sin FormData o fuera de /api deja la URL intacta', () => {
+    expect(urlDeApi('/api/radicacion/lista', {}, true)).toBe('/api/radicacion/lista');
+    expect(urlDeApi('/otra/ruta', { body: formDataCon(9 * 1024 * 1024) }, true)).toBe('/otra/ruta');
   });
 });

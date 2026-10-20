@@ -16,7 +16,7 @@ export const MANUAL_COMUN = {
     'Un computador con internet.',
     'Navegador Chrome o Edge actualizado.',
     'Su correo de Microsoft (si usa Gmail, regístrelo gratis como cuenta Microsoft).',
-    'Sus documentos en PDF, foto o plano (cada uno de máximo 50 MB).',
+    'Sus documentos en PDF, foto o plano (cada uno de máximo 200 MB).',
   ],
   glosario: [
     ['Radicado', 'Su expediente subido al portal. Recibe un número único.'],
@@ -98,7 +98,7 @@ export const MANUAL_CONTRATISTA = {
     ['"La firma es obligatoria"', 'Ponga su firma en el Paso 3 antes de radicar.'],
     ['"No se pudo conectar"', 'Revise su internet o espere un minuto si la página está despertando.'],
     ['"Me devolvió al inicio"', 'Se venció el permiso (dura 24 horas). Entre de nuevo.'],
-    ['"Me rechaza el archivo"', 'Use PDF, foto o plano de máximo 50 MB.'],
+    ['"Me rechaza el archivo"', 'Use PDF, foto o plano de máximo 200 MB.'],
     ['"No veo mis radicados"', 'Verifique que entró con el mismo correo de siempre y quite los filtros de búsqueda.'],
   ],
 };

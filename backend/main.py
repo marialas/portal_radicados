@@ -58,7 +58,11 @@ MIME_PERMITIDOS = {
     "application/acad",
     "application/octet-stream",
 }
-MAX_TAMANIO_BYTES = 50 * 1024 * 1024
+try:
+    MAX_TAMANIO_MB = int(os.getenv("MAX_TAMANIO_MB", "200"))
+except ValueError:
+    MAX_TAMANIO_MB = 200
+MAX_TAMANIO_BYTES = MAX_TAMANIO_MB * 1024 * 1024
 
 EXTENSIONES_PERMITIDAS = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".dwg", ".dxf"}
 
@@ -601,7 +605,7 @@ async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_us
 
         contenido = await upload_file.read()
         if len(contenido) > MAX_TAMANIO_BYTES:
-            raise HTTPException(status_code=413, detail="Archivo supera 50 MB.")
+            raise HTTPException(status_code=413, detail=f"Archivo supera el limite de {MAX_TAMANIO_MB} MB.")
 
         safe_name = (upload_file.filename or "file.pdf").replace("/", "_").replace("\\", "_")
         file_path = upload_dir / safe_name
@@ -787,7 +791,7 @@ async def subir_archivo(request: Request, identificador: str, usuario: dict = De
     if len(contenido) > MAX_TAMANIO_BYTES:
         raise HTTPException(
             status_code=413,
-            detail=f"El archivo supera el limite de 50 MB.",
+            detail=f"El archivo supera el limite de {MAX_TAMANIO_MB} MB.",
         )
 
     upload_dir = UPLOADS_DIR / radicacion["id"]
@@ -884,7 +888,7 @@ async def subir_formato(request: Request, identificador: str, usuario: dict = De
 
     contenido = await archivo.read()
     if len(contenido) > MAX_TAMANIO_BYTES:
-        raise HTTPException(status_code=413, detail="El archivo supera el límite de 50 MB.")
+        raise HTTPException(status_code=413, detail=f"El archivo supera el límite de {MAX_TAMANIO_MB} MB.")
 
     upload_dir = UPLOADS_DIR / radicacion["id"]
     upload_dir.mkdir(parents=True, exist_ok=True)

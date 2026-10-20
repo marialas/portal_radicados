@@ -77,6 +77,6 @@
 
 ## Archivos en disco y SharePoint
 
-- Local: `backend/uploads/{radicacion.id}/[{docCode}/]{archivo}` (50 MB máx. por parte).
+- Local: `backend/uploads/{radicacion.id}/[{docCode}/]{archivo}` (200 MB máx. por parte).
 - SharePoint: `Documentos_Radicacion/{RAD}/{A_Tecnicos,B_Certificaciones,C_Contractuales,D_Inventario,E_Otros[/Documentos para circuitos exclusivos de AP],F_Documentos_Adicionales}/{orden:02d}_{código}_{original}`; formatos sueltos en la raíz del radicado.
 - JWT payload: `{sub, email, role, company, name, exp(24h), iat}` HS256.

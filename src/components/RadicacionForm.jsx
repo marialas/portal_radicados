@@ -565,7 +565,7 @@ export const RadicacionForm = ({ onSuccess, onCancel, currentUser, filingToEdit 
       } else {
         const detalle = result?.detail || result?.error || result?.mensaje;
         if (response.status === 413) {
-          alert('Uno de los archivos supera los 50 MB permitidos. Reduzca el tamaño e intente de nuevo.');
+          alert('Uno de los archivos supera el límite de 200 MB permitidos. Reduzca el tamaño e intente de nuevo.');
         } else if (response.status === 400 && detalle) {
           alert(`No se pudo radicar: ${typeof detalle === 'string' ? detalle : JSON.stringify(detalle)}`);
         } else if (response.status === 409 && detalle) {

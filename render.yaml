@@ -25,3 +25,5 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS
         value: "*"
+      - key: MAX_TAMANIO_MB
+        value: "200"

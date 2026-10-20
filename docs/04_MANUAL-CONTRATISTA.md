@@ -36,7 +36,7 @@ Este manual le enseña a radicar, firmar y hacer seguimiento a expedientes técn
 - Navegador actualizado: Google Chrome o Microsoft Edge (recomendados).
 - Conexión estable a internet.
 - Cuenta de Microsoft 365. Si usa Gmail, regístrelo gratis como cuenta Microsoft en account.microsoft.com.
-- Documentos en PDF, imagen o plano AutoCAD (máximo 50 MB por archivo).
+- Documentos en PDF, imagen o plano AutoCAD (máximo 200 MB por archivo).
 
 ## 3. Glosario
 
@@ -130,7 +130,7 @@ No lo haga: con otro correo sus radicados no aparecen.
 | "La firma es obligatoria" | Ponga su firma en el Paso 3 antes de radicar. |
 | "No se pudo conectar" | Revise su internet o espere un minuto si la página está despertando. |
 | "Me devolvió al inicio" | Se venció el permiso (dura 24 horas). Entre de nuevo. |
-| "Me rechaza el archivo" | Use PDF, foto o plano de máximo 50 MB. |
+| "Me rechaza el archivo" | Use PDF, foto o plano de máximo 200 MB. |
 | "No veo mis radicados" | Entre con el mismo correo de siempre y quite los filtros de búsqueda. |
 
 ## 12. Soporte y contacto
