@@ -1,11 +1,3 @@
-/**
- * ============================================================================
- * INTECOAL S.A.S. - SISTEMA DE RADICACIÓN DE EXPEDIENTES ALUMBRADO PÚBLICO
- * PROYECTO DE ETAPA PRÁCTICA SENA (SISTEMAS / TELEINFORMÁTICA)
- * ============================================================================
- * Definiciones de Tipos e Interfaces TypeScript.
- * ----------------------------------------------------------------------------
- */
 
 export type FilingStatus = 
   | 'Radicado'

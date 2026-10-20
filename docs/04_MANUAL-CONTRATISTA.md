@@ -59,7 +59,7 @@ Este manual le enseña a radicar, firmar y hacer seguimiento a expedientes técn
 ## 5. Conozca la pantalla
 
 - **Encabezado superior:** logo INTECOAL, su cargo y los botones Manual y Salir.
-- **Menú lateral:** Nueva Radicación, Mis Radicaciones y Calendario (solo lectura, si aplica).
+- **Menú lateral:** Nueva Radicación y Mis Radicaciones (el **Calendario** es exclusivo del revisor).
 - **Mis Radicaciones:** tabla con sus expedientes, estados y acciones.
 - **Filtros y buscador:** encuentre radicados por número, proyecto, municipio o estado.
 

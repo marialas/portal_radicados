@@ -1,12 +1,10 @@
 import JSZip from 'jszip';
 
-/** ZIP del expediente con estructura M365, listo para SharePoint */
 export async function downloadFilingZip(filing) {
   const zip = new JSZip();
   const rootFolderName = filing.numeroRadicado || 'EXPEDIENTE_RETILAP';
   const projectFolder = zip.folder(rootFolderName);
 
-  // Subcarpetas M365
   const folderA = projectFolder.folder('A_Tecnicos');
   const folderB = projectFolder.folder('B_Certificaciones');
   const folderC = projectFolder.folder('C_Contractuales');
@@ -15,7 +13,6 @@ export async function downloadFilingZip(filing) {
   const folderF = projectFolder.folder('F_Documentos_Adicionales');
   const folderCEAP = folderE.folder('Documentos para circuitos exclusivos de AP');
 
-  // README con instrucciones SharePoint
   const readmeContent = `EXPEDIENTE TÉCNICO VERIFICACIÓN RETILAP 40150
 ================================================================
 INTERVENTORÍA Y CONSULTORÍA S.A.S. - INTECOAL S.A.S.
@@ -39,11 +36,9 @@ PASOS PARA SUBIR ESTA CARPETA A TU SHAREPOINT ONLINE:
 
   projectFolder.file('README_INSTRUCCIONES_SHAREPOINT.txt', readmeContent);
 
-  // Un PDF por requisito
   const archivos = filing.archivos || [];
   for (const archivo of archivos) {
     if (archivo.status === 'CUMPLE' || archivo.status === 'N/A' || filing.estado === 'Aprobado') {
-      // CEAP a su subcarpeta (vale para rutas viejas)
       const esCEAP = archivo.docId === 25 || (archivo.docCode || '').toUpperCase() === 'CEAP';
       let targetSubFolder = projectFolder;
       const path = archivo.folderPath || '';
@@ -59,7 +54,6 @@ PASOS PARA SUBIR ESTA CARPETA A TU SHAREPOINT ONLINE:
       const sanitizeName = (str) => (str || 'documento').replace(/[/\\?%*:|"<>]/g, '_');
       const filename = `${archivo.docCode}_${sanitizeName(archivo.fileName || archivo.docName)}.pdf`;
 
-      // PDF de marca de agua
       const pdfBinary = `%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
@@ -116,7 +110,6 @@ startxref
     }
   }
 
-  // Comprime y descarga
   const zipBlob = await zip.generateAsync({ type: 'blob' });
   const downloadUrl = URL.createObjectURL(zipBlob);
   const anchor = document.createElement('a');

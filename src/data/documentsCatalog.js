@@ -1,5 +1,4 @@
 export const DOCUMENT_CATALOG = [
-  // 1. Documentos de Diseño (A)
   {
     id: 1,
     code: 'A1',
@@ -71,7 +70,6 @@ export const DOCUMENT_CATALOG = [
     description: 'Conforme al formato 4.3.7.A del RETILAP. Formato oficial de declaración firmada por el diseñador eléctrico.'
   },
 
-  // 2. Luminarias y Materiales (B)
   {
     id: 8,
     code: 'B8',
@@ -143,7 +141,6 @@ export const DOCUMENT_CATALOG = [
     description: 'Certificación de postes de concreto o metálicos (si aplica en el alcance).'
   },
 
-  // 3. Documentos del Constructor (C)
   {
     id: 15,
     code: 'C15',
@@ -185,7 +182,6 @@ export const DOCUMENT_CATALOG = [
     description: 'Conforme al formato 4.3.7.B del RETILAP y formato 4.3.6.2 del RETIE. Formato de declaración juramentada de la correcta ejecución de la obra.'
   },
 
-  // 4. Dictámenes y Permisos (D)
   {
     id: 19,
     code: 'D19',
@@ -218,7 +214,6 @@ export const DOCUMENT_CATALOG = [
     description: 'Paz y salvo o recibo oficial de intervención de espacio público emitido por la alcaldía.'
   },
 
-  // 5. Otros
   {
     id: 22,
     code: 'CAUE',

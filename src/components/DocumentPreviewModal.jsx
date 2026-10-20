@@ -11,7 +11,6 @@ import {
   Box
 } from 'lucide-react';
 
-// DXF se visualiza en línea con el visor. DWG/DWF/DWT requieren AutoCAD para visualizarse.
 const esCad = (nombre = '') => {
   const n = (nombre || '').toLowerCase();
   return n.endsWith('.dwg') || n.endsWith('.dxf') || n.endsWith('.dwf') || n.endsWith('.dwt');
@@ -59,7 +58,6 @@ export const DocumentPreviewModal = ({ docItem, filing, onClose }) => {
   const hasFile = docItem.fileName && docItem.fileName !== 'N/A';
 
   const handleDownloadPdf = () => {
-    // Si el archivo está disponible en el servidor, descargarlo real desde el backend
     if (docItem.fileUrl || docItem.blobUrl) {
       const url = docItem.fileUrl || docItem.blobUrl;
       apiFetch(url)
@@ -78,7 +76,6 @@ export const DocumentPreviewModal = ({ docItem, filing, onClose }) => {
           URL.revokeObjectURL(objUrl);
         })
         .catch(() => {
-          // Respaldar con un PDF local mínimo si el archivo no está en el servidor
           const pdfContent = `%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
@@ -142,7 +139,6 @@ startxref
       return;
     }
 
-    // Sin URL del servidor: generar placeholder
     const pdfContent = `%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
@@ -207,7 +203,7 @@ startxref
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-3">
       <div className="bg-[#1E222A] text-white rounded-2xl shadow-2xl border border-slate-700 w-full max-w-[98vw] overflow-hidden flex flex-col h-[96vh] max-h-[96vh]">
-        {/* Header del Modal */}
+        
         <div className="bg-slate-900 px-6 py-4 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center space-x-3 truncate">
             <div className="w-10 h-10 rounded-xl bg-[#D9CF43]/20 border border-[#D9CF43]/40 flex items-center justify-center shrink-0">
@@ -238,11 +234,11 @@ startxref
           </div>
         </div>
 
-        {/* Toolbar de Controles */}
+        
         <div className="bg-slate-850 px-6 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-900/60">
           {hasFile && (
             <div className="flex flex-wrap items-center gap-2 text-gray-300">
-              {/* Zoom Controls */}
+              
               <button
                 onClick={handleDownloadPdf}
                 className="bg-slate-800 hover:bg-slate-700 text-white px-2.5 py-1.5 rounded-lg font-bold flex items-center space-x-1 shadow transition-colors"
@@ -255,7 +251,7 @@ startxref
           )}
         </div>
 
-        {/* Cuerpo del Modal */}
+        
         <div className="p-6 flex-1 bg-slate-950/80 min-h-0">
           <div className="h-full flex flex-col">
             {isNA ? (
@@ -386,7 +382,7 @@ startxref
           </div>
         </div>
 
-        {/* Footer del Modal */}
+        
         <div className="bg-slate-900 px-6 py-3 border-t border-slate-800 flex items-center justify-between text-xs text-gray-300">
           <span className="truncate">INTECOAL SAS • Custodia M365 SharePoint Online</span>
           <button

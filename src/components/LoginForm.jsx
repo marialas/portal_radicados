@@ -43,7 +43,7 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
     <div className="w-full flex items-center justify-center font-sans">
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
         
-        {/* Encabezado Corporativo */}
+        
         <div className="bg-[#1E222A] text-white px-5 py-4 border-b-4 border-[#D9CF43] relative overflow-hidden">
           <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-[#D9CF43]/10 rounded-full blur-2xl pointer-events-none" />
           
@@ -75,7 +75,7 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
         </div>
 
         <div className="px-5 py-4 space-y-4">
-          {/* Selección de Perfil Corporativo */}
+          
           <div className="space-y-2">
             <label className="text-xs font-black uppercase tracking-wider text-gray-500 block">
               1. Seleccione su Perfil de Acceso:
@@ -141,7 +141,7 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
             </div>
           </div>
 
-          {/* Opción A: Autenticación con Microsoft 365 (MSAL SSO) */}
+          
           <div className="bg-gradient-to-r from-blue-900/10 via-sky-800/10 to-indigo-900/10 border-2 border-blue-500/30 rounded-2xl p-4 space-y-3 relative overflow-hidden shadow-sm">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center space-x-5">
@@ -199,7 +199,7 @@ export const LoginForm = ({ onLoginSuccess, externalError }) => {
             </div>
           )}
 
-          {/* Mini manual: qué necesita para iniciar (ventana emergente) */}
+          
           <div className="flex justify-center">
             <button
               type="button"

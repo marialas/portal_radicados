@@ -49,6 +49,13 @@ npm run dev        # http://localhost:5173
 | `npm run build` | Build de producción → `dist/` |
 | `npm run preview` | Previsualizar el build |
 | `npm run lint` | Verificación de tipos (`tsc --noEmit`) |
+| `npm test` | Tests del frontend (Vitest) |
+
+## Tests (backend)
+
+```bash
+python -m pytest backend/tests -q     # unitarios (plazos, vencimientos, permisos)
+```
 
 ## Verificación rápida
 

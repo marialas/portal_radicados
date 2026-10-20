@@ -8,6 +8,16 @@ El repositorio ya incluye los archivos de despliegue:
 - `render.yaml` → backend en Render.
 - `netlify.toml` → frontend en Netlify (build + proxy `/api`).
 
+## URLs de producción
+
+| Pieza | URL |
+|-------|-----|
+| Frontend (Netlify) | `https://entregadeproyectos.netlify.app` |
+| Backend (Render) | `https://radicados-intecoal-sas.onrender.com` |
+| Proxy de API | `https://entregadeproyectos.netlify.app/api/*` → Render (redirect con `force = true` en `netlify.toml`) |
+
+> Si cambias el nombre del sitio en Netlify, actualiza **a la vez**: `VITE_MSAL_REDIRECT_URI` (Netlify), la URI de redirección registrada en la app de Azure AD y `FRONTEND_URL` / `ALLOWED_ORIGINS` (Render). Un cambio solo de CORS hace fallar `/api/*` en el navegador.
+
 ---
 
 ## Despliegue del Backend en Render.com
@@ -56,7 +66,7 @@ SHAREPOINT_LIST_ID=<list-id>
 SHAREPOINT_LIBRARY_ID=Documents   # nombre de la librería (se resuelve por nombre; si no existe usa la primera)
 
 M365_SENDER_EMAIL=coord.tecnico@intecoalsas.com
-M365_NOTIFICATION_RECIPIENT=<correo-del-revisor>
+M365_NOTIFICATION_RECIPIENT=coord.tecnico@intecoalsas.com  # revisor: avisos de nuevo radicado y vencimientos
 
 POWER_AUTOMATE_WEBHOOK_URL=   # opcional
 ```
@@ -126,15 +136,15 @@ VITE_MSAL_REDIRECT_URI=https://<tu-sitio>.netlify.app
 
 > `VITE_MSAL_REDIRECT_URI` en producción debe coincidir exactamente con la URI de redirección registrada en la app de Azure AD.
 
-### 4. Redirect del SPA
+### 4. Redirect del SPA (opcional)
 
-Asegurar que exista la regla de SPA (todas las rutas → `index.html`):
+El portal **no usa rutas con path** (es una sola pantalla con pestañas), así que no hace falta regla de SPA: todas las visitas caen en `/`. Solo añade el fallback si en algún momento incorporas rutas profundas:
 
 ```
 /*  /index.html  200
 ```
 
-Se puede añadir en un archivo `public/_redirects` o como redirect en Netlify.
+Se puede añadir en un archivo `public/_redirects` o como redirect en Netlify. Si la añades, colócala **después** de la regla de `/api/*` (que lleva `force = true`).
 
 ### 5. Custom Domain (opcional)
 
@@ -185,3 +195,24 @@ Se puede añadir en un archivo `public/_redirects` o como redirect en Netlify.
 ### Login M365 falla
 **Síntoma:** `timed_out` / `block_nested_popups`.
 **Solución:** `VITE_MSAL_REDIRECT_URI` debe coincidir con la URI registrada en Azure AD; MSAL usa `loginRedirect` con timeout de 3 min para MFA.
+
+### La lista de radicaciones aparece vacía
+**Diagnóstico (F12 → Network → `lista`):**
+
+| Estado de `lista` | Causa | Acción |
+|---|---|---|
+| `200` con datos | El filtro por correo del rol **Contratista** solo muestra los radicados que ese usuario creó (`creadorEmail`) | Entrar con el mismo correo con el que se radicó (el rol Revisor ve todo) |
+| `401` con cuerpo HTML | La **contraseña de Access control de Netlify** está interceptando el proxy a `/api/*` (sin cookie de sesión devuelve `401 text/html`) | Volver a autenticarse en el sitio o quitar la protección en **Site settings → Access control** |
+| `401` con JSON | JWT ausente/expirado | Cerrar sesión y volver a entrar |
+| `500` / `502` | Backend caído o reiniciando (plan gratuito en frío) | Esperar ~1 min y recargar |
+
+Comprobación rápida de CORS desde la consola del navegador: si `lista` está bloqueado por CORS, revisa `FRONTEND_URL`/`ALLOWED_ORIGINS` en Render.
+
+### Se perdieron radicados creados en producción
+**Causa:** Render (plan gratuito) **no tiene disco persistente** — `render.yaml` no declara `disks`, así que el archivo `backend/data/radicaciones.json` vuelve al estado del repositorio en **cada redespliegue o reinicio**.
+**Solución:** respaldar/crear los radicados donde sí persisten (SharePoint, que es la fuente oficial al aprobar), o montar un disco persistente en Render y mover `DATA_FILE` ahí.
+
+### Subidas grandes fallan (DWG/DXF de varios MB)
+**Síntoma:** la subida se corta sin mensaje claro.
+**Causas reales:** el proxy de Netlify corta peticiones **> 26 s** y hay un límite de tamaño en el POST que atraviesa el proxy; el backend acepta **≤ 50 MB** (PDF, imágenes, DWG/DXF).
+**Solución:** no reducir `MAX_TAMANIO_BYTES`; si el archivo es muy grande, subirlo con la conexión estable o servir la subida directa contra Render para diagnóstico.

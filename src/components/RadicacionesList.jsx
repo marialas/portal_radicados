@@ -36,18 +36,12 @@ export const RadicacionesList = ({
   const [selectedEstado, setSelectedEstado] = useState('TODOS');
   const [selectedTipo, setSelectedTipo] = useState('TODOS');
 
-  // Solo el ÚLTIMO número del consecutivo GLOBAL puede eliminarse, y solo
-  // por el contratista que lo creó. La fuente de verdad es `ultimoGlobal`
-  // del backend (el contratista no recibe la lista completa, así que no
-  // puede calcularlo solo con lo visible). Respaldo: cálculo local.
   const baseGlobal = (allFilings && allFilings.length ? allFilings : filings) || [];
   const ultimoCalculado = [...baseGlobal]
     .filter(f => f && f.numeroRadicado)
     .sort((a, b) => (b.numeroRadicado || '').localeCompare(a.numeroRadicado || ''))[0];
   const ultimoId = ultimoGlobal?.id || ultimoCalculado?.id || null;
 
-  // Filtros tolerantes: un registro incompleto no debe tumbar toda la lista
-  // (antes un metadata ausente lanzaba TypeError y dejaba la vista en blanco).
   const filtered = filings.filter(f => {
     if (!f) return false;
     const meta = f.metadata || {};

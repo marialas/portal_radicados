@@ -1,6 +1,5 @@
 import { PublicClientApplication, LogLevel } from '@azure/msal-browser';
 
-// Configuración por defecto de Azure AD / Entra ID (INTECOAL SAS / Microsoft 365)
 export const DEFAULT_AZURE_CONFIG = {
   clientId: import.meta.env.VITE_MSAL_CLIENT_ID || '',
   tenantId: import.meta.env.VITE_MSAL_TENANT_ID || 'common',
@@ -21,10 +20,10 @@ export function createMsalClient(clientId, tenantId, redirectUri) {
     },
     cache: {
       cacheLocation: 'localStorage',
-      storeAuthStateInCookie: true, // Asegura persistencia de estado en popups y redirects
+      storeAuthStateInCookie: true, 
     },
     system: {
-      windowHashTimeout: 180000, // 3 minutos de tiempo de espera para popups (evita timed_out en logins lentos o MFA)
+      windowHashTimeout: 180000, 
       iframeHashTimeout: 10000,
       loadFrameTimeout: 10000,
       asyncPopups: true,
@@ -63,7 +62,6 @@ export async function ensureMsalInit(instance = msalInstance) {
   return msalInitPromises.get(instance);
 }
 
-// Dominios permitidos por rol. El Responsable de Revisión solo con correo de INTECOAL.
 const ALLOWED_REVISOR_DOMAINS = ['intecoalsas.com', 'intecoal.com.co'];
 export const REVISOR_DOMAIN_HINT = 'Correo institucional de INTECOAL (@intecoalsas.com)';
 
@@ -77,7 +75,6 @@ export function validateRoleEmail(role, email) {
   if (role === 'interventor') {
     return isRevisorAllowedEmail(email);
   }
-  // Contratista (y cualquier otro rol) acepta cualquier correo
   return true;
 }
 
@@ -94,10 +91,8 @@ export function formatNameFromEmail(email, m365DisplayName = null) {
   let prefix = email.split('@')[0].trim();
   if (!prefix) return 'Usuario Portal';
 
-  // Reemplazar separadores comunes por espacios
   prefix = prefix.replace(/[\._\-+]/g, ' ');
 
-  // Separar nombres compuestos comunes en español si vienen sin espacios (ej. sanpedro -> san pedro)
   prefix = prefix.replace(/^(san)(pedro|juan|pablo|jose|diego|carlos|marcos|francisco|esteban|mateo)/i, '$1 $2');
   prefix = prefix.replace(/^(juan)(pablo|carlos|pedro|jose|diego|manuel|david|sebastian)/i, '$1 $2');
   prefix = prefix.replace(/^(maria)(jose|camila|fernanda|alejandra|paula|isabel|victoria)/i, '$1 $2');
@@ -151,30 +146,24 @@ export async function loginM365User(
 
   await ensureMsalInit(activeMsal);
 
-  // Clean URL hash if any leftover code or error is present to avoid block_nested_popups
   if (typeof window !== 'undefined' && window.location.hash && (window.location.hash.includes('code=') || window.location.hash.includes('error='))) {
     window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
   }
 
-  // Persistir el rol seleccionado (Revisor/Interventor o Creador/Contratista) y los indicadores de intento.
-  // IMPORTANTE: solo en sessionStorage que se limpia al cerrar la pestaña. NUNCA en localStorage,
-  // porque localStorage persiste entre sesiones y provocaba que el rol quedara "pegado" (caché) en "contratista".
   if (typeof window !== 'undefined') {
     sessionStorage.setItem('pending_msal_role', customRole);
     sessionStorage.setItem('is_msal_login_attempt', 'true');
     if (customEmail) {
       sessionStorage.setItem('pending_msal_email', customEmail);
     }
-    // Limpiar residuos viejos que se hayan guardado en localStorage de versiones anteriores
     try {
       localStorage.removeItem('pending_msal_role');
       localStorage.removeItem('pending_msal_email');
       localStorage.removeItem('is_msal_login_attempt');
-    } catch (e) { /* ignora */ }
+    } catch (e) {  }
   }
 
   try {
-    // Usar loginRedirect para autenticación limpia en la misma pestaña sin abrir popups ni pestañas duplicadas
     await activeMsal.loginRedirect({
       scopes: DEFAULT_AZURE_CONFIG.scopes,
       prompt: promptOption || 'select_account'
@@ -199,7 +188,6 @@ export async function logoutM365User() {
       sessionStorage.removeItem('m365_user_session');
       sessionStorage.removeItem('pending_msal_role');
     }
-    // Limpiar claves de caché de MSAL en localStorage
     if (typeof localStorage !== 'undefined') {
       Object.keys(localStorage).forEach(key => {
         if (key.includes('msal') || key.includes('login.windows.net') || key.includes('authority')) {

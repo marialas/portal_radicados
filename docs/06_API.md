@@ -26,7 +26,7 @@ Genera un token JWT a partir de identidad de sesión (flujo no-M365 / verificaci
 ```jsonc
 // Request
 {
-  "email": "anyeli_cabezas@soy.sena.edu.co",
+  "email": "contratista@empresa.com",
   "company": "SENA",
   "role": "contratista"
 }
@@ -45,7 +45,7 @@ Verifica la sesión/cuenta de Microsoft 365, valida el rol solicitado y devuelve
 ```jsonc
 // Request
 {
-  "account": { "username": "anyeli_cabezas@soy.sena.edu.co" },
+  "account": { "username": "contratista@empresa.com" },
   "role": "contratista"   // "interventor" exige dominio INTECOAL o responde 403
 }
 
@@ -312,7 +312,7 @@ Prueba la conexión con Microsoft Graph.
 
 ### POST /api/m365/revisar-vencimientos
 
-Disparo manual de la revisión de plazos (la automática corre cada 6 h). Envía avisos de 8/4 días hábiles no enviados y devuelve lo notificado.
+Disparo manual de la revisión de plazos (la automática corre **cada 1 h**, con el correo diario de vencidos a partir de las 8 a.m. hora Colombia). Envía los avisos pendientes de **8 días**, **4 días** y **diario** para radicados ya vencidos, y devuelve lo notificado. El texto del correo varía: "próximo a vencer / faltan N días", "vence hoy" o "vencido hace N días".
 
 ```jsonc
 // 200

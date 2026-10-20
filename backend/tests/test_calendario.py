@@ -1,10 +1,3 @@
-"""Pruebas caja blanca — Calendario de revisión (15 días hábiles + semáforo).
-
-Cubre: cálculo de días/restantes, triggers de correo (8, 4, diario 8am),
-idempotencia (sin bucles ni duplicados) y rutas HTTP con sus payloads.
-
-Tiempo congelado solo con la librería estándar (sin freezegun).
-"""
 import asyncio
 from datetime import datetime, timezone, timedelta, date
 
@@ -22,9 +15,6 @@ from backend.modelos import (
 )
 
 
-# --------------------------------------------------------------------------
-# Utilidades de tiempo congelado (solo stdlib)
-# --------------------------------------------------------------------------
 class _RelojFijo(datetime):
     _fija = None
 
@@ -34,7 +24,6 @@ class _RelojFijo(datetime):
 
 
 def _hoy_utc(y, m, d, hh=15, mm=0):
-    # 15:00 UTC = 10:00 Colombia (>= 8am, dispara la diaria)
     return datetime(y, m, d, hh, mm, tzinfo=timezone.utc)
 
 
@@ -61,7 +50,6 @@ class _GraphFalso:
 
 
 def _creacion_con_restantes(hoy, objetivo):
-    """Fecha de creación tal que dias_restantes(limite) == objetivo en `hoy`."""
     d = hoy
     while True:
         lim = fecha_limite_revision(datetime(d.year, d.month, d.day, tzinfo=timezone.utc).isoformat())
@@ -71,18 +59,14 @@ def _creacion_con_restantes(hoy, objetivo):
         assert (hoy - d).days < 400, "no se encontró fecha"
 
 
-# --------------------------------------------------------------------------
-# 1. Cálculo de días hábiles y restantes
-# --------------------------------------------------------------------------
 def test_limite_salta_fin_de_semana():
-    # Viernes -> el límite de 15 hábiles no puede caer en fin de semana
-    limite = fecha_limite_revision("2026-09-04T10:00:00+00:00")  # viernes
+    limite = fecha_limite_revision("2026-09-04T10:00:00+00:00")  
     assert es_dia_habil(limite)
     assert dias_habiles_entre(date(2026, 9, 4), limite) == 15
 
 
 def test_limite_lunes_arranca_bien():
-    limite = fecha_limite_revision("2026-09-28T10:00:00+00:00")  # lunes
+    limite = fecha_limite_revision("2026-09-28T10:00:00+00:00")  
     assert limite == date(2026, 10, 19)
     assert dias_habiles_entre(date(2026, 9, 28), limite) == 15
 
@@ -98,29 +82,21 @@ def test_solo_fecha_tolera_basura():
     assert _solo_fecha("no-fecha") is None
     assert _solo_fecha("") is None
     assert _solo_fecha(None) is None
-    # Madrugada UTC no cambia de día (paridad backend/frontend)
     assert _solo_fecha("2026-09-04T02:00:00+00:00") == date(2026, 9, 4)
 
 
 def test_puente_festivo_se_comporta_como_habil():
-    """LIMITACIÓN CONOCIDA: los festivos (ej. lunes 2026-10-12) NO se
-    descuentan; solo sábado/domingo. Si algún día se descuentan festivos,
-    este test debe invertirse."""
     limite = fecha_limite_revision("2026-09-28T10:00:00+00:00")
-    assert date(2026, 10, 12) <= limite  # el lunes festivo cuenta como hábil
+    assert date(2026, 10, 12) <= limite  
     assert dias_habiles_entre(date(2026, 10, 11), date(2026, 10, 12)) == 1
 
 
 @pytest.mark.xfail(reason="Festivos colombianos no descontados (solo lun-vie). Ver LIMITACIÓN.",
                    strict=False)
 def test_puente_festivo_se_descuenta():
-    # Comportamiento DESEADO si se implementan festivos oficiales
     assert dias_habiles_entre(date(2026, 10, 11), date(2026, 10, 12)) == 0
 
 
-# --------------------------------------------------------------------------
-# 2. Semáforo con fechas extremas
-# --------------------------------------------------------------------------
 @pytest.mark.parametrize("restantes,aprobado,esperado", [
     (None, False, "gris"),
     (None, True, "verde"),
@@ -133,15 +109,12 @@ def test_puente_festivo_se_descuenta():
     (8, False, "amarillo"),
     (9, False, "azul"),
     (365, False, "azul"),
-    (0, True, "verde"),  # aprobado manda sobre todo
+    (0, True, "verde"),  
 ])
 def test_semaforo_extremos(restantes, aprobado, esperado):
     assert estado_semaforo(restantes, aprobado) == esperado
 
 
-# --------------------------------------------------------------------------
-# 3. Triggers de correo: 8, 4 y diaria 8am (una sola vez, sin bucles)
-# --------------------------------------------------------------------------
 def _entorno(monkeypatch, registros, ahora):
     _RelojFijo._fija = ahora
     monkeypatch.setattr(M, "datetime", _RelojFijo)
@@ -162,7 +135,6 @@ def test_aviso_8_exactamente_una_vez(monkeypatch):
     assert [(n["numeroRadicado"], n["aviso"]) for n in primera] == [("RAD-T-001", "8 dias")]
     assert len(falso.envios) == 1
     assert regs[0]["notifVencimiento"].get("8")
-    # Segunda pasada el mismo día: silencio total (sin bucle ni duplicado)
     assert asyncio.run(M.revisar_vencimientos()) == []
     assert len(falso.envios) == 1
 
@@ -175,27 +147,25 @@ def test_aviso_4_escala_y_marca_8(monkeypatch):
     res = asyncio.run(M.revisar_vencimientos())
     assert [(n["numeroRadicado"], n["aviso"]) for n in res] == [("RAD-T-004", "4 dias")]
     assert regs[0]["notifVencimiento"].get("4")
-    assert regs[0]["notifVencimiento"].get("8")  # el aviso 8 queda saldado
+    assert regs[0]["notifVencimiento"].get("8")  
     assert asyncio.run(M.revisar_vencimientos()) == []
 
 
 def test_diaria_8am_vencido_hasta_aprobar(monkeypatch):
-    hoy = _hoy_utc(2026, 9, 28).date()  # 10:00 Colombia
-    creacion = _creacion_con_restantes(hoy, -3)  # vencido hace 3
+    hoy = _hoy_utc(2026, 9, 28).date()  
+    creacion = _creacion_con_restantes(hoy, -3)  
     viejo = "2026-09-20T15:00:00+00:00"
     regs = [_radicado("RAD-T-VEN", creacion, flags={"4": viejo, "8": viejo,
                                                    "diaria": "2026-09-27T15:00:00+00:00"})]
     falso, _ = _entorno(monkeypatch, regs, _hoy_utc(2026, 9, 28))
     assert [(n["numeroRadicado"], n["aviso"]) for n in asyncio.run(M.revisar_vencimientos())] == [("RAD-T-VEN", "diaria 8am")]
-    assert asyncio.run(M.revisar_vencimientos()) == []  # mismo día: no repite
-    # Al aprobarse se desactiva solo
+    assert asyncio.run(M.revisar_vencimientos()) == []  
     regs[0]["estado"] = "Aprobado"
     assert asyncio.run(M.revisar_vencimientos()) == []
     assert len(falso.envios) == 1
 
 
 def test_diaria_no_dispara_antes_de_las_8(monkeypatch):
-    # 12:00 UTC = 07:00 Colombia -> aún no son las 8
     ahora = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
     hoy = ahora.date()
     creacion = _creacion_con_restantes(hoy, -3)
@@ -206,8 +176,6 @@ def test_diaria_no_dispara_antes_de_las_8(monkeypatch):
 
 
 def test_vencido_sin_flag_8_recibe_4_no_8(monkeypatch):
-    # Regresión: un vencido sin ningún flag debe recibir el aviso urgente
-    # "4 dias", jamás la etiqueta "8 dias"
     hoy = _hoy_utc(2026, 9, 28).date()
     creacion = _creacion_con_restantes(hoy, -3)
     regs = [_radicado("RAD-T-REG", creacion)]
@@ -226,10 +194,6 @@ def test_aprobado_nunca_avisa(monkeypatch):
     assert falso.envios == []
 
 
-# --------------------------------------------------------------------------
-# 4. Rutas HTTP: códigos y payloads (lifespan solo lee: DB no vacía,
-#    columnas 403 capturado; la escritura se neutraliza con mocks)
-# --------------------------------------------------------------------------
 def _cliente():
     from fastapi.testclient import TestClient
     from backend.main import app
@@ -272,7 +236,6 @@ def test_ruta_revisar_notifica_con_payload(monkeypatch):
     creacion = _creacion_con_restantes(hoy, 8)
     regs = [_radicado("RAD-T-RUTA", creacion)]
     with _cliente() as c:
-        # Token con hora real (si se emite con el reloj congelado, nace expirado)
         r = c.post("/api/auth/msal-verify",
                    json={"account": {"username": "rev@intecoalsas.com"}, "role": "interventor"})
         assert r.json()["user"]["role"] == "interventor"

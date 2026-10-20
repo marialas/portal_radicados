@@ -2,10 +2,8 @@ import uuid
 from datetime import datetime, timezone, timedelta, date
 
 
-# Días hábiles (lun-vie) para el plazo de 15 días del revisor
 
 def _solo_fecha(valor):
-    """ISO/date/datetime a date UTC (o None)."""
     if not valor:
         return None
     if isinstance(valor, datetime):
@@ -54,7 +52,6 @@ def retroceder_dias_habiles(fecha, n):
 
 
 def dias_habiles_entre(desde, hasta):
-    """Hábiles en (desde, hasta]."""
     c = 0
     d = desde
     while d < hasta:
@@ -72,12 +69,10 @@ def fecha_limite_revision(fecha_radicacion_iso):
 
 
 def dias_habiles_restantes(fecha_limite, hoy=None):
-    """Compat: delega en dias_restantes."""
     return dias_restantes(fecha_limite, hoy)
 
 
 def dias_restantes(fecha_limite, hoy=None):
-    """Días calendario exactos restantes (negativo si venció)."""
     hoy = hoy or datetime.now(timezone.utc).date()
     if not fecha_limite:
         return None
@@ -85,16 +80,10 @@ def dias_restantes(fecha_limite, hoy=None):
 
 
 def fecha_en_que_faltan(fecha_limite, n):
-    """Fecha en que faltan n días para el límite."""
     return fecha_limite - timedelta(days=n)
 
 
 def estado_semaforo(restantes, aprobado=False):
-    """Color del semáforo del calendario (misma regla que el frontend).
-
-    verde = aprobado | morado = vencido | rojo = vence hoy o faltan <=4 |
-    amarillo = faltan <=8 | azul = en término | gris = sin fecha.
-    """
     if aprobado:
         return "verde"
     if restantes is None:
@@ -109,7 +98,6 @@ def estado_semaforo(restantes, aprobado=False):
 
 
 CATALOGO_21_DOCUMENTOS = [
-    # A. Diseño
     {
         "id": 1, "code": "A1", "name": "Diseño fotométrico aprobado",
         "category": "diseno", "categoryName": "Documentos de Diseño",
@@ -152,7 +140,6 @@ CATALOGO_21_DOCUMENTOS = [
         "required": True, "folderGroup": "B_Certificaciones",
         "description": "Conforme al formato 4.3.7.A del RETILAP. Formato oficial de declaración firmada por el diseñador eléctrico."
     },
-    # B. Luminarias
     {
         "id": 8, "code": "B8", "name": "Carta de garantía de luminarias",
         "category": "luminarias", "categoryName": "Luminarias y Materiales",
@@ -195,7 +182,6 @@ CATALOGO_21_DOCUMENTOS = [
         "required": True, "folderGroup": "B_Certificaciones",
         "description": "Certificación de postes de concreto o metálicos (si aplica en el alcance)."
     },
-    # C. Constructor
     {
         "id": 15, "code": "C15", "name": "Cédula de ciudadanía del constructor",
         "category": "constructor", "categoryName": "Documentos del Constructor",
@@ -220,7 +206,6 @@ CATALOGO_21_DOCUMENTOS = [
         "required": True, "folderGroup": "B_Certificaciones",
         "description": "Conforme al formato 4.3.7.B del RETILAP y formato 4.3.6.2 del RETIE. Formato de declaración juramentada de la correcta ejecución de la obra."
     },
-    # D. Dictámenes
     {
         "id": 19, "code": "D19", "name": "Dictamen RETIE",
         "category": "dictamenes", "categoryName": "Dictámenes y Permisos",
@@ -241,7 +226,6 @@ CATALOGO_21_DOCUMENTOS = [
         "required": True, "folderGroup": "D_Inventario",
         "description": "Paz y salvo o recibo oficial de intervención de espacio público emitido por la alcaldía."
     },
-    # Otros
     {
         "id": 22, "code": "CAUE", "name": "CAUE — Costo Anual Uniforme Equivalente",
         "category": "otros", "categoryName": "Otros",

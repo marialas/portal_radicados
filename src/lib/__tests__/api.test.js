@@ -37,8 +37,6 @@ describe('apiFetch — JWT y expiración (caja blanca)', () => {
     sessionStorage.setItem('active_tab', 'lista');
     setToken('JWT-VIEJO');
     fetch.mockResolvedValue(respuesta(401, { detail: 'expirada' }));
-    // jsdom no implementa navigation: el reload puede no-op; lo que importa
-    // es que la sesión quede destruida antes de cualquier reintento
     await apiFetch('/api/radicacion/lista').catch(() => null);
     expect(getToken()).toBe('');
     expect(sessionStorage.getItem('m365_user_session')).toBeNull();

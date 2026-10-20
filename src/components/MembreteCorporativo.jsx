@@ -6,26 +6,15 @@ import {
   ICONO_TELEFONO
 } from '../lib/imagenesMembrete';
 
-/**
- * Membrete y franja corporativos del Recibo Técnico
- * (logo, información de contacto y colores oficiales).
- * Se comparte entre Recibo Técnico y Formato 4.3.7 C para que
- * ambos documentos lleven exactamente el mismo encabezado y pie.
- *
- * NOTA impresión: los fondos/colores solo salen en papel con
- * print-color-adjust: exact (por defecto el navegador los omite).
- */
 
 const printExact = {
   WebkitPrintColorAdjust: 'exact',
   printColorAdjust: 'exact'
 };
 
-// Firma fija del Director de Interventoría (Recibo Técnico e Informe)
 export const FIRMA_NOMBRE_JEFE = 'VICTOR JAIME CASTAÑO ACOSTA';
 export const FIRMA_CARGO_JEFE = 'Director de Interventoría.';
 
-// Dirección y teléfono del encabezado según municipio
 const datosPorMunicipio = (municipio) => {
   const m = (municipio || '')
     .toLowerCase()
@@ -88,7 +77,7 @@ export const MembreteRecibo = ({ municipio }) => {
         </div>
       </div>
     </div>
-    {/* Línea superior: abajo del encabezado, de margen a margen */}
+    
     <hr style={{ border: 'none', height: '3px', backgroundColor: '#4E3629', margin: '20px 0', width: '100%', ...printExact }} />
   </div>
   );
@@ -97,10 +86,10 @@ export const MembreteRecibo = ({ municipio }) => {
 export const FranjaCorporativa = () => (
   <footer style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'sans-serif', marginTop: '60px', paddingBottom: '50px', ...printExact }}>
 
-    {/* Contenedor principal que alinea perfectamente las dos secciones en el mismo nivel inferior */}
+    
     <div style={{ display: 'flex', alignItems: 'flex-end', width: '100%' }}>
 
-      {/* Bloque Izquierdo Sólido (Marrón + Dorado) con corte diagonal corregido */}
+      
       <div style={{
         width: '35%',
         height: '44px',
@@ -110,7 +99,7 @@ export const FranjaCorporativa = () => (
         ...printExact
       }}></div>
 
-      {/* Contenedor Derecho: Mueve el texto arriba y pega la línea justo en la base del bloque */}
+      
       <div style={{
         width: '65%',
         display: 'flex',
@@ -119,7 +108,7 @@ export const FranjaCorporativa = () => (
         marginBottom: '0px'
       }}>
 
-        {/* Texto Web: Ahora se ubica exactamente arriba de la línea, sin estorbar a la diagonal */}
+        
         <span style={{
           fontSize: '13px',
           color: '#4E3629',
@@ -129,7 +118,7 @@ export const FranjaCorporativa = () => (
           letterSpacing: '0.3px'
         }}>www.Intecoalsas.com</span>
 
-        {/* Línea delgada horizontal perfectamente conectada a la base */}
+        
         <div style={{ width: '100%', height: '3px', backgroundColor: '#4E3629', ...printExact }}></div>
 
       </div>

@@ -19,6 +19,7 @@
 | 07 | ☁️ **Producción** | [07_DEPLOYMENT.md](07_DEPLOYMENT.md) | Despliegue en Render (API) y Netlify (frontend) |
 | 08 | 🔐 **Protección** | [08_SECURITY.md](08_SECURITY.md) | Autenticación JWT/MSAL, roles y buenas prácticas |
 | 09 | 🎬 **Video** | [09_GUION-VIDEO-CONTRATISTA.md](09_GUION-VIDEO-CONTRATISTA.md) | Guion del video instructivo |
+| 10 | 📊 **Datos** | [10_DICCIONARIO-DATOS.md](10_DICCIONARIO-DATOS.md) | Diccionario de datos, campos y estructura en disco/SharePoint |
 
 ---
 
@@ -34,7 +35,7 @@ Revisar [03_FLUJO.md](03_FLUJO.md) → sección **Roles y Acceso**.
 Consultar [06_API.md](06_API.md), con los endpoints agrupados por dominio de uso.
 
 ### ¿Vas a desplegar a producción?
-Seguir [DEPLOYMENT.md](07_DEPLOYMENT.md).
+Seguir [07_DEPLOYMENT.md](07_DEPLOYMENT.md) (incluye URLs de producción y troubleshooting).
 
 ### ¿Preocupado por la seguridad?
 Leer [08_SECURITY.md](08_SECURITY.md).

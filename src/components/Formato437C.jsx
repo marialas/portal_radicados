@@ -72,7 +72,6 @@ const EMPTY = {
 
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 
-// Fecha de hoy para autodiligenciamiento (se recalcula en cada carga)
 const fechaHoy = () => {
   const hoy = new Date();
   return {
@@ -82,9 +81,6 @@ const fechaHoy = () => {
   };
 };
 
-// Datos iniciales: número de radicado, municipio/ciudad y fecha se
-// diligencian automáticamente. La fecha se actualiza día a día mientras
-// el formato NO se haya subido; una vez subido se congela lo guardado.
 const datosIniciales = (filing) => {
   const m = filing?.metadata || {};
   const saved = m.formato437c || {};
@@ -104,13 +100,7 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
   const yaSubido = (filing?.formatos || []).some(f =>
     f.nombre?.toLowerCase().includes('formato 4.3.7 c')
   );
-  // Carga perezosa: al montar (o al abrir el formato de un radicado con
-  // datos ya guardados) se muestran de inmediato. Antes se iniciaba con
-  // EMPTY y el efecto solo cargaba al CAMBIAR de radicado, por eso se veía
-  // un formato "limpio" aunque hubiera datos guardados.
   const [data, setData] = useState(() => datosIniciales(filing));
-  // Nunca entra en edición solo: siempre se muestra como está guardado
-  // y solo se edita pulsando Editar (igual que el Recibo Técnico)
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -278,7 +268,7 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
         }
       `}</style>
 
-      {/* Barra de acciones */}
+      
       <div className="flex flex-col lg:flex-row flex-wrap items-start lg:items-center justify-between gap-4 mb-6 bg-white p-4 rounded-2xl shadow-lg border border-gray-200 print:hidden">
         <div className="flex flex-wrap items-center gap-2.5 min-w-0">
           <button
@@ -289,7 +279,7 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
             <span>Volver</span>
           </button>
 
-          {/* Selector de radicado */}
+          
           <div className="relative min-w-0 max-w-[280px] sm:max-w-[340px] flex-1">
             <select
               value={filing?.id || ''}
@@ -370,8 +360,7 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
         </div>
       </div>
 
-      {/* Canvas del formato (sin márgenes: encabezado en thead y pie en
-          tfoot para que se repitan en cada página impresa) */}
+      
       <div
         ref={formatRef}
         className="print-canvas bg-white print:shadow-none print:border-none print:rounded-none print:w-full text-slate-900"
@@ -380,22 +369,22 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
       <table className="fc-repeat" style={{ width: '100%', borderCollapse: 'collapse', height: '1000px' }}>
         <thead className="fc-head">
           <tr><td style={{ padding: 0 }}>
-        {/* Membrete corporativo (tal cual el Recibo Técnico) */}
+        
         <MembreteRecibo municipio={data.municipio || filing?.metadata?.municipio || ''} />
           </td></tr>
         </thead>
         <tbody>
           <tr><td style={{ padding: 0, verticalAlign: 'top' }}>
-          {/* Contenedor principal del formato (márgenes de hoja) */}
+          
           <div style={{ maxWidth: '1000px', margin: '0 auto', paddingLeft: '40px', paddingRight: '40px', boxSizing: 'border-box' }}>
           <div className="space-y-6">
-        {/* Cabecera oficial */}
+        
         <div className="text-center pb-3 space-y-1">
           <p className="text-sm font-bold tracking-wide">REPÚBLICA DE COLOMBIA</p>
           <p className="text-sm font-bold tracking-wide">MINISTERIO DE MINAS Y ENERGÍA</p>
         </div>
 
-        {/* Título */}
+        
         <div className="text-center space-y-1.5">
           <h2 className="text-[13px] font-black uppercase leading-snug">
             DECLARACIÓN DE CUMPLIMIENTO DE OPERACIÓN Y MANTENIMIENTO DE INSTALACIONES DE SISTEMAS DE ILUMINACIÓN BAJO EL REGLAMENTO TÉCNICO DE ILUMINACIÓN Y ALUMBRADO PÚBLICO – RETILAP.
@@ -410,7 +399,7 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
           Formato 4.3.7.c. Declaración de cumplimiento de operación y mantenimiento de instalaciones de sistemas de iluminación.
         </p>
 
-        {/* Cuerpo del formato (Arial Narrow 12pt) */}
+        
         <div className="space-y-4 text-[16px] leading-relaxed">
           <p className="text-justify">
             Yo {V('nombreOperador')}, identificado(a) con la cedula de ciudadanía No.{' '}
@@ -444,7 +433,7 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
           </p>
         </div>
 
-        {/* Información de notificación */}
+        
         <div>
           <p className="text-[11px] font-black uppercase">Información de notificación del encargado de la operación o mantenimiento:</p>
           <p className="leading-relaxed mt-1.5">
@@ -461,7 +450,7 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
           </p>
         </div>
 
-        {/* Anexos */}
+        
         <div className="text-[16px] space-y-1">
           <p className="font-bold uppercase">Anexos:</p>
           <p className="text-justify">
@@ -470,7 +459,7 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
           </p>
         </div>
 
-        {/* Firma */}
+        
         {editing ? (
           <div className="space-y-2 print:hidden">
             <label className="block text-xs font-bold text-gray-700 uppercase">Subir Firma (PNG/JPG)</label>
@@ -497,7 +486,7 @@ export const Formato437C = ({ filing, allFilings, onSelectFiling, onBack, onUpda
         </tbody>
         <tfoot className="fc-foot">
           <tr><td style={{ padding: 0 }}>
-            {/* Pie de página: franja decorativa corporativa (tal cual el Recibo Técnico) */}
+            
             <FranjaCorporativa />
           </td></tr>
         </tfoot>

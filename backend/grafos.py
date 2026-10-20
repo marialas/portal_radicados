@@ -5,7 +5,6 @@ import httpx
 
 
 def esc(valor):
-    """Escapa texto para interpolarlo en HTML de correos (anti-XSS/HTML injection)."""
     return html.escape(str(valor or ""), quote=True)
 
 
@@ -95,10 +94,8 @@ class GraphService:
         "D_Inventario", "E_Otros", "F_Documentos_Adicionales",
     ]
 
-    # Subcarpeta del #25 CEAP dentro de E_Otros
     CEAP_SUBCARPETA = "Documentos para circuitos exclusivos de AP"
 
-    # Otros directos en E_Otros: CAUE/CANT/CVP
     OTROS_IDS = {22, 23, 24}
     OTROS_CODES = {"CAUE", "CANT", "CVP"}
 
@@ -111,12 +108,6 @@ class GraphService:
         return limpio.strip("_") or "documento"
 
     def _nombre_ordenado(self, archivo):
-        """Nombre con orden y código: 01_A1_diseno-original.pdf
-
-        Preserva el nombre original aportado por el contratista y le
-        antepone el orden (docId) + código para que en SharePoint quede
-        ordenado y trazable.
-        """
         original = archivo.get("fileName") or archivo.get("docName") or "documento.pdf"
         code = archivo.get("docCode") or str(archivo.get("docId", "X"))
         try:
@@ -137,7 +128,6 @@ class GraphService:
         return doc_id == 25 or code == "CEAP"
 
     def _carpeta_destino(self, archivo):
-        # Por documento (no por ruta guardada): incluye radicados viejos
         try:
             doc_id = int(archivo.get("docId", 0))
         except (TypeError, ValueError):
@@ -146,13 +136,11 @@ class GraphService:
         if self._es_ceap(archivo) or doc_id in self.OTROS_IDS or code in self.OTROS_CODES:
             return "E_Otros"
         if doc_id == 21 or code == "D21":
-            # D21 va con D19/D20
             return "D_Inventario"
         if archivo.get("esManual"):
             return "F_Documentos_Adicionales"
         folder_path = archivo.get("folderPath") or ""
         if "Documentos_Adicionales" in folder_path:
-            # Cubre la ruta vieja y la nueva F_Documentos_Adicionales
             return "F_Documentos_Adicionales"
         partes = [p for p in folder_path.split("/") if p]
         if partes:
@@ -160,8 +148,7 @@ class GraphService:
             if candidato in self.SUBCARPETAS:
                 return candidato
             if candidato == "E_SST_Ambiental":
-                return "E_Otros"  # ruta vieja
-        # Fallback por código para no dejar nada en la raíz
+                return "E_Otros"  
         if code.startswith("A"):
             return "A_Tecnicos"
         if code.startswith("B"):
@@ -175,20 +162,13 @@ class GraphService:
         return "F_Documentos_Adicionales"
 
     async def sincronizar_a_sharepoint(self, radicacion):
-        # Flujo único (antes duplicaba filas): fila + carpetas + archivos
         return await self.guardar_radicacion_en_sharepoint(radicacion)
 
     @staticmethod
     def _filtro_seguro(valor):
-        """Escapa comillas simples para valores dentro de $filter OData.
-
-        Sin esto, un número de radicado con apóstrofe rompería la consulta
-        o permitiría inyección de filtro (OData injection).
-        """
         return str(valor or "").replace("'", "''")
 
     async def _asegurar_carpeta(self, cliente, headers, base, parent_rel, nombre):
-        """Crea parent_rel/nombre si no existe. parent_rel='' = raíz."""
         rel = f"{parent_rel}/{nombre}" if parent_rel else nombre
         url_get = f"{base}/root:/{rel}"
         try:
@@ -223,20 +203,17 @@ class GraphService:
         base = await self._drive_url()
 
         async with httpx.AsyncClient(timeout=30.0) as cliente:
-            # Crea padre e hijas (sin padre Graph responde 404)
             await self._asegurar_carpeta(cliente, headers, base, "", self.RAIZ)
             await self._asegurar_carpeta(cliente, headers, base, self.RAIZ, codigo)
             padre = f"{self.RAIZ}/{codigo}"
             for sub in self.SUBCARPETAS:
                 await self._asegurar_carpeta(cliente, headers, base, padre, sub)
-            # Subcarpeta anidada del #25 CEAP
             await self._asegurar_carpeta(
                 cliente, headers, base,
                 f"{padre}/E_Otros", self.CEAP_SUBCARPETA,
             )
 
     async def _subir_contenido(self, cliente, headers_auth, base, rel_path, contenido):
-        """Subida simple (<4MB) o por sesión (>4MB, archivos de hasta 50MB)."""
         LIMITE_SIMPLE = 4 * 1024 * 1024
         if len(contenido) <= LIMITE_SIMPLE:
             url = f"{base}/root:/{rel_path}:/content"
@@ -246,7 +223,6 @@ class GraphService:
                 return True
             print(f"[GRAPH] Error subiendo {rel_path}: {resp.status_code} {resp.text[:200]}")
             return False
-        # Archivos >4MB: subida por fragmentos de 5MB
         url_sesion = f"{base}/root:/{rel_path}:/createUploadSession"
         resp = await cliente.post(url_sesion, headers={**headers_auth, "Content-Type": "application/json"}, json={})
         if resp.status_code != 200:
@@ -285,7 +261,6 @@ class GraphService:
         subidos = 0
         omitidos = 0
         async with httpx.AsyncClient(timeout=120.0) as cliente:
-            # 1) Documentos con archivo local (se custodian todos)
             for a in radicacion.get("archivos", []):
                 local_path = (a.get("localPath") or "").strip()
                 file_name = (a.get("fileName") or "").strip()
@@ -312,7 +287,6 @@ class GraphService:
                 subcarpeta = self._carpeta_destino(a)
                 destino = self._nombre_ordenado(a)
                 if self._es_ceap(a):
-                    # CEAP a su subcarpeta anidada
                     rel = f"{self.RAIZ}/{codigo}/{subcarpeta}/{self.CEAP_SUBCARPETA}/{destino}"
                 else:
                     rel = f"{self.RAIZ}/{codigo}/{subcarpeta}/{destino}"
@@ -324,7 +298,6 @@ class GraphService:
                     print(f"[GRAPH] Excepcion subiendo {rel}: {e}")
                     omitidos += 1
 
-                # Anexos y sub-archivos
                 for sf in a.get("subFiles", []) or []:
                     sf_local = (sf.get("localPath") or "").strip()
                     if not sf_local:
@@ -353,21 +326,17 @@ class GraphService:
                     except Exception as e:
                         print(f"[GRAPH] Excepcion subiendo {rel_sf}: {e}")
 
-            # Formatos no incluidos: solo suben con su botón Subir
 
         print(f"[GRAPH] Subida {codigo}: {subidos} archivos OK, {omitidos} omitidos")
         return {"subidos": subidos, "omitidos": omitidos}
 
     def _nombre_seguro_raiz(self, nombre):
-        # Nombre seguro para raíz: conserva espacios y puntos
         seguro = "".join(c for c in str(nombre or "") if c not in '/\\?%*:|"<>').strip() or "formato.pdf"
         if not seguro.lower().endswith(".pdf"):
             seguro += ".pdf"
         return seguro
 
     async def subir_formato_a_sharepoint(self, numero, formato):
-        """Sube UN formato (4.3.7 C) suelto en la raíz de la carpeta del
-        radicado. Solo se llama desde el botón Subir del formato."""
         token = await self._obtener_token()
         headers_auth = {"Authorization": f"Bearer {token}"}
         headers_json = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -398,7 +367,6 @@ class GraphService:
         return "".join(c for c in unicodedata.normalize("NFD", m) if unicodedata.category(c) != "Mn")
 
     def _logo_por_municipio(self, municipio):
-        """Devuelve (cid, ruta_local, content_type) del logo según municipio."""
         m = self._normalizar_municipio(municipio)
         if "tulua" in m:
             nombre = "logo-tulua.jpg"
@@ -420,7 +388,6 @@ class GraphService:
         return cid, str(ruta), tipo
 
     def _pie_logo_html(self, municipio):
-        """Firma visual al final del correo (sin marco): logo del municipio."""
         cid, _, _ = self._logo_por_municipio(municipio)
         return f'<img src="cid:{cid}" alt="INTECOAL SAS" style="max-width:520px;width:100%;height:auto;margin:12px 0 4px 0;" />'
 
@@ -442,7 +409,6 @@ class GraphService:
         }
 
     def _plantilla_correo(self, titulo, cuerpo_interno, municipio):
-        """Plantilla plana (sin marco de cuadro) + logo del municipio al final."""
         return f"""<html><body style="font-family:Arial,sans-serif;color:#1E222A;">
 <h2 style="margin:0 0 12px 0;font-size:17px;color:#1E222A;">{titulo}</h2>
 {cuerpo_interno}
@@ -451,15 +417,9 @@ class GraphService:
 </body></html>"""
 
     def _remitente_municipio(self, municipio):
-        """Remitente según municipio (respaldo: correo general).
-
-        OJO: el buzón debe existir en el tenant; si no, Graph rechaza
-        el envío y se registra en logs (el flujo no se interrumpe).
-        """
         return self._correo_municipio(municipio) or self.sender_email
 
     def _copia_municipio(self, municipio, destino):
-        """Lista con el correo municipal (sin duplicar al destinatario)."""
         correo = self._correo_municipio(municipio)
         if correo and destino and correo.lower() == destino.lower():
             return []
@@ -501,7 +461,6 @@ class GraphService:
         return self.notification_recipient
 
     def _correo_municipio(self, municipio):
-        """Correo del municipio (para segunda notificación del calendario)."""
         m = self._normalizar_municipio(municipio)
         if "tulua" in m:
             return "tulua@intecoalsas.com"
@@ -524,7 +483,6 @@ class GraphService:
         )
 
     async def enviar_correo_nuevo_radicado_revisor(self, radicacion):
-        """Notifica al revisor (interventoría) que hay un nuevo radicado por revisar."""
         destino = self._revisor_email()
         if not destino:
             return
@@ -549,7 +507,6 @@ class GraphService:
                                   self._copia_municipio(municipio, destino))
 
     async def enviar_correo_nuevo_radicado_contratista(self, radicacion):
-        """Notifica al contratista que su radicado fue creado y quedó en revisión."""
         destino = self._contratista_email(radicacion)
         if not destino:
             return
@@ -572,7 +529,6 @@ class GraphService:
                                   self._remitente_municipio(municipio))
 
     async def enviar_correo_estado(self, radicacion, estado_anterior, observaciones):
-        """Notifica al contratista el resultado de la evaluación (Aprobado / Con Observaciones)."""
         meta = radicacion["metadata"]
         destino = self._contratista_email(radicacion)
         if not destino:
@@ -598,7 +554,6 @@ class GraphService:
                                   self._remitente_municipio(municipio))
 
     async def enviar_correo_reesubido_revisor(self, radicacion):
-        """Notifica al revisor que el contratista reenvió/actualizó el radicado y hay trabajo pendiente por revisar."""
         destino = self._revisor_email()
         if not destino:
             return
@@ -620,7 +575,6 @@ class GraphService:
                                   self._copia_municipio(municipio, destino))
 
     async def enviar_correo_reenvio_contratista(self, radicacion):
-        """Notifica al contratista que su radicado editado fue subido correctamente y quedó en revisión."""
         meta = radicacion["metadata"]
         municipio = meta.get("municipio", "")
         destino = self._contratista_email(radicacion)
@@ -642,12 +596,12 @@ class GraphService:
                                   self._copia_municipio(municipio, destino),
                                   self._remitente_municipio(municipio))
 
-    async def enviar_correo_vencimiento(self, radicacion, dias_restantes, fecha_limite):
-        """Avisa al revisor que un radicado está por vencer (8 / 4 días hábiles).
+    @staticmethod
+    def _dias_txt(cantidad):
+        n = abs(int(cantidad or 0))
+        return f"{n} día" if n == 1 else f"{n} días"
 
-        Doble envío simultáneo: correo general (revisor) + correo del
-        municipio del radicado, ambos con el número de radicado.
-        """
+    async def enviar_correo_vencimiento(self, radicacion, dias_restantes, fecha_limite):
         destino = self._revisor_email()
         if not destino:
             print("[GRAPH] Sin destinatario revisor (M365_NOTIFICATION_RECIPIENT), no se envía aviso de vencimiento")
@@ -658,14 +612,25 @@ class GraphService:
         extras = [copia_municipio] if copia_municipio else []
         numero = radicacion.get("numeroRadicado", "?")
         municipio = meta.get("municipio", "")
-        if dias_restantes is not None and dias_restantes < 0:
-            asunto = f"URGENTE: Radicado vencido sin evaluar — {esc(numero)}"
-            estado_txt = f"venció hace {-dias_restantes} día(s) (límite: {fecha_limite})"
+        vencido = dias_restantes is not None and dias_restantes < 0
+        if vencido:
+            atraso = self._dias_txt(-dias_restantes)
+            asunto = f"URGENTE: Radicado vencido hace {atraso} — {esc(numero)}"
+            estado_txt = f"vencido hace {atraso} (límite: {fecha_limite})"
+            intro_txt = "El siguiente radicado <strong>ya venció</strong> su plazo de 15 días hábiles de revisión:"
+            cta_txt = f"El plazo venció hace {atraso}. Evalue el expediente con prioridad y, si aplica, suba el Formato 4.3.7 C y el Recibo Técnico de inmediato."
+        elif dias_restantes == 0:
+            asunto = f"URGENTE: Radicado vence hoy — {esc(numero)}"
+            estado_txt = f"vence hoy (límite: {fecha_limite})"
+            intro_txt = "El siguiente radicado <strong>vence hoy</strong> el plazo de 15 días hábiles de revisión:"
+            cta_txt = "Evalue el expediente hoy y, si aplica, suba el Formato 4.3.7 C y el Recibo Técnico antes del cierre."
         else:
-            asunto = f"Radicado por vencer ({dias_restantes} días) — {esc(numero)}"
-            estado_txt = f"faltan {dias_restantes} días (límite: {fecha_limite})"
+            asunto = f"Radicado por vencer ({self._dias_txt(dias_restantes)}) — {esc(numero)}"
+            estado_txt = f"faltan {self._dias_txt(dias_restantes)} (límite: {fecha_limite})"
+            intro_txt = "El siguiente radicado está próximo a vencer su plazo de 15 días hábiles de revisión:"
+            cta_txt = "Evalue el expediente y, si aplica, suba el Formato 4.3.7 C y el Recibo Técnico antes del vencimiento."
         interno = f"""
-            <p>El siguiente radicado está próximo a vencer su plazo de 15 días hábiles de revisión: <strong>{esc(estado_txt)}</strong>.</p>
+            <p>{intro_txt} <strong>{esc(estado_txt)}</strong>.</p>
             <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0;">
                 <tr><td style="padding:6px 0;font-weight:bold;width:150px;">Radicado:</td><td><strong>{esc(numero)}</strong></td></tr>
                 <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{esc(meta.get('nombreProyecto', ''))}</td></tr>
@@ -673,7 +638,7 @@ class GraphService:
                 <tr><td style="padding:6px 0;font-weight:bold;">Contratista:</td><td>{esc(meta.get('contratista', ''))}</td></tr>
                 <tr><td style="padding:6px 0;font-weight:bold;">Estado:</td><td>{esc(radicacion.get('estado', ''))}</td></tr>
             </table>
-            <p style="font-size:12px;color:#666;">Evalue el expediente y, si aplica, suba el Formato 4.3.7 C y el Recibo Técnico antes del vencimiento.</p>
+            <p style="font-size:12px;color:#666;">{cta_txt}</p>
             <p style="font-size:11px;color:#999;">INTECOAL SAS — Interventoría Técnica (aviso automático)</p>
         """
         cuerpo = self._plantilla_correo("INTECOAL SAS — Alerta de vencimiento de revisión", interno, municipio)
@@ -948,7 +913,6 @@ class GraphService:
                     f"SharePoint rechazó la fila de la lista ({resp.status_code}): {resp.text[:300]}"
                 )
 
-        # Fila + carpetas + archivos en un solo flujo
         resumen = {"fila": f"{numero} ({estado_sp})", "carpetas": "ok", "archivos": {}}
         try:
             await self._crear_carpeta_proyecto(numero)

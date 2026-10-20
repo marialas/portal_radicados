@@ -42,12 +42,10 @@ export const ReciboTecnico = ({
   const [cuerpo, setCuerpo] = useState(() => saved.cuerpo ?? '');
   const [titulo, setTitulo] = useState(() => saved.titulo ?? '');
   const [senor, setSenor] = useState(() => saved.senor ?? '');
-  // Sin auto-edición: solo con el botón Editar
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // Subido = bloqueado contra edición
   useEffect(() => {
     if (yaSubido) setEditing(false);
   }, [yaSubido]);
@@ -83,12 +81,10 @@ export const ReciboTecnico = ({
 
   const municipio = meta.municipio || 'Andalucía';
   const proyecto = meta.nombreProyecto || 'Parque Principal Vicente H. Cruz';
-  // Señor y título: auto pero editables
   const tituloAuto = `RECIBO TÉCNICO PROYECTO DE ILUMINACIÓN ${proyecto.toUpperCase()} DEL MUNICIPIO DE ${municipio.toUpperCase()}.`;
   const senorAuto = meta.responsable || meta.contratista || 'Elbert Lopez';
   const tituloVer = titulo || tituloAuto;
   const senorVer = senor || senorAuto;
-  // Fecha viva hasta subir; luego se congela
   const fechaTexto = `${municipio}, ${saved.fechaCongelada || fechaModelo()}`;
   const cuerpoParrafos = (cuerpo || '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
 
@@ -119,7 +115,6 @@ export const ReciboTecnico = ({
             cuerpo,
             titulo: titulo || undefined,
             senor: senor || undefined,
-            // Conserva fecha congelada si existe
             fechaCongelada: saved.fechaCongelada || undefined,
             fechaActualizacion: new Date().toISOString(),
             actualizadoPor: currentUser?.email || ''
@@ -140,7 +135,6 @@ export const ReciboTecnico = ({
   const handleUpload = async () => {
     if (!canvasRef.current || !filing) return;
     setUploading(true);
-    // Congela la fecha visible al subir
     const fechaAlSubir = saved.fechaCongelada || fechaModelo();
     const origGetCS = window.CSSStyleDeclaration.prototype.getPropertyValue;
     try {
@@ -203,7 +197,6 @@ export const ReciboTecnico = ({
         }
       };
       if (onUpdateFiling) {
-        // Persiste fecha congelada y refresca formatos
         await onUpdateFiling(conFechaCongelada);
       }
       alert(`Recibo Técnico subido a SharePoint como "${fileName}" (suelto en la carpeta del radicado)`);
@@ -238,7 +231,7 @@ export const ReciboTecnico = ({
         }
       `}</style>
 
-      {/* Barra de control (solo pantalla) */}
+      
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-3 bg-white p-4 rounded-2xl shadow-lg border border-gray-200 print:hidden">
         <div className="flex items-center gap-2">
           {onBack && (
@@ -335,8 +328,7 @@ export const ReciboTecnico = ({
         </div>
       </div>
 
-      {/* Documento (réplica del modelo). Sin márgenes: el encabezado va en
-          thead y el pie en tfoot para que se repitan en cada página impresa */}
+      
       <div
         ref={canvasRef}
         className="print-canvas bg-white shadow-2xl rounded-2xl border border-gray-200 text-black"
@@ -345,16 +337,16 @@ export const ReciboTecnico = ({
       <table className="rt-repeat" style={{ width: '100%', borderCollapse: 'collapse', height: '1000px' }}>
         <thead className="rt-head">
           <tr><td style={{ padding: 0 }}>
-            {/* Membrete original del formato (tal cual el Recibo Técnico) */}
+            
             <MembreteRecibo municipio={municipio} />
           </td></tr>
         </thead>
         <tbody>
           <tr><td style={{ padding: 0, verticalAlign: 'top' }}>
 
-        {/* Contenedor principal del formato (márgenes de hoja) */}
+        
         <div style={{ maxWidth: '1000px', margin: '0 auto', paddingLeft: '40px', paddingRight: '40px', boxSizing: 'border-box' }}>
-        {/* Cuerpo del documento (formato del modelo: Arial Narrow 12.5pt, cierre 14pt) */}
+        
         <div className="pt-4" style={{ fontSize: '16px', lineHeight: 1.35, color: '#000000' }}>
           <p>{fechaTexto}</p>
           <br />
@@ -423,7 +415,7 @@ export const ReciboTecnico = ({
           <br />
           <p style={{ fontSize: '19px' }}>Atentamente,</p>
           <br />
-          {/* Firma permanente del jefe para todos los radicados */}
+          
           <div style={{ minHeight: '70px' }} className="flex items-end">
             <img
               src={FIRMA_JEFE}
@@ -439,7 +431,7 @@ export const ReciboTecnico = ({
         </tbody>
         <tfoot className="rt-foot">
           <tr><td style={{ padding: 0 }}>
-            {/* Pie de página: franja decorativa corporativa (tal cual el Recibo Técnico) */}
+            
             <FranjaCorporativa />
           </td></tr>
         </tfoot>

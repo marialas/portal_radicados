@@ -36,7 +36,7 @@ export const ManualUsuario = ({ userRole = 'contratista', onClose }) => {
     setPreguntaAbierta(null);
     try {
       document.querySelector(`#man-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } catch { /* sin scroll */ }
+    } catch {  }
   };
 
   const indice = [
@@ -64,7 +64,7 @@ export const ManualUsuario = ({ userRole = 'contratista', onClose }) => {
           }
         `}</style>
 
-        {/* Barra superior */}
+        
         <div className="flex items-center justify-between gap-3 bg-white px-4 sm:px-5 py-3 border-b border-gray-200 shrink-0 print:hidden">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-2 bg-[#1E222A] rounded-xl shrink-0">
@@ -83,7 +83,7 @@ export const ManualUsuario = ({ userRole = 'contratista', onClose }) => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 p-4 sm:p-5 flex-1 min-h-0 overflow-hidden">
-          {/* Índice fijo: no se mueve, solo el contenido */}
+          
           <nav className="lg:col-span-1 bg-white rounded-2xl border border-gray-200 shadow-sm p-3.5 h-fit shrink-0">
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Índice</p>
             <ul className="space-y-1 max-h-[40vh] lg:max-h-none overflow-y-auto">
@@ -101,7 +101,7 @@ export const ManualUsuario = ({ userRole = 'contratista', onClose }) => {
             </ul>
           </nav>
 
-          {/* Contenido: lo único que se desplaza */}
+          
           <article className="lg:col-span-3 bg-white rounded-2xl border border-gray-200 shadow-md p-5 sm:p-7 space-y-6 text-sm text-gray-800 leading-relaxed overflow-y-auto min-h-0">
             <section id="man-portada" className="text-center border-b-2 border-[#1E222A] pb-5">
               <p className="text-[11px] font-black uppercase tracking-widest text-gray-500">INTECOAL S.A.S.</p>

@@ -1,7 +1,3 @@
-/**
- * Manual de Usuario por rol, en palabras sencillas.
- * Versión del manual: 1.0 — Octubre 2026.
- */
 
 export const MANUAL_META = {
   titulo: 'Manual de Usuario',

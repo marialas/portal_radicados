@@ -39,10 +39,9 @@ export const InformeRecibidoConformidad = ({
   const [signingRole, setSigningRole] = useState(null);
 
   const effectiveRole = userRole || currentUser?.role || 'interventor';
-  const isRol1Revisor = effectiveRole === 'interventor'; // Rol 1: Revisor / Interventor
-  const isRol2Contratista = effectiveRole === 'contratista'; // Rol 2: Contratista / Operador
+  const isRol1Revisor = effectiveRole === 'interventor'; 
+  const isRol2Contratista = effectiveRole === 'contratista'; 
 
-  // Additional technical photometics/electric state for full RETILAP report completeness
   const [techParams, setTechParams] = useState(() => ({
     dpcp: filing.metadata.dpcp || '1.85 W/m²',
     eficiencia: filing.metadata.eficiencia || '142 lm/W',
@@ -191,7 +190,7 @@ export const InformeRecibidoConformidad = ({
 
   return (
     <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6" style={{ fontFamily: "'Arial Narrow', Arial, sans-serif" }}>
-      {/* Print Styles for Official Executive Letterhead */}
+      
       <style>{`
         @media print {
           @page {
@@ -256,7 +255,7 @@ export const InformeRecibidoConformidad = ({
         }
       `}</style>
 
-      {/* Screen Action Control Bar */}
+      
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3 bg-white p-4 rounded-2xl shadow-lg border border-gray-200 print:hidden">
         <button
           onClick={onBack}
@@ -318,15 +317,15 @@ export const InformeRecibidoConformidad = ({
         </div>
       </div>
 
-      {/* Main Corporate Report Canvas (Official Letterhead Format) */}
+      
       <div 
         ref={printRef}
         className="print-canvas bg-white p-6 sm:p-10 shadow-2xl rounded-2xl border border-gray-200 text-slate-900 font-sans space-y-7 print:shadow-none print:border-none print:rounded-none"
       >
-        {/* Membrete corporativo (tal cual Formato y Recibo) */}
+        
         <MembreteRecibo municipio={filing.metadata?.municipio} />
 
-        {/* DOCUMENT HEADER & FORMAL EXECUTIVE HEADING */}
+        
         <div className="space-y-4 page-break-avoid">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-700 font-medium bg-slate-50 p-3.5 rounded-xl border border-slate-200 print-border-clean">
             <div className="space-y-1">
@@ -357,7 +356,7 @@ export const InformeRecibidoConformidad = ({
           </div>
         </div>
 
-        {/* SECTION 3: RESUMEN DE EVALUACIÓN Y SCORE */}
+        
         <div className="space-y-3 page-break-avoid">
           <div className="flex items-center space-x-2 border-b-2 border-slate-900 pb-1.5">
             <ShieldCheck className="w-4 h-4 text-slate-900" />
@@ -427,7 +426,7 @@ export const InformeRecibidoConformidad = ({
           </div>
         </div>
 
-        {/* SECTION 4: AUDITORÍA DOCUMENTAL Y CHECKLIST EXHAUSTIVO (22 REQUISITOS NORMATIVOS) */}
+        
         <div className="space-y-4">
           <div className="flex items-center space-x-2 border-b-2 border-slate-900 pb-1.5">
             <FileCheck2 className="w-4 h-4 text-slate-900" />
@@ -528,7 +527,7 @@ export const InformeRecibidoConformidad = ({
           </div>
         </div>
 
-        {/* SECTION 5: INVENTARIO DE ELEMENTOS Y MATERIALES ENTREGADOS */}
+        
         {filing.elementosEntregados && filing.elementosEntregados.length > 0 && (
           <div className="space-y-3 page-break-avoid">
             <div className="flex items-center space-x-2 border-b-2 border-slate-900 pb-1.5">
@@ -565,7 +564,7 @@ export const InformeRecibidoConformidad = ({
           </div>
         )}
 
-        {/* SECTION 6: DICTAMEN FINAL Y OBSERVACIONES GENERALES */}
+        
         <div className="space-y-2 page-break-avoid">
           <div className="flex items-center space-x-2 border-b-2 border-slate-900 pb-1.5">
             <Award className="w-4 h-4 text-slate-900" />
@@ -584,7 +583,7 @@ export const InformeRecibidoConformidad = ({
           </div>
         </div>
 
-        {/* SECTION 7: FIRMAS (limpias: firma, nombre, cargo y matrícula) */}
+        
         <div className="pt-6 space-y-6 page-break-avoid">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-xs">
             <FirmaLimpia
@@ -605,7 +604,7 @@ export const InformeRecibidoConformidad = ({
           </div>
         </div>
 
-        {/* Pie de página: franja decorativa corporativa (tal cual Formato y Recibo) */}
+        
         <FranjaCorporativa />
       </div>
 
@@ -636,7 +635,6 @@ export const InformeRecibidoConformidad = ({
   );
 };
 
-// Firma limpia: solo imagen, nombre, cargo y matrícula (sin recuadros ni insignias)
 const FirmaLimpia = ({ firma, nombre, cargo }) => (
   <div className="text-center space-y-1">
     <div className="min-h-[85px] flex items-center justify-center">

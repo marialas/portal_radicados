@@ -11,20 +11,18 @@ import {
   X
 } from 'lucide-react';
 
-// Colores del semáforo de revisión (15 días hábiles)
 const C = {
-  azul: '#2563EB',     // radicado / en término (>8 días)
-  amarillo: '#EAB308', // faltan 8 días o menos
-  rojo: '#DC2626',     // faltan 4 días o menos
-  morado: '#7C3AED',   // fecha límite vencida
-  verde: '#16A34A'     // aprobado
+  azul: '#2563EB',
+  amarillo: '#EAB308',
+  rojo: '#DC2626',
+  morado: '#7C3AED',
+  verde: '#16A34A',
+  oscuro: '#0F172A'
 };
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
-// Todas las fechas se manejan en UTC (medianoche UTC) para que el cálculo
-// sea idéntico al del backend: un ISO de madrugada no cambia de día aquí.
 const aMedianocheUTC = (d) => {
   const x = new Date(d);
   return new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate()));
@@ -47,7 +45,6 @@ const sumarHabiles = (fecha, n) => {
   }
   return d;
 };
-// Días CALENDARIO exactos entre dos fechas (puede ser negativo)
 const diasExactos = (desde, hasta) =>
   Math.round((aMedianocheUTC(hasta) - aMedianocheUTC(desde)) / 86400000);
 const restarDias = (fecha, n) => {
@@ -81,8 +78,6 @@ export const CalendarioRevision = ({
   });
   const [diaSeleccionado, setDiaSeleccionado] = useState(null);
 
-  // Por radicado: creación, límite (15 hábiles), restantes EXACTOS de
-  // calendario, fechas de aviso 8/4 (calendario) y aprobación
   const info = useMemo(() => filings.filter(Boolean).map(f => {
     const creacion = soloFecha(f.fechaRadicacion);
     if (!creacion) return null;
@@ -100,7 +95,6 @@ export const CalendarioRevision = ({
     };
   }).filter(Boolean), [filings, hoy]);
 
-  // Mapa fecha -> eventos [{info, tipo}] para el mes visible
   const eventosPorDia = useMemo(() => {
     const mapa = {};
     const push = (fecha, item) => {
@@ -111,8 +105,6 @@ export const CalendarioRevision = ({
       }
     };
     info.forEach(i => {
-      // Solo las fechas importantes llevan punto: creación, aviso de 8,
-      // aviso de 4 y aprobación (nada de rangos día por día)
       push(i.creacion, { info: i, tipo: 'creacion' });
       if (i.aprobacion) {
         push(i.aprobacion, { info: i, tipo: 'aprobado' });
@@ -136,7 +128,6 @@ export const CalendarioRevision = ({
     aprobado: 'Aprobado'
   };
 
-  // Celdas del mes (lunes primero), en UTC para coincidir con las claves
   const celdas = useMemo(() => {
     const primero = new Date(Date.UTC(mesVisible.anio, mesVisible.mes, 1));
     const desplazamiento = (primero.getUTCDay() + 6) % 7;
@@ -152,7 +143,6 @@ export const CalendarioRevision = ({
   const eventosDia = diaSeleccionado ? (eventosPorDia[clave(diaSeleccionado)] || []) : [];
   const fmtCorta = (d) => d ? d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : '—';
 
-  // Insignia según el ESTADO ACTUAL del radicado (días exactos de calendario)
   const insigniaEstado = (i) => {
     if (i.aprobacion) return { texto: `Aprobado el ${fmtCorta(i.aprobacion)}`, color: C.verde };
     if (i.restantes < 0) return { texto: `Vencido hace ${-i.restantes} días`, color: C.morado };
@@ -170,9 +160,62 @@ export const CalendarioRevision = ({
     setDiaSeleccionado(null);
   };
 
+  const pendientes = info.filter(i => !i.aprobacion).sort((a, b) => a.restantes - b.restantes);
+  const proximos = pendientes.filter(i => i.restantes >= 0);
+  const vencidos = pendientes.filter(i => i.restantes < 0);
+
+  const fila = (i) => {
+    const ins = insigniaEstado(i);
+    return (
+      <div key={i.filing.id} className="w-full text-left px-5 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-mono font-black text-xs text-gray-900">{i.filing.numeroRadicado}</span>
+          <span
+            className="text-[10px] font-black px-2 py-0.5 rounded-full border"
+            style={{ color: '#fff', backgroundColor: ins.color, borderColor: 'transparent' }}
+          >
+            {ins.texto}
+          </span>
+        </div>
+        <p className="text-[11px] text-gray-600 truncate mt-0.5">{i.filing.metadata?.nombreProyecto || ''}</p>
+        <p className="text-[10px] text-gray-400">Límite: {fmtCorta(i.limite)}</p>
+        <div className="flex items-center gap-2 pt-1.5">
+          {userRole === 'interventor' && onEvaluateFiling && (
+            <button
+              type="button"
+              onClick={() => onEvaluateFiling(i.filing)}
+              className="bg-amber-100 hover:bg-amber-200 text-amber-900 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 border border-amber-300 cursor-pointer"
+            >
+              <Edit3 className="w-3 h-3" /> Evaluar
+            </button>
+          )}
+          {onSelectFiling && (
+            <button
+              type="button"
+              onClick={() => onSelectFiling(i.filing)}
+              className="bg-[#0D0D0D] hover:bg-gray-800 text-[#D9CF43] font-bold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
+            >
+              <Eye className="w-3 h-3" /> Informe
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const encabezado = (titulo, color, cantidad, iconoColor) => (
+    <div className="px-5 py-3.5 text-white flex items-center gap-2 shrink-0" style={{ backgroundColor: color }}>
+      <AlertTriangle className="w-4 h-4" style={{ color: iconoColor }} />
+      <h2 className="text-xs font-black uppercase tracking-wider">{titulo}</h2>
+      <span className="ml-auto text-[10px] font-black bg-white/20 border border-white/40 rounded-full px-2 py-0.5">
+        {cantidad}
+      </span>
+    </div>
+  );
+
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-6 font-sans">
-      {/* Encabezado */}
+      
       <div className="bg-[#1E222A] text-white rounded-2xl p-6 shadow-xl border border-slate-700/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
           <div className="p-2.5 bg-slate-800 rounded-xl border border-slate-700">
@@ -204,7 +247,7 @@ export const CalendarioRevision = ({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Calendario */}
+        
         <div className="lg:col-span-2 bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
           <div className="grid grid-cols-7 bg-[#0D0D0D] text-white text-[11px] font-black uppercase tracking-wider text-center">
             {DIAS.map(d => <div key={d} className="py-2.5">{d}</div>)}
@@ -239,7 +282,7 @@ export const CalendarioRevision = ({
               );
             })}
           </div>
-          {/* Leyenda */}
+          
           <div className="flex flex-wrap items-center gap-4 px-5 py-3 bg-gray-50 border-t border-gray-200 text-[11px] font-bold text-gray-700">
             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: C.azul }} /> Radicado</span>
             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: C.amarillo }} /> Faltan ≤8 días</span>
@@ -249,62 +292,24 @@ export const CalendarioRevision = ({
           </div>
         </div>
 
-        {/* Próximos vencimientos */}
+        
         <div className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden flex flex-col">
-          <div className="px-5 py-3.5 bg-slate-900 text-white flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-[#D9CF43]" />
-            <h2 className="text-xs font-black uppercase tracking-wider">Próximos a vencer</h2>
+          {encabezado('Próximos a vencer', C.oscuro, proximos.length, '#D9CF43')}
+          <div className="h-[210px] overflow-y-auto overflow-x-hidden divide-y divide-gray-100">
+            {proximos.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center py-8 font-semibold">Sin radicados por vencer.</p>
+            ) : proximos.map(fila)}
           </div>
-          <div className="divide-y divide-gray-100 overflow-y-auto max-h-[420px]">
-            {info.filter(i => !i.aprobacion).sort((a, b) => a.restantes - b.restantes).slice(0, 15).map(i => {
-              const ins = insigniaEstado(i);
-              return (
-              <div
-                key={i.filing.id}
-                className="w-full text-left px-5 py-3"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono font-black text-xs text-gray-900">{i.filing.numeroRadicado}</span>
-                  <span
-                    className="text-[10px] font-black px-2 py-0.5 rounded-full border"
-                    style={{ color: '#fff', backgroundColor: ins.color, borderColor: 'transparent' }}
-                  >
-                    {ins.texto}
-                  </span>
-                </div>
-                <p className="text-[11px] text-gray-600 truncate mt-0.5">{i.filing.metadata?.nombreProyecto || ''}</p>
-                <p className="text-[10px] text-gray-400">Límite: {fmtCorta(i.limite)}</p>
-                <div className="flex items-center gap-2 pt-1.5">
-                  {userRole === 'interventor' && onEvaluateFiling && (
-                    <button
-                      type="button"
-                      onClick={() => onEvaluateFiling(i.filing)}
-                      className="bg-amber-100 hover:bg-amber-200 text-amber-900 font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 border border-amber-300 cursor-pointer"
-                    >
-                      <Edit3 className="w-3 h-3" /> Evaluar
-                    </button>
-                  )}
-                  {onSelectFiling && (
-                    <button
-                      type="button"
-                      onClick={() => onSelectFiling(i.filing)}
-                      className="bg-[#0D0D0D] hover:bg-gray-800 text-[#D9CF43] font-bold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
-                    >
-                      <Eye className="w-3 h-3" /> Informe
-                    </button>
-                  )}
-                </div>
-              </div>
-              );
-            })}
-            {info.filter(i => !i.aprobacion).length === 0 && (
-              <p className="text-xs text-gray-500 text-center py-8 font-semibold">Sin radicados pendientes de revisión.</p>
-            )}
+          {encabezado('Vencidos', C.morado, vencidos.length, '#FFFFFF')}
+          <div className="h-[210px] overflow-y-auto overflow-x-hidden divide-y divide-gray-100 border-t border-gray-200">
+            {vencidos.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center py-8 font-semibold">Sin radicados vencidos.</p>
+            ) : vencidos.map(fila)}
           </div>
         </div>
       </div>
 
-      {/* Modal de detalle del día */}
+      
       {diaSeleccionado && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setDiaSeleccionado(null)}>
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>

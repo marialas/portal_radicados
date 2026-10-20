@@ -1,6 +1,3 @@
-/**
- * HTTP centralizado: inyecta el JWT; ante 401 limpia y vuelve al ingreso.
- */
 
 const TOKEN_KEY = 'm365_jwt';
 
@@ -24,7 +21,6 @@ export function setToken(token) {
       localStorage.removeItem(TOKEN_KEY);
     }
   } catch {
-    /* almacenamiento no disponible */
   }
 }
 
@@ -36,10 +32,8 @@ function sesionExpirada() {
     sessionStorage.removeItem('pending_msal_role');
     sessionStorage.removeItem('active_tab');
   } catch {
-    /* ignora */
   }
   setToken('');
-  // Solo recarga si había sesión (evita bucles en la pantalla de ingreso)
   if (teniaToken && typeof window !== 'undefined') {
     window.location.reload();
   }
@@ -58,7 +52,6 @@ export async function apiFetch(path, options = {}) {
   return resp;
 }
 
-/** JWT del backend para el usuario M365 (valida el rol). */
 export async function obtenerJwt(email, role) {
   const resp = await fetch('/api/auth/msal-verify', {
     method: 'POST',

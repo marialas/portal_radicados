@@ -5,9 +5,6 @@ import userEvent from '@testing-library/user-event';
 import { RadicacionForm } from '../RadicacionForm';
 import { DOCUMENT_CATALOG } from '../../data/documentsCatalog';
 
-// Sin animaciones en jsdom: AnimatePresence real nunca completa el "exit"
-// (mode="wait") y el paso nuevo jamás se monta. Passthrough para probar
-// la lógica del wizard, no la librería de animación.
 vi.mock('motion/react', async () => {
   const React = await import('react');
   const Div = ({ children, custom, variants, initial, animate, exit, transition, ...rest }) =>
@@ -68,7 +65,6 @@ afterEach(() => {
 });
 
 function tarjetaDoc(code) {
-  // Card raíz del documento por su código (#id CODE)
   const marcado = screen.getByText(new RegExp(`#\\d+ ${code}$`));
   return marcado.closest('div[class*="rounded-xl"]');
 }
@@ -86,7 +82,6 @@ describe('Wizard Radicación — estructura (caja blanca)', () => {
   it('la navegación entre pasos es libre; el freno real está al enviar (confirm)', async () => {
     const user = userEvent.setup();
     render(<RadicacionForm onSuccess={noop} onCancel={noop} currentUser={contratista} />);
-    // Paso 1 -> 2 sin adjuntar nada: no se bloquea (diseño actual)
     await user.click(screen.getByRole('button', { name: /Siguiente Paso/i }));
     expect(screen.getByText('PASO 2 DE 3')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Siguiente Paso/i }));
@@ -112,14 +107,12 @@ describe('Wizard Radicación — estructura (caja blanca)', () => {
     const onSuccess = vi.fn();
     render(<RadicacionForm onSuccess={onSuccess} onCancel={noop} currentUser={contratista} />);
 
-    // Adjunta A1 y un sub-archivo CEAP en paso 1
     const cardA1 = tarjetaDoc('A1');
     await user.upload(within(cardA1).getByLabelText(/Adjuntar|Cambiar/), new File(['pdf'], 'a1.pdf', { type: 'application/pdf' }));
     const cardCEAP = tarjetaDoc('CEAP');
     const slotInputs = within(cardCEAP).getAllByLabelText(/Adjuntar|Cambiar/);
     await user.upload(slotInputs[0], new File(['pdf'], 'tarjeta.pdf', { type: 'application/pdf' }));
 
-    // Paso 3 -> firma por modal (nombre + imagen + confirmar)
     await user.click(screen.getByRole('button', { name: /Siguiente Paso/i }));
     await user.click(screen.getByRole('button', { name: /Siguiente Paso/i }));
     await user.click(screen.getByRole('button', { name: /Crear \/ Subir Firma/i }));
@@ -152,7 +145,6 @@ describe('Wizard — modo edición (subsanar)', () => {
     expect(screen.getByText('Faltan planos legibles')).toBeInTheDocument();
     expect(screen.getByText(/Matrícula ilegible, re-subir/i)).toBeInTheDocument();
     expect(screen.getAllByText('VERIFICADO').length).toBeGreaterThanOrEqual(1);
-    // Tarjeta A2 (CUMPLE): sin input de archivo para cambiar
     expect(within(tarjetaDoc('A2')).queryByRole('button', { name: /Adjuntar|Cambiar/ })).toBeNull();
   });
 
@@ -173,11 +165,11 @@ describe('Wizard — modo edición (subsanar)', () => {
     const user = userEvent.setup();
     window.confirm.mockReturnValue(true);
     fetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { archivos: [] } }) }) // archivo C15
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) // sub-slot CEAP
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) // metadata
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) // estado
-      .mockResolvedValueOnce({ // GET final
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { archivos: [] } }) }) 
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) 
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) 
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) 
+      .mockResolvedValueOnce({ 
         ok: true,
         json: async () => ({ data: { ...radicadoEdicion(), estado: 'En Revisión' } }),
       });

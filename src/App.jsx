@@ -1,13 +1,3 @@
-/**
- * ============================================================================
- * INTECOAL S.A.S. - SISTEMA DE RADICACIÓN DE EXPEDIENTES ALUMBRADO PÚBLICO
- * PROYECTO DE ETAPA PRÁCTICA SENA
- * ============================================================================
- * Componente Principal de la Aplicación en React + JavaScript.
- * Controla la navegación, estados de usuarios (Revisor / Contratista)
- * y la visualización de los 25 requisitos RETILAP.
- * ----------------------------------------------------------------------------
- */
 
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
@@ -27,25 +17,20 @@ import { logoutM365User, ensureMsalInit, extractCompanyFromEmail, formatNameFrom
 import { apiFetch, getToken, setToken as guardarToken, obtenerJwt } from './lib/api';
 
 export default function App() {
-  // Pestaña activa
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window === 'undefined') return 'lista';
     return sessionStorage.getItem('active_tab') || 'lista';
   });
   
-  // Radicaciones en memoria
   const [filings, setFilings] = useState([]);
-  // Último consecutivo global (viene del backend)
   const [ultimoGlobal, setUltimoGlobal] = useState(null);
   const [selectedFiling, setSelectedFiling] = useState(null);
   const [editingFiling, setEditingFiling] = useState(null);
 
-  // Sesión: se restaura de session/localStorage para no sacarla al recargar
   const [user, setUser] = useState(() => {
     const emptyUser = { isAuthenticated: false, name: '', email: '', role: 'interventor', company: '' };
     if (typeof window === 'undefined') return emptyUser;
 
-    // Con hash de redirect MSAL no se restaura sesión previa
     if (window.location.hash && (window.location.hash.includes('code=') || window.location.hash.includes('id_token=') || window.location.hash.includes('error='))) {
       return emptyUser;
     }
@@ -58,15 +43,13 @@ export default function App() {
           return parsed;
         }
       }
-    } catch (e) { /* ignora */ }
+    } catch (e) {  }
 
     return emptyUser;
   });
 
-  // Error de autenticación MSAL
   const [msalAuthError, setMsalAuthError] = useState(null);
 
-  // Redirección M365 en curso
   const [isProcessingMsal, setIsProcessingMsal] = useState(() => {
     if (typeof window !== 'undefined' && window.location.hash && (window.location.hash.includes('code=') || window.location.hash.includes('id_token=') || window.location.hash.includes('error='))) {
       return true;
@@ -74,7 +57,6 @@ export default function App() {
     return false;
   });
 
-  // Config M365 del backend
   const [m365Config, setM365Config] = useState({
     azureClientId: import.meta.env.VITE_MSAL_CLIENT_ID || '',
     azureTenantId: '',
@@ -107,7 +89,6 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  // Contratista ve lo suyo; revisor ve todo
   const userFilings = React.useMemo(() => {
     if (user.role === 'contratista' && user.isAuthenticated) {
       const userEmailClean = (user.email || '').toLowerCase().trim();
@@ -122,7 +103,6 @@ export default function App() {
     return filings;
   }, [filings, user]);
 
-  // Mantiene selección válida al recargar (evita pantalla en blanco)
   useEffect(() => {
     if (user.role === 'contratista') {
       if (userFilings.length > 0) {
@@ -133,14 +113,12 @@ export default function App() {
         setSelectedFiling(null);
       }
     } else {
-      // Default solo si no hay selección
       if (filings.length > 0 && !selectedFiling) {
         setSelectedFiling(filings[0]);
       }
     }
   }, [user.role, filings, userFilings, selectedFiling]);
 
-  // Persiste el id en edición para restaurarlo al recargar
   useEffect(() => {
     if (activeTab === 'nueva' && !editingFiling && filings.length > 0 && typeof window !== 'undefined') {
       const editId = sessionStorage.getItem('editing_filing_id');
@@ -152,9 +130,7 @@ export default function App() {
     }
   }, [activeTab, filings, editingFiling]);
 
-  // Restricciones de rol por pestaña
   useEffect(() => {
-    // El manual ahora es ventana emergente: redirige la pestaña vieja guardada
     if (activeTab === 'manual') {
       setActiveTab('lista');
       return;
@@ -170,17 +146,14 @@ export default function App() {
     }
   }, [user.role, activeTab]);
 
-  // JWT de sesión (sin él la API responde 401)
   const [jwt, setJwt] = useState(() => getToken());
 
-  // Pide y guarda el JWT
   const asegurarJwt = async (email, role) => {
     if (getToken()) return getToken();
     await obtenerJwt(email, role);
     setJwt(getToken());
   };
 
-  // Carga inicial + redirect MSAL
   useEffect(() => {
     fetchFilings();
 
@@ -198,7 +171,6 @@ export default function App() {
       const redirectResponse = res?.redirectResponse;
       const msalError = res?.error;
 
-      // Lee flags MSAL (solo sessionStorage, sin caché pegada)
       const wasAttemptingMsal = typeof window !== 'undefined' && (
         sessionStorage.getItem('is_msal_login_attempt') === 'true'
       );
@@ -222,12 +194,10 @@ export default function App() {
         }
       };
 
-      // Limpia tokens de la URL
       if (hasMsalHash && typeof window !== 'undefined') {
         window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
       }
 
-      // Detecta redirect real de Microsoft 365
       const isCompletedRedirect = Boolean(redirectResponse || (hasMsalHash && !urlHash.includes('error=')));
 
       if (isCompletedRedirect) {
@@ -248,7 +218,6 @@ export default function App() {
           const nameFormatted = formatNameFromEmail(email, account?.name);
           const company = extractCompanyFromEmail(email);
 
-          // Rol: respeta el de la UI o deriva del dominio
           const roleToAssign = savedRole || (isRevisorAllowedEmail(email) ? 'interventor' : 'contratista');
 
           if (roleToAssign === 'interventor' && !isRevisorAllowedEmail(email)) {
@@ -310,7 +279,6 @@ export default function App() {
           cleanPendingMsalStorage();
         }
       } else {
-        // Si canceló en Microsoft, no inicia sesión
         if (wasAttemptingMsal) {
           cleanPendingMsalStorage();
         }
@@ -330,10 +298,8 @@ export default function App() {
     };
   }, []);
 
-  // Recarga al autenticar (redirect llega después del montaje)
   useEffect(() => {
     if (user.isAuthenticated && user.email) {
-      // Sin JWT se obtiene y luego se lista
       if (!getToken()) {
         asegurarJwt(user.email, user.role).then(() => fetchFilings()).catch(() => {});
       } else {
@@ -353,7 +319,6 @@ export default function App() {
         }
         setUltimoGlobal(json.ultimoGlobal || null);
       } else if (res.status !== 401 && retryCount < 3) {
-        // 401 = sin sesión: apiFetch ya limpió y redirige; no reintentar
         await new Promise(r => setTimeout(r, 3000));
         fetchFilings(retryCount + 1);
       }
@@ -401,8 +366,6 @@ export default function App() {
     });
   };
 
-  // Nueva radicación limpia: cierra cualquier edición en curso (estado y
-  // persistencia) para que el formulario arranque vacío y no restaure nada
   const irNuevaRadicacion = () => {
     setEditingFiling(null);
     if (typeof window !== 'undefined') {
@@ -432,7 +395,6 @@ export default function App() {
     setFilings(prev => prev.map(f => f.id === updatedFiling.id ? updatedFiling : f));
     setSelectedFiling(updatedFiling);
 
-    // Refresco diferido del estado m365Synced (background)
     if (updatedFiling.estado === 'Aprobado' && !updatedFiling.m365Synced) {
       setTimeout(async () => {
         try {
@@ -444,11 +406,10 @@ export default function App() {
               setSelectedFiling(prev => (prev && prev.id === json.data.id ? json.data : prev));
             }
           }
-        } catch (e) { /* reintento manual disponible en el Historial */ }
+        } catch (e) {  }
       }, 15000);
     }
 
-    // skipSync: evita PATCH duplicado y sync de borradores
     if (opts.skipSync) return;
 
     apiFetch(`/api/radicacion/${updatedFiling.id}/metadata`, {
@@ -471,10 +432,8 @@ export default function App() {
 
   const [syncingId, setSyncingId] = useState(null);
 
-  // Manual de usuario como ventana emergente (disponible en ambos roles)
   const [manualOpen, setManualOpen] = useState(false);
 
-  // Reintento manual de subida (muestra el motivo si falla)
   const handleRetrySync = async (record) => {
     if (!record || syncingId) return;
     if (!confirm(`¿Reintentar la subida de ${record.numeroRadicado} a SharePoint? Puede tardar 1-3 minutos.`)) return;
@@ -498,7 +457,7 @@ export default function App() {
     <div className={`bg-[#F2F2F2] font-sans text-gray-900 flex flex-col selection:bg-[#D9CF43] selection:text-[#0D0D0D] ${
       user.isAuthenticated ? 'h-screen overflow-hidden print:h-auto print:overflow-visible' : 'min-h-screen'
     }`}>
-      {/* Main Container */}
+      
       {isProcessingMsal ? (
         <main className="flex-1 min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-[#1A1D24]">
           <div className="bg-[#212631] border border-gray-700/60 rounded-xl p-8 max-w-md w-full text-center shadow-xl">
@@ -508,14 +467,12 @@ export default function App() {
           </div>
         </main>
       ) : !user.isAuthenticated ? (
-        /* Formulario de Autenticación Principal (Sin Header Superior) */
         <main className="flex-1 h-screen overflow-hidden flex items-center justify-center p-3 sm:p-4 bg-[#1A1D24] sm:bg-[#EAEAEA]">
           <LoginForm onLoginSuccess={handleLoginSuccess} externalError={msalAuthError} />
         </main>
       ) : (
-        /* Workspace Main Area with Top Header and Sidebar */
         <>
-          {/* Top Header - Appears after login */}
+          
           <Header
             user={user}
             m365Config={m365Config}
@@ -526,7 +483,7 @@ export default function App() {
           />
 
           <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden print:h-auto print:overflow-visible">
-            {/* Left Vertical Navigation Sidebar */}
+            
             <Sidebar
               activeTab={activeTab}
               setActiveTab={(tab) => (tab === 'nueva' ? irNuevaRadicacion() : setActiveTab(tab))}
@@ -534,7 +491,7 @@ export default function App() {
               userRole={user.role}
             />
 
-          {/* Workspace Content Area */}
+          
           <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto print:p-0 print:overflow-visible print:h-auto">
             <ErrorBoundary>
               {activeTab === 'nueva' && (
@@ -672,9 +629,7 @@ export default function App() {
                 />
               )}
 
-              {/* Fallback: si la pestaña guardada requiere un expediente pero aún
-                  no hay selección (p. ej. recarga con active_tab en sessionStorage),
-                  mostrar carga en vez de una página en blanco. */}
+              
               {['evaluacion', 'informe', 'formato437c'].includes(activeTab) && !selectedFiling && (
                 <div className="max-w-md mx-auto my-16 bg-white rounded-2xl border border-gray-200 shadow-md p-8 text-center space-y-4">
                   <div className="w-10 h-10 border-4 border-[#D9CF43] border-t-transparent rounded-full animate-spin mx-auto"></div>

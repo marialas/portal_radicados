@@ -56,7 +56,7 @@ Este manual le enseña a revisar expedientes, emitir dictámenes y generar los f
 ## 5. Conozca la pantalla
 
 - **Encabezado superior:** logo, su cargo y los botones Manual y Salir.
-- **Menú lateral:** Revisión Radicaciones, Formato 4.3.7.C, Recibo Técnico, Calendario y Manual.
+- **Menú lateral:** Revisión Radicaciones, Formato 4.3.7.C, Recibo Técnico y Calendario.
 - **Revisión Radicaciones:** todos los expedientes con estados y acciones (Evaluar, Informe, Formato C, Recibo Técnico, Reintentar subida).
 
 ## 6. Evaluar un radicado
@@ -93,8 +93,11 @@ Este manual le enseña a revisar expedientes, emitir dictámenes y generar los f
 2. Cada radicado tiene 15 días hábiles desde que se creó; el calendario los cuenta solo.
 3. Cada bolita es una fecha clave: azul se creó, amarilla faltan 8 días, roja faltan 4, morada se venció, verde se aprobó.
 4. Pulse una fecha para ver el radicado completo y saltar a Evaluar o al Informe.
-5. A la derecha tiene la lista de próximos a vencer, del más urgente al menos urgente.
-6. Los avisos por correo (8 y 4 días, más diario 8 a.m. si vence) le llegan solo a usted.
+5. A la derecha tiene **dos listas del mismo tamaño**, una debajo de la otra, cada una con su propia barra de desplazamiento vertical:
+   - **Próximos a vencer** (arriba): los que aún están en plazo, del más urgente al menos; incluye los que vencen hoy.
+   - **Vencidos** (abajo): los que ya pasaron su fecha límite, con la insignia "Vencido hace N días".
+   - Cada encabezado muestra cuántos radicados hay en esa lista; si una está vacía lo dice.
+6. Los avisos por correo (8 y 4 días, más diario 8 a.m. si ya venció) le llegan solo a usted: si está por vencer dice "faltan N días", si venció dice "vencido hace N días".
 
 ## 10. Reintentar subida a SharePoint
 

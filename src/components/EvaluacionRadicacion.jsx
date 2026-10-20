@@ -38,7 +38,6 @@ export const EvaluacionRadicacion = ({
   const isRol2Contratista = effectiveRole === 'contratista';
 
   const [archivosState, setArchivosState] = useState(() => {
-    // Preserva adicionales y sub-archivos (no solo el catálogo)
     const existentes = new Map(
       (filing.archivos || []).map(a => [a.docId, a])
     );
@@ -127,7 +126,6 @@ export const EvaluacionRadicacion = ({
     }));
   };
 
-  // Evaluación individual por sub-archivo
   const handleSubStatusChange = (docId, subId, newStatus) => {
     setArchivosState(prev => prev.map(item => {
       if (item.docId !== docId) return item;
@@ -217,7 +215,6 @@ export const EvaluacionRadicacion = ({
       setSaveSuccessMsg('Avance guardado localmente.');
     } finally {
       setIsSaving(false);
-      // Borrador ya persistido: solo estado local
       await onSaveEvaluation(updatedFiling, { skipSync: true });
       if (typeof onBack === 'function') onBack();
     }
@@ -226,7 +223,6 @@ export const EvaluacionRadicacion = ({
   const handleFinalizar = async (andGenerateReport = true) => {
     const estadoFinal = estadoGeneral;
 
-    // Dictamen final exige firma del revisor
     if ((estadoFinal === 'Aprobado' || estadoFinal === 'Con Observaciones') && !firmaInterventoria) {
       setSaveErrorMsg('No se puede finalizar el informe: falta la firma digital del revisor (INTECOAL). Estampe la firma antes de guardar.');
       setSaveSuccessMsg('');
@@ -277,14 +273,12 @@ export const EvaluacionRadicacion = ({
         throw new Error(detalle || `El servidor respondió ${res.status}`);
       }
 
-      // Fuente de verdad: lo que devuelve el backend
       try {
         const payload = await res.json();
         if (payload?.data) filingFinal = payload.data;
       } catch { filingFinal = updatedFiling; }
 
       if (estadoFinal === 'Aprobado') {
-        // m365Synced solo lo confirma el backend
         setSaveSuccessMsg(`¡Radicado ${filingFinal.numeroRadicado} APROBADO y notificado! La subida a SharePoint (carpetas + archivos) continúa en segundo plano. Si no aparece en SharePoint, use «Reintentar subida» en el Historial. Volviendo al Historial de Radicaciones…`);
       } else {
         setSaveSuccessMsg(`¡Evaluación de ${filingFinal.numeroRadicado} finalizada y notificada! (A SharePoint solo se sube al aprobar). Volviendo al Historial de Radicaciones…`);
@@ -297,7 +291,6 @@ export const EvaluacionRadicacion = ({
       setIsSaving(false);
     }
 
-    // Sale solo si el backend confirmó; navega al Historial
     if (finalizadoOk) {
       setLastSavedFiling(filingFinal);
       await onSaveEvaluation(filingFinal, { skipSync: true });
@@ -319,7 +312,7 @@ export const EvaluacionRadicacion = ({
   return (
     <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 space-y-8 font-sans text-gray-900">
       
-      {/* TOP HEADER & ACTION BAR */}
+      
       <div className="bg-[#1E222A] text-white rounded-2xl p-6 shadow-xl border border-slate-700/80 relative overflow-hidden">
         <div className="absolute -right-12 -top-12 w-64 h-64 bg-[#D9CF43]/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -440,7 +433,7 @@ export const EvaluacionRadicacion = ({
         </div>
       )}
 
-      {/* COMPLIANCE METRICS & OVERALL DECISION CARD */}
+      
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-md flex flex-col justify-between space-y-4">
           <div>
@@ -526,7 +519,7 @@ export const EvaluacionRadicacion = ({
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-xl text-xs font-bold text-gray-900 focus:ring-2 focus:ring-[#D9CF43]"
               />
 
-              {/* Firma Digital Status and Action Button */}
+              
               <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-extrabold text-slate-700 text-[11px]">Firma Digital Revisor (INTECOAL):</span>
@@ -615,7 +608,7 @@ export const EvaluacionRadicacion = ({
         </div>
       </div>
 
-      {/* CHECKLIST MATRIX (ALL DOCUMENTS) */}
+      
       <div className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-200 bg-slate-900 text-white space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -759,7 +752,7 @@ export const EvaluacionRadicacion = ({
                         </div>
                       )}
 
-                      {/* Evaluación individual de sub-archivos (en horizontal, igual que los normales) */}
+                      
                       {(item.subFiles || []).filter(sf => sf.fileName).length > 0 && (
                         <div className="w-full mt-2 pt-2 border-t border-dashed border-gray-300 space-y-2">
                           <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 block">

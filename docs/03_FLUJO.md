@@ -9,7 +9,7 @@ El login es **exclusivamente con cuenta de Microsoft 365** (no hay "Ingreso Dire
 | **Revisor / Interventor** | `@intecoalsas.com`, `@intecoal.com.co` | Evaluar documentos, dictaminar (Aprobado / Con Observaciones), firmar el informe, Formato 4.3.7 C, Recibo Técnico y Calendario. Su correo recibe la notificación de radicado por revisar y las alertas de vencimiento. |
 | **Contratista / Creador** | Cualquier correo M365 | Crear radicaciones, subir/corregir archivos, firmar declaración, ver sus radicaciones. Recibe confirmación de subida y resultado de evaluación. |
 
-> Los correos de notificación al **revisor** van a `M365_NOTIFICATION_RECIPIENT`; los del **contratista** van a su correo registrado en la metadata del radicado (`creadorEmail`/`correoResponsable`).
+> Los correos de notificación al **revisor** van a `M365_NOTIFICATION_RECIPIENT` (hoy: `coord.tecnico@intecoalsas.com`); los del **contratista** van a su correo registrado en la metadata del radicado (`creadorEmail`/`correoResponsable`). Si esa variable queda vacía, los avisos del revisor simplemente no se envían.
 
 ## Flujo de trabajo
 
@@ -59,7 +59,7 @@ Contratista            Revisor (Interventoría)
 - **Aprobado → subida a SharePoint** (fila + carpetas + archivos, en background) con insignia de estado y botón **Reintentar subida** si queda pendiente.
 - **Formato 4.3.7 C** (por radicado): número, municipio/ciudad y fecha se autodiligencian; la fecha se actualiza a diario hasta subirlo y luego se congela. Botones Editar/Guardar/Subir/Imprimir.
 - **Recibo Técnico** (por radicado, botón en el Historial solo en aprobados): solo asunto y cuerpo editables; firma del jefe permanente; correo del membrete según municipio (Tuluá/Andalucía/San Pedro/Calima); fecha viva hasta subir y congelada después. Botones Editar/Guardar/Subir/Imprimir + selector de radicado.
-- **Calendario** de plazos: límite = 15 días hábiles por radicado (lun–vie); el conteo restante es en días calendario exactos. Bolitas 🔵 radicación, 🟡 faltan ≤8, 🔴 faltan ≤4, 🟣 vencido, 🟢 aprobado. Clic en fecha → detalle del radicado con acceso a Evaluar/Informe.
+- **Calendario** de plazos: límite = 15 días hábiles por radicado (lun–vie); el conteo restante es en días calendario exactos. Bolitas 🔵 radicación, 🟡 faltan ≤8, 🔴 faltan ≤4, 🟣 vencido, 🟢 aprobado. Clic en fecha → detalle del radicado con acceso a Evaluar/Informe. En la tarjeta lateral conviven **dos listas del mismo tamaño**, cada una con su barra de desplazamiento vertical: **Próximos a vencer** (los que aún tienen plazo, incluye "vence hoy") arriba y **Vencidos** (los que ya pasaron su fecha límite, con "Vencido hace N días") abajo; ambas muestran su conteo en el encabezado.
 
 ### Visor de documentos
 - **PDF e imágenes:** se muestran en línea (Content-Disposition: inline).
@@ -81,6 +81,16 @@ Plantilla plana (sin marco): título, contenido y al final el **logo del municip
 | Confirmación de reenvío | Contratista | `enviar_correo_reenvio_contratista` |
 | Faltan 8 / 4 días (una sola vez c/u) | Revisor (general) + correo del municipio en simultáneo | `enviar_correo_vencimiento` (vigilancia cada 1 h) |
 | Vencido sin aprobar (diario 8:00 a.m. hasta aprobar) | Revisor (general) + correo del municipio en simultáneo | `enviar_correo_vencimiento` (bandera `diaria`) |
+
+**Texto de los avisos de plazo** (asunto y cuerpo cambian según el caso):
+
+| Caso | Asunto | Primer párrafo |
+|------|--------|----------------|
+| Por vencer | `Radicado por vencer (7 días) — RAD-…` | "está **próximo a vencer** … **faltan 7 días** (límite: AAAA-MM-DD)" |
+| Vence hoy | `URGENTE: Radicado vence hoy — RAD-…` | "**vence hoy** el plazo de 15 días hábiles …" |
+| Vencido | `URGENTE: Radicado vencido hace 3 días — RAD-…` | "**ya venció** su plazo … **vencido hace 3 días** (límite: AAAA-MM-DD)" |
+
+Singular/plural correcto (`1 día` / `7 días`) y, si venció, el cierre recuerda cuánto se atrasó en lugar de decir "antes del vencimiento".
 
 > Los avisos del calendario son **solo para el revisor**; el contratista no recibe nada de esto. Al aprobarse el radicado se desactivan automáticamente (los aprobados se omiten).
 

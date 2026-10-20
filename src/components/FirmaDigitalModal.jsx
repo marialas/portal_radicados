@@ -80,7 +80,7 @@ export const FirmaDigitalModal = ({
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
         
-        {/* Modal Header */}
+        
         <div className="bg-[#1E222A] text-white p-6 relative">
           <button
             onClick={onClose}
@@ -105,7 +105,7 @@ export const FirmaDigitalModal = ({
           </div>
         </div>
 
-        {/* Form Body */}
+        
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs">
             <div>

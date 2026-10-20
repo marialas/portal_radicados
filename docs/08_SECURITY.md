@@ -1,4 +1,4 @@
-# Seguridad
+﻿# Seguridad
 
 ## Autenticación
 
@@ -153,7 +153,7 @@ SHAREPOINT_LIST_ID=<list-id>
 SHAREPOINT_LIBRARY_ID=Documentos_Radicacion
 
 M365_SENDER_EMAIL=coord.tecnico@intecoalsas.com
-M365_NOTIFICATION_RECIPIENT=<correo-del-revisor>
+M365_NOTIFICATION_RECIPIENT=coord.tecnico@intecoalsas.com  # revisor: avisos de nuevo radicado y vencimientos
 
 POWER_AUTOMATE_WEBHOOK_URL=<webhook-url>   # opcional
 ```
