@@ -66,3 +66,17 @@ def test_error_interno_devuelve_el_motivo_en_el_detalle(cliente, monkeypatch):
                      files={"archivo": ("a.pdf", io.BytesIO(b"%PDF-1.4"), "application/pdf")})
     assert r.status_code == 500
     assert "KeyError" in r.json()["detail"]
+
+
+def test_subida_funciona_con_starlette_sin_max_part_size(cliente, monkeypatch):
+    regs = [_rad()]
+    monkeypatch.setattr(M, "radicaciones_db", regs)
+    monkeypatch.setattr(M, "graph_service", None)
+    monkeypatch.setattr(M, "guardar_db", lambda: None)
+    monkeypatch.setattr(M, "_PARAMETROS_FORM", frozenset({"self", "max_files", "max_fields"}))
+    contenido = b"%PDF-1.4 en starlette antiguo"
+    r = cliente.post("/api/radicacion/s-sub-1/archivo", headers=_token(cliente),
+                     data={"docId": "14"},
+                     files={"archivo": ("prueba.pdf", io.BytesIO(contenido), "application/pdf")})
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["archivos"][0]["fileSize"] == len(contenido)

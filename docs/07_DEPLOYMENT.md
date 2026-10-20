@@ -189,6 +189,11 @@ Se puede añadir en un archivo `public/_redirects` o como redirect en Netlify. S
 **Síntoma:** error al subir (el mensaje trae el detalle exacto).
 **Solución:** extensión permitida (PDF, imágenes, DWG/DXF; la validación acepta por MIME o por extensión). El detalle del error dice el motivo exacto (por ejemplo, permisos o disco del servidor).
 
+### `TypeError: Request.form() got an unexpected keyword argument 'max_part_size'`
+**Síntoma:** **todos** los POST multipart (`/nueva`, `/archivo`, `/formato`) responden `500` con ese mensaje; las acciones sin archivos (estado, metadata, lista) sí funcionan.
+**Causa:** Render instala `fastapi==0.115.0` → **Starlette 0.38**, cuyo `Request.form()` solo acepta `max_files`/`max_fields`.
+**Solución:** `leer_form()` en `backend/main.py` detecta los parámetros disponibles y solo envía `max_part_size` si la versión instalada lo soporta (en Starlette 0.38 no existe límite por parte, se desborda a disco solo). No hay que cambiar de versión.
+
 ### Render en frío (plan gratuito)
 **Síntoma:** la primera petición tras inactividad falla o tarda ~1 min.
 **Solución:** reintentar pasado un minuto. El frontend espera hasta 3 min en la radicación y el reintento de SharePoint hasta 3 min; si falla, muestra el motivo real en lugar de un error genérico.

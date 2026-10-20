@@ -2,6 +2,7 @@ import os
 import json
 import shutil
 import asyncio
+import inspect
 import traceback
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -110,6 +111,15 @@ async def guardar_archivo(destino: Path, upload_file, nombre: str) -> int:
         return total
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"No se pudo guardar '{nombre}' en disco: {e}")
+
+
+_PARAMETROS_FORM = frozenset(inspect.signature(Request.form).parameters)
+
+
+async def leer_form(request: Request, max_files: int, max_fields: int):
+    if "max_part_size" in _PARAMETROS_FORM:
+        return await request.form(max_files=max_files, max_fields=max_fields, max_part_size=2**31 - 1)
+    return await request.form(max_files=max_files, max_fields=max_fields)
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -505,7 +515,7 @@ async def eliminar_radicacion(identificador: str, usuario: dict = Depends(requer
 
 @app.post("/api/radicacion/nueva")
 async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_usuario)):
-    form = await request.form(max_files=5000, max_fields=5000, max_part_size=2**31 - 1)
+    form = await leer_form(request, 5000, 5000)
 
     text_fields = {}
     uploaded_files = {}
@@ -760,7 +770,7 @@ async def crear_radicacion(request: Request, usuario: dict = Depends(requerir_us
 
 @app.post("/api/radicacion/{identificador}/archivo")
 async def subir_archivo(request: Request, identificador: str, usuario: dict = Depends(requerir_usuario)):
-    form = await request.form(max_files=100, max_fields=100, max_part_size=2**31 - 1)
+    form = await leer_form(request, 100, 100)
     doc_id_raw = form.get("docId")
     archivo = form.get("archivo")
     sub_file_name = form.get("subFileName")
@@ -868,7 +878,7 @@ async def subir_archivo(request: Request, identificador: str, usuario: dict = De
 
 @app.post("/api/radicacion/{identificador}/formato")
 async def subir_formato(request: Request, identificador: str, usuario: dict = Depends(requerir_usuario)):
-    form = await request.form(max_files=100, max_fields=100, max_part_size=2**31 - 1)
+    form = await leer_form(request, 100, 100)
     nombre = form.get("nombre")
     archivo = form.get("archivo")
 
