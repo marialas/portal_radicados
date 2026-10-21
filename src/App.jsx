@@ -124,7 +124,9 @@ export default function App() {
       const editId = sessionStorage.getItem('editing_filing_id');
       if (editId) {
         const f = filings.find(x => x.id === editId || x.numeroRadicado === editId);
-        if (f) setEditingFiling(f);
+        if (f) {
+          cargarRadicacionCompleta(f).then(full => setEditingFiling(full));
+        }
         else sessionStorage.removeItem('editing_filing_id');
       }
     }
@@ -332,6 +334,19 @@ export default function App() {
     }
   };
 
+  const cargarRadicacionCompleta = async (record) => {
+    const ref = record?.id || record?.numeroRadicado;
+    if (!ref) return record;
+    try {
+      const res = await apiFetch(`/api/radicacion/${ref}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) return json.data;
+      }
+    } catch (e) { /* sin backend: se usa el registro de la lista */ }
+    return record;
+  };
+
   const handleLoginSuccess = (newUser, defaultTab = 'lista') => {
     setUser(newUser);
     if (typeof sessionStorage !== 'undefined') {
@@ -515,18 +530,23 @@ export default function App() {
                   allFilings={filings}
                   ultimoGlobal={ultimoGlobal}
                   onSelectFiling={(record) => {
-                    setSelectedFiling(record);
-                    setActiveTab('informe');
+                    cargarRadicacionCompleta(record).then((full) => {
+                      setSelectedFiling(full);
+                      setActiveTab('informe');
+                    });
                   }}
                   onEvaluateFiling={(record) => {
-                    setSelectedFiling(record);
-                    setActiveTab('evaluacion');
+                    cargarRadicacionCompleta(record).then((full) => {
+                      setSelectedFiling(full);
+                      setActiveTab('evaluacion');
+                    });
                   }}
                   onNewFiling={irNuevaRadicacion}
-                  onEditFiling={(record) => {
-                    setEditingFiling(record);
+                  onEditFiling={async (record) => {
+                    const full = await cargarRadicacionCompleta(record);
+                    setEditingFiling(full);
                     if (typeof window !== 'undefined') {
-                      sessionStorage.setItem('editing_filing_id', record.id || record.numeroRadicado);
+                      sessionStorage.setItem('editing_filing_id', full.id || full.numeroRadicado);
                     }
                     setActiveTab('nueva');
                   }}

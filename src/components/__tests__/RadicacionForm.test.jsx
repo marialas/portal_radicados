@@ -119,7 +119,7 @@ describe('Wizard Radicación — estructura (caja blanca)', () => {
     await user.type(screen.getByPlaceholderText('Nombre del signatario'), 'Resp Firmante');
     const modalImg = document.querySelector('.fixed.inset-0 input[type="file"]');
     await user.upload(modalImg, new File(['img'], 'firma.png', { type: 'image/png' }));
-    await waitFor(() => expect(screen.getByText(/Imagen cargada correctamente/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Imagen cargada correctamente/i)).toBeInTheDocument(), { timeout: 3000 });
     await user.click(screen.getByRole('button', { name: /Estampar Firma en Informe/i }));
     await waitFor(() => expect(screen.getByText('Resp Firmante')).toBeInTheDocument());
 

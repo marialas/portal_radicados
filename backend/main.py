@@ -131,7 +131,7 @@ graph_service = None
 
 def guardar_db():
     try:
-        DATA_FILE.write_text(json.dumps(radicaciones_db, ensure_ascii=False, indent=2), encoding="utf-8")
+        DATA_FILE.write_text(json.dumps(radicaciones_db, ensure_ascii=False), encoding="utf-8")
     except Exception as e:
         print(f"[DB] Error guardando: {e}")
 
@@ -411,10 +411,19 @@ async def listar_radicaciones(
     if tipo and tipo != "TODOS":
         resultados = [r for r in resultados if (r.get("metadata") or {}).get("tipoEntrega") == tipo]
 
+    ligeras = []
+    for r in resultados:
+        r2 = dict(r)
+        meta = r.get("metadata")
+        if isinstance(meta, dict) and ("firmaContratista" in meta or "firmaInterventoria" in meta):
+            r2["metadata"] = {k: v for k, v in meta.items()
+                              if k not in ("firmaContratista", "firmaInterventoria")}
+        ligeras.append(r2)
+
     ultimo = max(radicaciones_db, key=lambda r: r.get("numeroRadicado", ""), default=None)
     return {
-        "data": resultados,
-        "total": len(resultados),
+        "data": ligeras,
+        "total": len(ligeras),
         "ultimoGlobal": {"id": ultimo.get("id"), "numeroRadicado": ultimo.get("numeroRadicado")} if ultimo else None,
     }
 

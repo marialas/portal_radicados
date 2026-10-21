@@ -32,14 +32,45 @@ export const FirmaDigitalModal = ({
     setUploadedImage(initialSignature?.dataUrl || null);
   }, [initialSignature, defaultRole]);
 
+  const comprimirFirma = (dataUrl) => new Promise((resolve) => {
+    let resuelto = false;
+    const terminar = (valor) => {
+      if (!resuelto) {
+        resuelto = true;
+        resolve(valor);
+      }
+    };
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const anchoMax = 600;
+        const escala = Math.min(1, anchoMax / (img.width || anchoMax));
+        const lienzo = document.createElement('canvas');
+        lienzo.width = Math.max(1, Math.round(img.width * escala));
+        lienzo.height = Math.max(1, Math.round(img.height * escala));
+        const ctx = lienzo.getContext('2d');
+        if (!ctx) return terminar(dataUrl);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+        ctx.drawImage(img, 0, 0, lienzo.width, lienzo.height);
+        terminar(lienzo.toDataURL('image/jpeg', 0.75));
+      } catch (e) {
+        terminar(dataUrl);
+      }
+    };
+    img.onerror = () => terminar(dataUrl);
+    setTimeout(() => terminar(dataUrl), 500);
+    img.src = dataUrl;
+  });
+
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       if (event.target?.result) {
-        setUploadedImage(event.target.result);
+        setUploadedImage(await comprimirFirma(event.target.result));
       }
     };
     reader.readAsDataURL(file);
@@ -142,7 +173,7 @@ export const FirmaDigitalModal = ({
 
           <div className="space-y-3">
             <label className="block text-xs text-gray-500 font-medium">
-              Seleccione una imagen limpia de su firma (preferiblemente fondo transparente PNG):
+              Seleccione una imagen limpia de su firma. Se comprime automáticamente para optimizar el almacenamiento:
             </label>
 
             <div className="border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer relative">
