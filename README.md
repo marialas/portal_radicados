@@ -26,8 +26,7 @@ Todo el detalle está organizado y numerado en orden de lectura en la carpeta [`
 | 06 | [06_API.md](docs/06_API.md) | Referencia de endpoints REST |
 | 07 | [07_DEPLOYMENT.md](docs/07_DEPLOYMENT.md) | Despliegue en Netlify y Render.com |
 | 08 | [08_SECURITY.md](docs/08_SECURITY.md) | Seguridad y autenticación |
-| 09 | [09_GUION-VIDEO-CONTRATISTA.md](docs/09_GUION-VIDEO-CONTRATISTA.md) | Guion del video instructivo |
-| 10 | [10_DICCIONARIO-DATOS.md](docs/10_DICCIONARIO-DATOS.md) | Diccionario de datos y campos |
+| 09 | [09_DICCIONARIO-DATOS.md](docs/09_DICCIONARIO-DATOS.md) | Diccionario de datos y campos |
 
 ## Instalación rápida
 

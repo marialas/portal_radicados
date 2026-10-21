@@ -18,8 +18,7 @@
 | 06 | 🔌 **Backend** | [06_API.md](06_API.md) | Todos los endpoints REST, payloads y efectos secundarios |
 | 07 | ☁️ **Producción** | [07_DEPLOYMENT.md](07_DEPLOYMENT.md) | Despliegue en Render (API) y Netlify (frontend) |
 | 08 | 🔐 **Protección** | [08_SECURITY.md](08_SECURITY.md) | Autenticación JWT/MSAL, roles y buenas prácticas |
-| 09 | 🎬 **Video** | [09_GUION-VIDEO-CONTRATISTA.md](09_GUION-VIDEO-CONTRATISTA.md) | Guion del video instructivo |
-| 10 | 📊 **Datos** | [10_DICCIONARIO-DATOS.md](10_DICCIONARIO-DATOS.md) | Diccionario de datos, campos y estructura en disco/SharePoint |
+| 09 | 📊 **Datos** | [09_DICCIONARIO-DATOS.md](09_DICCIONARIO-DATOS.md) | Diccionario de datos, campos y estructura en disco/SharePoint |
 
 ---
 
