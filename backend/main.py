@@ -162,13 +162,18 @@ def lanzar_background(coro, nombre="tarea"):
         print(f"[BG:{nombre}] Sin event loop, se omite ejecución en background")
 
 
-async def revisar_vencimientos():
+async def revisar_vencimientos(forzar=False):
     notificados = []
     if not graph_service:
         return notificados
     ahora = datetime.now(timezone.utc)
     hoy = ahora.date()
     hora_colombia = ahora.astimezone(timezone(timedelta(hours=-5))).hour
+    if not forzar:
+        dia_semana = ahora.weekday()
+        if dia_semana > 4 or not (8 <= hora_colombia < 9):
+            return []
+    pend_8, pend_4, vencidos = [], [], []
     for r in radicaciones_db:
         if r.get("estado") == "Aprobado":
             continue
@@ -179,31 +184,39 @@ async def revisar_vencimientos():
             continue
         rest = dias_restantes(limite, hoy)
         flags = r.setdefault("notifVencimiento", {})
-        ya_avisado_4 = bool(flags.get("4"))
-        try:
-            if rest <= 4 and not ya_avisado_4:
-                ok = await graph_service.enviar_correo_vencimiento(r, rest, limite.isoformat())
-                if ok:
-                    marca = datetime.now(timezone.utc).isoformat()
-                    flags["4"] = marca
-                    flags["8"] = flags.get("8") or marca
-                    notificados.append({"numeroRadicado": numero, "diasRestantes": rest, "aviso": "4 dias"})
-            elif rest <= 8 and rest >= 0 and not flags.get("8"):
-                ok = await graph_service.enviar_correo_vencimiento(r, rest, limite.isoformat())
-                if ok:
-                    flags["8"] = datetime.now(timezone.utc).isoformat()
-                    notificados.append({"numeroRadicado": numero, "diasRestantes": rest, "aviso": "8 dias"})
-            if rest < 0 and ya_avisado_4:
-                ultima = _solo_fecha(flags.get("diaria"))
-                if hora_colombia >= 8 and (ultima is None or ultima < hoy):
-                    ok = await graph_service.enviar_correo_vencimiento(r, rest, limite.isoformat())
-                    if ok:
-                        flags["diaria"] = datetime.now(timezone.utc).isoformat()
-                        notificados.append({"numeroRadicado": numero, "diasRestantes": rest, "aviso": "diaria 8am"})
-        except Exception as e:
-            print(f"[VENC] Error revisando {numero}: {e}")
-    if notificados:
-        guardar_db()
+        item = {"radicacion": r, "dias": rest, "limite": limite.isoformat(), "flags": flags}
+        if rest < 0:
+            ultima = _solo_fecha(flags.get("diaria"))
+            if ultima != hoy:
+                vencidos.append(item)
+        elif rest <= 4 and not flags.get("4"):
+            pend_4.append(item)
+        elif 0 <= rest <= 8 and not flags.get("8"):
+            pend_8.append(item)
+    if not (pend_8 or pend_4 or vencidos):
+        return []
+    try:
+        ok = await graph_service.enviar_correo_vencimiento_resumen(pend_8, pend_4, vencidos)
+        if not ok:
+            return []
+        marca = datetime.now(timezone.utc).isoformat()
+        for it in pend_8:
+            it["flags"]["8"] = marca
+            notificados.append({"numeroRadicado": it["radicacion"].get("numeroRadicado"), "diasRestantes": it["dias"], "aviso": "8 dias"})
+        for it in pend_4:
+            it["flags"]["4"] = marca
+            it["flags"]["8"] = it["flags"].get("8") or marca
+            notificados.append({"numeroRadicado": it["radicacion"].get("numeroRadicado"), "diasRestantes": it["dias"], "aviso": "4 dias"})
+        for it in vencidos:
+            it["flags"]["diaria"] = marca
+            if not it["flags"].get("4"):
+                it["flags"]["4"] = marca
+                it["flags"]["8"] = it["flags"].get("8") or marca
+            notificados.append({"numeroRadicado": it["radicacion"].get("numeroRadicado"), "diasRestantes": it["dias"], "aviso": "diaria"})
+    except Exception as e:
+        print(f"[VENC] Error enviando resumen de vencimientos: {e}")
+        return []
+    guardar_db()
     return notificados
 
 
@@ -1157,7 +1170,7 @@ async def probar_conexion(usuario: dict = Depends(requerir_usuario)):
 async def forzar_revision_vencimientos(usuario: dict = Depends(requerir_interventor)):
     if not graph_service:
         raise HTTPException(status_code=503, detail="GraphService no disponible")
-    notificados = await revisar_vencimientos()
+    notificados = await revisar_vencimientos(forzar=True)
     return {"ok": True, "notificados": notificados, "total": len(notificados)}
 
 

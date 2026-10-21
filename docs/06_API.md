@@ -312,7 +312,7 @@ Prueba la conexión con Microsoft Graph.
 
 ### POST /api/m365/revisar-vencimientos
 
-Disparo manual de la revisión de plazos (la automática corre **cada 1 h**, con el correo diario de vencidos a partir de las 8 a.m. hora Colombia). Envía los avisos pendientes de **8 días**, **4 días** y **diario** para radicados ya vencidos, y devuelve lo notificado. El texto del correo varía: "próximo a vencer / faltan N días", "vence hoy" o "vencido hace N días".
+Disparo manual de la revisión de plazos con **forzar**: ignora la ventana horaria y envía de inmediato **un solo correo resumen** con los avisos pendientes de **8 días**, **4 días** y **vencidos**, y devuelve lo notificado radicado a radicado. La revisión automática corre **cada 1 h** pero solo envía de **lunes a viernes entre las 8:00 y 8:59 a.m. hora Colombia**, como máximo **un correo por día** (vencidos y por vencer van en el mismo mensaje); si un día no se envía no se acumula, se retoma en la siguiente ventana.
 
 ```jsonc
 // 200

@@ -97,7 +97,7 @@ Este manual le enseña a revisar expedientes, emitir dictámenes y generar los f
    - **Próximos a vencer** (arriba): los que aún están en plazo, del más urgente al menos; incluye los que vencen hoy.
    - **Vencidos** (abajo): los que ya pasaron su fecha límite, con la insignia "Vencido hace N días".
    - Cada encabezado muestra cuántos radicados hay en esa lista; si una está vacía lo dice.
-6. Los avisos por correo (8 y 4 días, más diario 8 a.m. si ya venció) le llegan solo a usted: si está por vencer dice "faltan N días", si venció dice "vencido hace N días".
+6. Los avisos por correo le llegan en **un solo correo al día** (lunes a viernes, entre 8:00 y 8:59 a.m.), con **todos** los radicados vencidos y por vencer en tablas dentro del mismo mensaje; el aviso de 8 o 4 días se incluye ahí una sola vez. Si un día no se envía (fin de semana o sin conexión) no se acumula: se envía en la siguiente ventana. Al aprobar un radicado deja de aparecer.
 
 ## 10. Reintentar subida a SharePoint
 
@@ -117,7 +117,7 @@ La subida automática falló. Use Reintentar subida para ver el motivo exacto.
 Con las notas que usted escriba en cada documento y sub-archivo; las ve al corregir.
 
 **¿A quién llegan los avisos de fechas?**
-Solo a usted, más copia al correo del municipio en el calendario.
+Solo a usted, en un correo resumen por día (máximo uno diario); ya no se copia al correo del municipio.
 
 **Guardé avance, ¿ya le avisó al contratista?**
 No. El borrador no avisa ni cambia el estado. Solo avisa al dar el resultado final.

@@ -44,8 +44,12 @@ class _GraphFalso:
     def __init__(self):
         self.envios = []
 
-    async def enviar_correo_vencimiento(self, rad, dias, limite):
-        self.envios.append((rad.get("numeroRadicado"), dias, limite))
+    async def enviar_correo_vencimiento_resumen(self, pend_8, pend_4, vencidos):
+        self.envios.append({
+            "pend_8": [i["radicacion"].get("numeroRadicado") for i in pend_8],
+            "pend_4": [i["radicacion"].get("numeroRadicado") for i in pend_4],
+            "vencidos": [i["radicacion"].get("numeroRadicado") for i in vencidos],
+        })
         return True
 
 
@@ -127,10 +131,10 @@ def _entorno(monkeypatch, registros, ahora):
 
 
 def test_aviso_8_exactamente_una_vez(monkeypatch):
-    hoy = _hoy_utc(2026, 9, 28).date()
+    hoy = _hoy_utc(2026, 9, 28, 13, 30).date()
     creacion = _creacion_con_restantes(hoy, 8)
     regs = [_radicado("RAD-T-001", creacion)]
-    falso, _ = _entorno(monkeypatch, regs, _hoy_utc(2026, 9, 28))
+    falso, _ = _entorno(monkeypatch, regs, _hoy_utc(2026, 9, 28, 13, 30))
     primera = asyncio.run(M.revisar_vencimientos())
     assert [(n["numeroRadicado"], n["aviso"]) for n in primera] == [("RAD-T-001", "8 dias")]
     assert len(falso.envios) == 1
@@ -140,10 +144,10 @@ def test_aviso_8_exactamente_una_vez(monkeypatch):
 
 
 def test_aviso_4_escala_y_marca_8(monkeypatch):
-    hoy = _hoy_utc(2026, 9, 28).date()
+    hoy = _hoy_utc(2026, 9, 28, 13, 30).date()
     creacion = _creacion_con_restantes(hoy, 4)
     regs = [_radicado("RAD-T-004", creacion)]
-    falso, _ = _entorno(monkeypatch, regs, _hoy_utc(2026, 9, 28))
+    falso, _ = _entorno(monkeypatch, regs, _hoy_utc(2026, 9, 28, 13, 30))
     res = asyncio.run(M.revisar_vencimientos())
     assert [(n["numeroRadicado"], n["aviso"]) for n in res] == [("RAD-T-004", "4 dias")]
     assert regs[0]["notifVencimiento"].get("4")
@@ -152,13 +156,13 @@ def test_aviso_4_escala_y_marca_8(monkeypatch):
 
 
 def test_diaria_8am_vencido_hasta_aprobar(monkeypatch):
-    hoy = _hoy_utc(2026, 9, 28).date()  
+    hoy = _hoy_utc(2026, 9, 28, 13, 30).date()  
     creacion = _creacion_con_restantes(hoy, -3)  
     viejo = "2026-09-20T15:00:00+00:00"
     regs = [_radicado("RAD-T-VEN", creacion, flags={"4": viejo, "8": viejo,
                                                    "diaria": "2026-09-27T15:00:00+00:00"})]
-    falso, _ = _entorno(monkeypatch, regs, _hoy_utc(2026, 9, 28))
-    assert [(n["numeroRadicado"], n["aviso"]) for n in asyncio.run(M.revisar_vencimientos())] == [("RAD-T-VEN", "diaria 8am")]
+    falso, _ = _entorno(monkeypatch, regs, _hoy_utc(2026, 9, 28, 13, 30))
+    assert [(n["numeroRadicado"], n["aviso"]) for n in asyncio.run(M.revisar_vencimientos())] == [("RAD-T-VEN", "diaria")]
     assert asyncio.run(M.revisar_vencimientos()) == []  
     regs[0]["estado"] = "Aprobado"
     assert asyncio.run(M.revisar_vencimientos()) == []
@@ -171,25 +175,76 @@ def test_diaria_no_dispara_antes_de_las_8(monkeypatch):
     creacion = _creacion_con_restantes(hoy, -3)
     regs = [_radicado("RAD-T-TEM", creacion, flags={"4": "2026-09-20T15:00:00+00:00",
                                                       "8": "2026-09-20T15:00:00+00:00"})]
-    _entorno(monkeypatch, regs, ahora)
+    falso, _ = _entorno(monkeypatch, regs, ahora)
     assert asyncio.run(M.revisar_vencimientos()) == []
+    assert falso.envios == []
+
+
+def test_diaria_no_dispara_despues_de_las_9(monkeypatch):
+    ahora = datetime(2026, 9, 28, 15, 0, tzinfo=timezone.utc)
+    hoy = ahora.date()
+    creacion = _creacion_con_restantes(hoy, -3)
+    regs = [_radicado("RAD-T-TARDE", creacion, flags={"4": "2026-09-20T15:00:00+00:00",
+                                                        "8": "2026-09-20T15:00:00+00:00"})]
+    falso, _ = _entorno(monkeypatch, regs, ahora)
+    assert asyncio.run(M.revisar_vencimientos()) == []
+    assert falso.envios == []
+
+
+def test_no_envia_finde_y_no_acumula(monkeypatch):
+    sabado = datetime(2026, 9, 26, 13, 30, tzinfo=timezone.utc)
+    creacion = _creacion_con_restantes(sabado.date(), -2)
+    regs = [_radicado("RAD-T-SAB", creacion, flags={"4": "2026-09-20T15:00:00+00:00",
+                                                      "8": "2026-09-20T15:00:00+00:00"})]
+    falso, _ = _entorno(monkeypatch, regs, sabado)
+    assert asyncio.run(M.revisar_vencimientos()) == []
+    assert falso.envios == []
+    _RelojFijo._fija = _hoy_utc(2026, 9, 28, 13, 30)
+    res = asyncio.run(M.revisar_vencimientos())
+    assert len(res) == 1
+    assert len(falso.envios) == 1
+
+
+def test_varios_vencidos_comparten_un_solo_correo(monkeypatch):
+    hoy = _hoy_utc(2026, 9, 28, 13, 30).date()
+    creacion_a = _creacion_con_restantes(hoy, -3)
+    creacion_b = _creacion_con_restantes(hoy, -7)
+    regs = [_radicado("RAD-T-V1", creacion_a, flags={"4": "2026-09-20T15:00:00+00:00", "8": "2026-09-20T15:00:00+00:00"}),
+            _radicado("RAD-T-V2", creacion_b, flags={"4": "2026-09-20T15:00:00+00:00", "8": "2026-09-20T15:00:00+00:00"})]
+    falso, _ = _entorno(monkeypatch, regs, _hoy_utc(2026, 9, 28, 13, 30))
+    res = asyncio.run(M.revisar_vencimientos())
+    assert len(res) == 2
+    assert len(falso.envios) == 1
+    assert falso.envios[0]["vencidos"] == ["RAD-T-V1", "RAD-T-V2"]
+
+
+def test_forzar_ignora_ventana_horaria(monkeypatch):
+    ahora = datetime(2026, 9, 28, 15, 0, tzinfo=timezone.utc)
+    creacion = _creacion_con_restantes(ahora.date(), -3)
+    regs = [_radicado("RAD-T-FZA", creacion, flags={"4": "2026-09-20T15:00:00+00:00",
+                                                      "8": "2026-09-20T15:00:00+00:00"})]
+    falso, _ = _entorno(monkeypatch, regs, ahora)
+    assert asyncio.run(M.revisar_vencimientos()) == []
+    assert falso.envios == []
+    assert len(asyncio.run(M.revisar_vencimientos(forzar=True))) == 1
+    assert len(falso.envios) == 1
 
 
 def test_vencido_sin_flag_8_recibe_4_no_8(monkeypatch):
-    hoy = _hoy_utc(2026, 9, 28).date()
+    hoy = _hoy_utc(2026, 9, 28, 13, 30).date()
     creacion = _creacion_con_restantes(hoy, -3)
     regs = [_radicado("RAD-T-REG", creacion)]
-    falso, _ = _entorno(monkeypatch, regs, _hoy_utc(2026, 9, 28))
+    falso, _ = _entorno(monkeypatch, regs, _hoy_utc(2026, 9, 28, 13, 30))
     res = asyncio.run(M.revisar_vencimientos())
-    assert [(n["numeroRadicado"], n["aviso"]) for n in res] == [("RAD-T-REG", "4 dias")]
+    assert [(n["numeroRadicado"], n["aviso"]) for n in res] == [("RAD-T-REG", "diaria")]
     assert regs[0]["notifVencimiento"].get("8")
 
 
 def test_aprobado_nunca_avisa(monkeypatch):
-    hoy = _hoy_utc(2026, 9, 28).date()
+    hoy = _hoy_utc(2026, 9, 28, 13, 30).date()
     creacion = _creacion_con_restantes(hoy, -31)
     regs = [_radicado("RAD-T-APR", creacion, estado="Aprobado")]
-    falso, _ = _entorno(monkeypatch, regs, _hoy_utc(2026, 9, 28))
+    falso, _ = _entorno(monkeypatch, regs, _hoy_utc(2026, 9, 28, 13, 30))
     assert asyncio.run(M.revisar_vencimientos()) == []
     assert falso.envios == []
 

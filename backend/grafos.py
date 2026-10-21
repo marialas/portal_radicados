@@ -601,49 +601,93 @@ class GraphService:
         n = abs(int(cantidad or 0))
         return f"{n} día" if n == 1 else f"{n} días"
 
-    async def enviar_correo_vencimiento(self, radicacion, dias_restantes, fecha_limite):
+    async def enviar_correo_vencimiento_resumen(self, pend_8, pend_4, vencidos):
         destino = self._revisor_email()
         if not destino:
-            print("[GRAPH] Sin destinatario revisor (M365_NOTIFICATION_RECIPIENT), no se envía aviso de vencimiento")
+            print("[GRAPH] Sin destinatario revisor (M365_NOTIFICATION_RECIPIENT), no se envía resumen de vencimientos")
             return False
-        meta = radicacion.get("metadata", {})
-        municipio = meta.get("municipio", "")
-        copia_municipio = self._correo_municipio(municipio)
-        extras = [copia_municipio] if copia_municipio else []
-        numero = radicacion.get("numeroRadicado", "?")
-        municipio = meta.get("municipio", "")
-        vencido = dias_restantes is not None and dias_restantes < 0
-        if vencido:
-            atraso = self._dias_txt(-dias_restantes)
-            asunto = f"URGENTE: Radicado vencido hace {atraso} — {esc(numero)}"
-            estado_txt = f"vencido hace {atraso} (límite: {fecha_limite})"
-            intro_txt = "El siguiente radicado <strong>ya venció</strong> su plazo de 15 días hábiles de revisión:"
-            cta_txt = f"El plazo venció hace {atraso}. Evalue el expediente con prioridad y, si aplica, suba el Formato 4.3.7 C y el Recibo Técnico de inmediato."
-        elif dias_restantes == 0:
-            asunto = f"URGENTE: Radicado vence hoy — {esc(numero)}"
-            estado_txt = f"vence hoy (límite: {fecha_limite})"
-            intro_txt = "El siguiente radicado <strong>vence hoy</strong> el plazo de 15 días hábiles de revisión:"
-            cta_txt = "Evalue el expediente hoy y, si aplica, suba el Formato 4.3.7 C y el Recibo Técnico antes del cierre."
+
+        def _cnt(n):
+            return f"{n} radicado" if n == 1 else f"{n} radicados"
+
+        def _situacion(dias):
+            if dias < 0:
+                return f"Vencido hace {self._dias_txt(dias)}"
+            if dias == 0:
+                return "Vence hoy"
+            return f"Faltan {self._dias_txt(dias)}"
+
+        def _tabla(items):
+            filas = "".join(
+                "<tr>"
+                f"<td style='padding:5px 8px 5px 0;'><strong>{esc(it['radicacion'].get('numeroRadicado', '?'))}</strong></td>"
+                f"<td style='padding:5px 8px 5px 0;'>{esc(it['radicacion'].get('metadata', {}).get('nombreProyecto', ''))}</td>"
+                f"<td style='padding:5px 8px 5px 0;'>{esc(it['radicacion'].get('metadata', {}).get('municipio', ''))}</td>"
+                f"<td style='padding:5px 8px 5px 0;'>{esc(it['radicacion'].get('metadata', {}).get('contratista', ''))}</td>"
+                f"<td style='padding:5px 8px 5px 0;'>{esc(it['radicacion'].get('estado', ''))}</td>"
+                f"<td style='padding:5px 8px 5px 0;'>{esc(str(it.get('limite', '')))}</td>"
+                f"<td style='padding:5px 0;'>{esc(_situacion(it['dias']))}</td>"
+                "</tr>"
+                for it in items
+            )
+            return (
+                "<table style='width:100%;font-size:13px;border-collapse:collapse;margin:4px 0 14px 0;'>"
+                "<tr style='background:#f1f3f5;'>"
+                "<th style='padding:6px 8px 6px 0;text-align:left;'>Radicado</th>"
+                "<th style='padding:6px 8px 6px 0;text-align:left;'>Proyecto</th>"
+                "<th style='padding:6px 8px 6px 0;text-align:left;'>Municipio</th>"
+                "<th style='padding:6px 8px 6px 0;text-align:left;'>Contratista</th>"
+                "<th style='padding:6px 8px 6px 0;text-align:left;'>Estado</th>"
+                "<th style='padding:6px 8px 6px 0;text-align:left;'>Límite</th>"
+                "<th style='padding:6px 0;text-align:left;'>Situación</th></tr>"
+                + filas + "</table>"
+            )
+
+        n_venc = len(vencidos)
+        n_por = len(pend_8) + len(pend_4)
+        if n_venc and n_por:
+            asunto = f"URGENTE: {_cnt(n_venc)} vencido(s) y {_cnt(n_por)} por vencer — resumen de revisión"
+        elif n_venc:
+            asunto = f"URGENTE: {_cnt(n_venc)} vencido(s) de revisión"
         else:
-            asunto = f"Radicado por vencer ({self._dias_txt(dias_restantes)}) — {esc(numero)}"
-            estado_txt = f"faltan {self._dias_txt(dias_restantes)} (límite: {fecha_limite})"
-            intro_txt = "El siguiente radicado está próximo a vencer su plazo de 15 días hábiles de revisión:"
-            cta_txt = "Evalue el expediente y, si aplica, suba el Formato 4.3.7 C y el Recibo Técnico antes del vencimiento."
-        interno = f"""
-            <p>{intro_txt} <strong>{esc(estado_txt)}</strong>.</p>
-            <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0;">
-                <tr><td style="padding:6px 0;font-weight:bold;width:150px;">Radicado:</td><td><strong>{esc(numero)}</strong></td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Proyecto:</td><td>{esc(meta.get('nombreProyecto', ''))}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Municipio:</td><td>{esc(meta.get('municipio', ''))}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Contratista:</td><td>{esc(meta.get('contratista', ''))}</td></tr>
-                <tr><td style="padding:6px 0;font-weight:bold;">Estado:</td><td>{esc(radicacion.get('estado', ''))}</td></tr>
-            </table>
-            <p style="font-size:12px;color:#666;">{cta_txt}</p>
-            <p style="font-size:11px;color:#999;">INTECOAL SAS — Interventoría Técnica (aviso automático)</p>
-        """
+            asunto = f"Radicados por vencer ({n_por}) — resumen de revisión"
+
+        secciones = []
+        if vencidos:
+            secciones.append(
+                "<p style='margin:14px 0 0 0;'><strong style='color:#b02a37;'>Vencidos — requieren atención inmediata</strong></p>"
+                + _tabla(vencidos)
+            )
+        vence_hoy = [i for i in pend_4 if i["dias"] == 0]
+        faltan_4 = [i for i in pend_4 if i["dias"] > 0]
+        if vence_hoy:
+            secciones.append(
+                "<p style='margin:14px 0 0 0;'><strong style='color:#b02a37;'>Vencen hoy</strong></p>"
+                + _tabla(vence_hoy)
+            )
+        if faltan_4:
+            secciones.append(
+                "<p style='margin:14px 0 0 0;'><strong style='color:#996515;'>Faltan 4 días o menos</strong></p>"
+                + _tabla(faltan_4)
+            )
+        if pend_8:
+            secciones.append(
+                "<p style='margin:14px 0 0 0;'><strong>Faltan 8 días o menos</strong></p>"
+                + _tabla(pend_8)
+            )
+
+        interno = (
+            "<p style='margin:0 0 8px 0;'>Resumen único de plazos de revisión (15 días hábiles) "
+            f"con <strong>{_cnt(n_venc)} vencido(s)</strong> y <strong>{_cnt(n_por)} por vencer</strong>:</p>"
+            + "".join(secciones)
+            + "<p style='font-size:12px;color:#666;'>Evalue los radicados listados y, si aplica, suba el Formato 4.3.7 C y el Recibo Técnico. "
+            "Este resumen se envía como máximo una vez al día (lunes a viernes).</p>"
+            + "<p style='font-size:11px;color:#999;'>INTECOAL SAS — Interventoría Técnica (aviso automático)</p>"
+        )
+        municipio = (vencidos[0]["radicacion"].get("metadata", {}) or {}).get("municipio", "") if vencidos else ""
         cuerpo = self._plantilla_correo("INTECOAL SAS — Alerta de vencimiento de revisión", interno, municipio)
         adj = self._adjunto_logo(municipio)
-        return await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None, extras)
+        return await self._enviar_correo(destino, asunto, cuerpo, [adj] if adj else None)
 
     def obtener_config(self):
         return {

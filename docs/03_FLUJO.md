@@ -70,7 +70,7 @@ Contratista            Revisor (Interventoría)
 
 Plantilla plana (sin marco): título, contenido y al final el **logo del municipio** como imagen inline (`backend/assets/correos/logo-{tulua,andalucia,sanpedro,calima,villavicencio,general}`), elegido por el municipio del radicado.
 
-**Remitente y copias por municipio:** las notificaciones al contratista (registrado, resultado, actualizado) salen **desde** el correo municipal; todas las notificaciones de estados agregan en copia al correo municipal con el número de radicado; los avisos del calendario van al general + municipal en simultáneo. Respaldo automático al correo general si el municipio no está en la tabla.
+**Remitente y copias por municipio:** las notificaciones al contratista (registrado, resultado, actualizado) salen **desde** el correo municipal; todas las notificaciones de estados agregan en copia al correo municipal con el número de radicado; los avisos del calendario van **solo al revisor** (un resumen diario, sin copia municipal, para no mezclar radicados de municipios distintos en un mismo correo). Respaldo automático al correo general si el municipio no está en la tabla.
 
 | Evento | Destinatario | Función backend |
 |--------|--------------|-----------------|
@@ -79,20 +79,20 @@ Plantilla plana (sin marco): título, contenido y al final el **logo del municip
 | Resultado de evaluación (Aprobado/Con Observaciones) | Contratista | `enviar_correo_estado` |
 | Radicado reenviado/editado | Revisor | `enviar_correo_reesubido_revisor` |
 | Confirmación de reenvío | Contratista | `enviar_correo_reenvio_contratista` |
-| Faltan 8 / 4 días (una sola vez c/u) | Revisor (general) + correo del municipio en simultáneo | `enviar_correo_vencimiento` (vigilancia cada 1 h) |
-| Vencido sin aprobar (diario 8:00 a.m. hasta aprobar) | Revisor (general) + correo del municipio en simultáneo | `enviar_correo_vencimiento` (bandera `diaria`) |
+| Aviso de plazo (8 / 4 días, una sola vez c/u) | Revisor (general, sin copia municipal) | Incluido en el correo resumen diario (`enviar_correo_vencimiento_resumen`, vigilancia cada 1 h) |
+| Vencido sin aprobar (una vez al día, lun–vie 8:00–8:59 a.m. Colombia) | Revisor (general, sin copia municipal) | Mismo correo resumen (bandera `diaria`) |
 
-**Texto de los avisos de plazo** (asunto y cuerpo cambian según el caso):
+**El correo resumen de plazo** — máximo **un envío por día**, solo de lunes a viernes entre las **8:00 y 8:59 a.m. hora Colombia**. Si un día no se envía (fin de semana o sin conexión) **no se acumula**: se incluye en la siguiente ventana. Si no hay nada pendiente, no se envía nada.
 
-| Caso | Asunto | Primer párrafo |
-|------|--------|----------------|
-| Por vencer | `Radicado por vencer (7 días) — RAD-…` | "está **próximo a vencer** … **faltan 7 días** (límite: AAAA-MM-DD)" |
-| Vence hoy | `URGENTE: Radicado vence hoy — RAD-…` | "**vence hoy** el plazo de 15 días hábiles …" |
-| Vencido | `URGENTE: Radicado vencido hace 3 días — RAD-…` | "**ya venció** su plazo … **vencido hace 3 días** (límite: AAAA-MM-DD)" |
+| Situación | Asunto |
+|------|--------|
+| Solo vencidos | `URGENTE: N radicado(s) vencido(s) de revisión` |
+| Solo por vencer | `Radicados por vencer (N) — resumen de revisión` |
+| Mezclado | `URGENTE: N radicado(s) vencido(s) y M por vencer — resumen de revisión` |
 
-Singular/plural correcto (`1 día` / `7 días`) y, si venció, el cierre recuerda cuánto se atrasó en lugar de decir "antes del vencimiento".
+El cuerpo agrupa los radicados en tablas: **Vencidos**, **Vencen hoy**, **Faltan 4 días o menos** y **Faltan 8 días o menos** (radicado, proyecto, municipio, contratista, estado, límite y situación). Singular/plural correcto (`1 día` / `7 días`) y, si venció, la columna Situación dice "Vencido hace N días". El disparo manual (`POST /api/m365/revisar-vencimientos`) ignora la ventana y envía el resumen de inmediato.
 
-> Los avisos del calendario son **solo para el revisor**; el contratista no recibe nada de esto. Al aprobarse el radicado se desactivan automáticamente (los aprobados se omiten).
+> Los avisos del calendario son **solo para el revisor** (un correo resumen por día como máximo, sin copia al municipio); el contratista no recibe nada de esto. Al aprobarse el radicado se desactivan automáticamente (los aprobados se omiten).
 
 ## Estructura en SharePoint
 
